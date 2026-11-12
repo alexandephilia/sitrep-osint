@@ -95,6 +95,7 @@ src/                   modular domain services & core engines (24 modules):
                        ├── security (SSRF guard, DNS-pinning, TLS chain repair)
                        ├── geo-sensors, geocode, tomtom, copernicus
                        ├── indonesian-nlp, nlp-adapter, feedtext, assessment, evmerge
+                       ├── article-extract, article-media (reader engine)
                        ├── social, social-cluster, social-history, social-diagnostics, xpool
                        └── market, metrics
 *.js (root shims)      16 backward-compatibility shims forwarding to src/*
