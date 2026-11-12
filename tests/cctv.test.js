@@ -492,7 +492,7 @@ test('River and flood monitoring cameras: Kali Ciliwung, BKB, Cengkareng Drain &
   assert.ok(html.includes('data-cam-open="${esc(c.s)}"'), 'camPopup must use data-cam-open delegation');
   assert.ok(html.includes('id="glb-snap"'), 'lightbox must include #glb-snap fallback image element');
   assert.ok(html.includes('p.snapProxy = true'), 'showSnap must fall back to backend /api/cctv/snap proxy when direct snapshot fails');
-  assert.ok(html.includes('Live Snap'), 'kill(cell) must preserve Live Snap mode when camera has working c.snap');
+  assert.ok(html.includes('p.snapMode = true') && html.includes("badge(cell, 'live', 'Live')"), 'kill(cell) must preserve live mode when camera has working c.snap');
 });
 
 test('gateway snap: serves direct JPEG snapshots for dpuprkotang.info without requiring ffmpeg and isolates cache per src', async () => {

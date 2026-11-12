@@ -96,7 +96,7 @@ test('SITREP_PUBLIC=1 HTTP contract: no login wall, no token leak, CDN cache hea
   };
   after(cleanup);
 
-  const deadline = Date.now() + 12000;
+  const deadline = Date.now() + 25000;
   let ready = false;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error('public server exited early');

@@ -7336,7 +7336,7 @@ function showSnap(cell, p){
     im = document.createElement('img'); im.className = 'snap'; im.alt = ''; im.decoding = 'async'; im.loading = 'lazy';
     im.onload = () => {
       p.snapOk = true; p.snapFail = 0; p.snapFailN = 0;
-      if (p.snapMode) { badge(cell, 'live', 'Live Snap'); upd(); }
+      if (p.snapMode) { badge(cell, 'live', 'Live'); upd(); }
     };
     im.onerror = () => {
       if (!p.snapProxy && API != null) {
@@ -7355,7 +7355,7 @@ function showSnap(cell, p){
     p.snapAt = Date.now();
     im.src = snapUrl(c, p.snapProxy);
   }
-  badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live Snap' : (p.loading ? 'Memuat' : 'Snapshot'));
+  badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live' : (p.loading ? 'Memuat' : 'Snapshot'));
   return true;
 }
 function dropSnap(cell){ const p = P.get(cell); if (p) { p.snapAt = 0; p.snapMode = false; } }
@@ -7374,7 +7374,7 @@ function releaseCell(cell){
   if (p.h && p.h !== 'native') { try { p.h.destroy(); } catch (e) {} }
   const v = vid(cell); if (v) { cleanVid(v); v.remove(); }
   p.h = null; p.loading = p.loaded = p.playing = p.stopped = false; p.visAt = 0;
-  badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live Snap' : 'Antre'); upd();
+  badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live' : 'Antre'); upd();
 }
 function cols(){ return Math.max(1, Math.min(4, Math.round(camGrid.clientWidth / 165))); }
 function badge(cell, cls, txt){ const b = cell.querySelector('.badge'); if (b) { b.className = 'badge ' + cls; b.textContent = txt; } }
@@ -7418,7 +7418,7 @@ function startCell(cell){
   const c = camList[+cell.dataset.i];
   if (c && isDirectSnapFeed(c.s, c)) {
     p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
-    showSnap(cell, p); badge(cell, 'live', 'Live Snap'); upd(); pump();
+    showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pump();
     return;
   }
   const v = mkVid(cell);
@@ -7427,7 +7427,7 @@ function startCell(cell){
     if (p.h !== 'native') { try { p.h.startLoad(); } catch (e) {} }
     p.stopped = false; p.loading = !p.loaded; p.nerr = p.merr = 0;
     syncLiveEdge(cell, p, v);
-    if (!p.loaded) { p.t0 = Date.now(); badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live Snap' : 'Memuat'); }
+    if (!p.loaded) { p.t0 = Date.now(); badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live' : 'Memuat'); }
     else { dropSnap(cell); if (p.vis) badge(cell, 'live', 'Live'); }
     v.play().catch(() => {}); return;
   }
@@ -7435,7 +7435,7 @@ function startCell(cell){
   if (!keepSnapLive) p.snapMode = false;
   p.loading = true; p.t0 = Date.now();
   if (c && c.snap && !p.loaded) showSnap(cell, p);
-  badge(cell, keepSnapLive ? 'live' : 'wait', keepSnapLive ? 'Live Snap' : 'Memuat');
+  badge(cell, keepSnapLive ? 'live' : 'wait', keepSnapLive ? 'Live' : 'Memuat');
   const steps = p.steps || (p.steps = camSteps(c));
   if (!p.step && hostMode.get(p.host) === 'proxy') { const pi = proxyIdx(steps); if (pi > 0) p.step = pi; }
   const url = steps[Math.min(p.step || 0, steps.length - 1)];
@@ -7447,7 +7447,7 @@ function startCell(cell){
         cleanVid(v); p.h = null;
         if (c && (c.snap || camSnapOK)) {
           p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
-          showSnap(cell, p); badge(cell, 'live', 'Live Snap'); upd(); pump();
+          showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pump();
         } else if ((p.step = (p.step || 0) + 1) < steps.length) {
           startCell(cell);
         } else kill(cell);
@@ -7458,7 +7458,7 @@ function startCell(cell){
       v.onerror = null;
       if (c && (c.snap || camSnapOK) && !p.loaded) {
         cleanVid(v); p.h = null; p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
-        showSnap(cell, p); badge(cell, 'live', 'Live Snap'); upd(); pump();
+        showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pump();
         return;
       }
       if ((p.step = (p.step || 0) + 1) < steps.length) { p.h = null; startCell(cell); }
@@ -7486,7 +7486,7 @@ function startCell(cell){
           if (c && (c.snap || camSnapOK)) {
             p.nerr = p.merr = p.stalls = 0; try { h.destroy(); } catch (e) {} p.h = null;
             p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
-            showSnap(cell, p); badge(cell, 'live', 'Live Snap'); upd(); pump();
+            showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pump();
             return;
           }
           if ((p.step = (p.step || 0) + 1) < steps.length) {
@@ -7509,7 +7509,7 @@ function startCell(cell){
       } else if (c && (c.snap || camSnapOK)) {
         p.nerr = p.merr = 0; try { h.destroy(); } catch (e) {} p.h = null;
         p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
-        showSnap(cell, p); badge(cell, 'live', 'Live Snap'); upd(); pump();
+        showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pump();
       } else if ((p.step = (p.step || 0) + 1) < steps.length) {
         p.nerr = p.merr = 0; try { h.destroy(); } catch (e) {} p.h = null; startCell(cell);
       } else kill(cell);
@@ -7596,7 +7596,7 @@ function kill(cell){
   if (hasSnap) {
     p.snapMode = true; p.bad = false;
     showSnap(cell, p);
-    badge(cell, 'live', 'Live Snap');
+    badge(cell, 'live', 'Live');
   } else {
     p.snapMode = false; p.bad = true;
     if (cam) {
@@ -7678,7 +7678,7 @@ function dropLoadingCell(cell){
   if (p.h && p.h !== 'native') { try { p.h.destroy(); } catch (e) {} }
   const v = vid(cell); if (v) cleanVid(v);
   p.h = null; p.loading = false; p.visAt = 0;
-  badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live Snap' : 'Antre'); upd();
+  badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live' : 'Antre'); upd();
 }
 function pump(){
   const vr = camVisRect();
@@ -7914,7 +7914,7 @@ setInterval(() => {
       const dv = vid(c); if (dv) cleanVid(dv);
       p.h = null; p.loading = false; p.dem = (p.dem || 0) + 1;
       if (p.dem >= 2 && p.steps && (p.step || 0) < p.steps.length - 1) p.step = (p.step || 0) + 1;
-      badge(c, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live Snap' : 'Antre'); pumpSoon(); return;
+      badge(c, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live' : 'Antre'); pumpSoon(); return;
     }
     if (p.loading && !p.loaded && !p.hedged && p.steps && API != null && Date.now() - p.t0 > HEDGE_MS && proxyIdx([p.steps[p.step || 0]]) !== 0) {
       const pi = proxyIdx(p.steps);
@@ -8086,7 +8086,7 @@ function glbFallbackEmbed(){
       if (p) {
         if (p.retry) { clearTimeout(p.retry); p.retry = null; }
         p.dead = false; p.bad = false; p.snapMode = true; p.snapOk = true;
-        badge(lbTrigger, 'live', 'Live Snap');
+        badge(lbTrigger, 'live', 'Live');
         orderCams();
         upd();
       }
