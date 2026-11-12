@@ -511,7 +511,8 @@ const joff = it => {
 };
 function paintMap(){
   if (!mapReady) return;
-  const visData = mapData.filter(i => i.fixed || legendOn[legendKeyOf(i)] !== false);
+  const now = Date.now();
+  const visData = mapData.filter(i => i.fixed || (inSitWindow(i, now) && legendOn[legendKeyOf(i)] !== false));
   if (heat) heat.setLatLngs(visData.filter(i => i.kind !== 'node').map(i => {
     const [dx, dy] = joff(i); return [i.la + dy, i.lo + dx, Math.max(0.18, Math.min(1, i.weight || 0.3))];
   }));
@@ -520,7 +521,8 @@ function paintMap(){
     if (it.fixed) continue;
     const c = it.sub === 'gempa' ? '#ff5a4e' : (KIND_COLOR[it.kind] || '#8d8d8d');
     const [dx, dy] = joff(it);
-    const fresh = it.ts && (Date.now() - it.ts) < 3 * 3600e3;
+    const ageMs = it.ts ? Math.max(0, now - it.ts) : 3 * 3600e3;
+    const fresh = ageMs < 2 * 3600e3;
     let m;
     if (fresh) {
       const sz = 18 + Math.round(Math.min(1, it.weight || 0.3) * 8);
@@ -529,11 +531,17 @@ function paintMap(){
           html: `<div class="pin-fresh" style="--pc:${c};width:${sz}px;height:${sz}px"><i></i></div>` }),
         keyboard: false
       });
-    } else {
+    } else if (ageMs < 12 * 3600e3) {
       m = L.circleMarker([it.la + dy, it.lo + dx], {
         radius: 4 + Math.round(Math.min(1, it.weight || 0.3) * 3),
         color: '#101010', weight: 1, opacity: .85, fillColor: c,
-        fillOpacity: .9
+        fillOpacity: .88
+      });
+    } else {
+      m = L.circleMarker([it.la + dy, it.lo + dx], {
+        radius: 3 + Math.round(Math.min(1, it.weight || 0.3) * 2),
+        color: '#101010', weight: 1, opacity: .55, fillColor: c,
+        fillOpacity: .50
       });
     }
     m.bindPopup(mapPopup(it), { maxWidth: 290, keepInView: true });
@@ -913,8 +921,9 @@ function renderGeoTelemetry(){
     if (countEl) countEl.textContent = '— titik';
     return;
   }
+  const now = Date.now();
   const pts = (PULSE || []).concat(DIS_PULSE || [])
-    .filter(p => p && !p.fixed && typeof p.la === 'number' && typeof p.lo === 'number');
+    .filter(p => p && !p.fixed && typeof p.la === 'number' && typeof p.lo === 'number' && inSitWindow(p, now));
   const counts = Object.create(null);
   for (const p of pts) {
     const k = legendKeyOf(p);
@@ -1027,6 +1036,7 @@ async function pullIncidents(fresh){
       maybeFocusFresh();
       const nReal = mapData.filter(i => !i.fixed).length;
       renderGeoTelemetry();
+      if (SIT && typeof renderSituation === 'function') renderSituation();
       $('#map-meta').textContent = nReal + ' titik · ' + (mapData.length - nReal) + ' node · sync ' + wibTime(d.at) + (d.stale ? ' · DATA LAMA' : '');
       wireSrcText = 'wire ' + (d.total || nReal) + (d.raw && d.raw > d.total ? ' · ' + d.raw + ' artikel' : '') + ' · kamera ' + CAMS.length;
       paintMapSrc();
@@ -1382,7 +1392,6 @@ const wxSize = () => { const s = Math.pow(1.3, (map ? map.getZoom() : 10) - 10);
 const wxIcon = (code, col) => { const sz = wxSize(); return L.divIcon({ className: 'mk-cuaca-ic',
   iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2],
   html: `<div class="mk-cuaca" style="--wc:${col}">${wxGlyph(code)}</div>` }); };
-const wibDayStart = () => { const j = new Date(Date.now() + 7 * 3600e3); j.setUTCHours(0, 0, 0, 0); return j.getTime() - 7 * 3600e3; };
 async function pullDisaster(){
   if (API == null) return;
   try {
@@ -1659,7 +1668,8 @@ async function pullDisaster(){
     DIS_PULSE = dp;
     geoDisLoaded = true;
     renderGeoTelemetry();
-    if (SIT) renderMapLegend({ ...(SIT.stats || {}),
+    if (SIT && typeof renderSituation === 'function') renderSituation();
+    else if (SIT) renderMapLegend({ ...(SIT.stats || {}),
       flood: ((SIT.stats && SIT.stats.flood) || 0) + dp.filter(p => p.kind === 'flood').length,
       gempa: dp.filter(p => p.sub === 'gempa').length,
       gunung: dp.filter(p => p.sub === 'volcano').length });

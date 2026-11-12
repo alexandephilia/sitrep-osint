@@ -1,8 +1,44 @@
+function activeWindowPointStats(now = Date.now()){
+  const st = {};
+  if (geoIncLoaded) {
+    let incCount = 0;
+    for (const p of (PULSE || [])) {
+      if (!p || p.fixed || typeof p.la !== 'number' || typeof p.lo !== 'number') continue;
+      if (!inSitWindow(p, now)) continue;
+      incCount++;
+      const k = legendKeyOf(p);
+      if (k) st[k] = (st[k] || 0) + 1;
+    }
+    let disCount = 0;
+    for (const p of (DIS_PULSE || [])) {
+      if (!p || p.fixed || typeof p.la !== 'number' || typeof p.lo !== 'number') continue;
+      if (!inSitWindow(p, now)) continue;
+      disCount++;
+      const k = legendKeyOf(p);
+      if (k) st[k] = (st[k] || 0) + 1;
+    }
+    return { st, incCount, disCount };
+  }
+  const base = (SIT && (SIT.incidentStats || SIT.stats)) || {};
+  Object.assign(st, base);
+  const daily = (SIT && SIT.daily) || null;
+  const incCount = sitWindow === 'today' && daily ? (daily.today || 0)
+    : sitWindow === 'live' && daily ? (daily.live2h || 0)
+    : ((SIT && typeof SIT.located === 'number' && SIT.located > 0) ? SIT.located : ((SIT && SIT.total) || 0));
+  let disCount = 0;
+  for (const p of (DIS_PULSE || [])) {
+    if (!p || p.fixed || typeof p.la !== 'number' || !inSitWindow(p, now)) continue;
+    disCount++;
+    const k = legendKeyOf(p);
+    if (k) st[k] = (st[k] || 0) + 1;
+  }
+  return { st, incCount, disCount };
+}
 function renderBrandCase(st){
   const g = {
     demo: st.demo || 0,
     insiden: (st.insiden || 0) + (st.fire || 0),
-    bencana: (st.disaster || 0) + (st.flood || 0),
+    bencana: (st.disaster || 0) + (st.flood || 0) + (st.gempa || 0) + (st.gunung || 0),
   };
   const total = g.demo + g.insiden + g.bencana;
   document.querySelectorAll('.bc-stat b[data-bc]').forEach(b => { b.textContent = g[b.dataset.bc]; });
@@ -12,23 +48,33 @@ function renderBrandCase(st){
     [g.demo, g.insiden, g.bencana].forEach((n, i) => { mix.children[i].style.flexGrow = total ? n : 1; });
   }
   const sum = $('#bc-sum');
-  if (sum) sum.textContent = total + ' titik · 24j';
+  if (sum) sum.textContent = total + ' titik · ' + (sitWindow === '24h' ? '24j' : sitWindowLabel().toLowerCase());
 }
 function renderSituation(){
   if (!SIT) return;
-  const st = { ...(SIT.stats || {}) };
-  st.gempa = (DIS_PULSE || []).filter(p => p.sub === 'gempa').length
-    + (PULSE || []).filter(p => p.sub === 'gempa' && typeof p.la === 'number').length;
-  st.gunung = (DIS_PULSE || []).filter(p => p.sub === 'volcano').length;
-  st.flood = (st.flood || 0) + (DIS_PULSE || []).filter(p => p.kind === 'flood').length;
+  const { st, incCount, disCount } = activeWindowPointStats();
   const sitTotal = SIT.total || 0;
   const sitLocated = (typeof SIT.located === 'number' && isFinite(SIT.located)) ? SIT.located : 0;
-  $('#sit-total').textContent = sitLocated > 0 ? sitLocated : sitTotal;
+  const daily = SIT.daily || null;
+  const total24h = sitLocated || (daily ? daily.total24h : sitTotal) || 0;
+  const todayN = daily ? daily.today : incCount;
+  const shownCount = geoIncLoaded ? incCount : (sitLocated > 0 ? incCount : sitTotal);
+  $('#sit-total').textContent = shownCount;
   const sitLbl = $('#sit-total-lbl');
-  if (sitLbl) sitLbl.textContent = sitLocated > 0 ? `${sitTotal} berita · 24 jam` : '24 jam';
+  if (sitLbl) {
+    if (sitWindow === 'today') {
+      sitLbl.textContent = `sejak 00:00 WIB · ${total24h} dlm 24J`;
+    } else if (sitWindow === 'live') {
+      sitLbl.textContent = `2 jam terakhir · ${total24h} dlm 24J`;
+    } else {
+      sitLbl.textContent = sitLocated > 0
+        ? `${todayN} hari ini · ${sitTotal} kabar${disCount > 0 ? ' · +' + disCount + ' sensor' : ''}`
+        : `${sitTotal} kabar · 24 jam`;
+    }
+  }
   renderMapLegend(st);
   renderBrandCase(st);
-  $('#dmeta').textContent = (SIT.total || 0) + ' insiden';
+  $('#dmeta').textContent = shownCount + ' insiden · ' + sitTotal + ' berita · ' + sitWindowLabel();
   const syncBox = document.querySelector('.sit-kpi-sync');
   syncBox.dataset.state = SIT_STALE ? 'stale' : 'live';
   $('#sit-sync-state').textContent = SIT_STALE ? 'stale' : 'live';
@@ -74,6 +120,19 @@ async function pullSituation(fresh){
   }
 }
 schedulePoll(() => pullSituation(), 60000, { dedupGlobalMs: 18000 });
+const sitWinEl = document.getElementById('sit-win');
+if (sitWinEl) {
+  sitWinEl.addEventListener('click', e => {
+    const btn = e.target.closest('.sw-b[data-win]');
+    if (!btn || btn.dataset.win === sitWindow) return;
+    sitWindow = btn.dataset.win;
+    sitWinEl.querySelectorAll('.sw-b').forEach(b => b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'));
+    if (SIT) renderSituation();
+    renderGeoTelemetry();
+    drawGlobe(performance.now());
+    if (typeof mapOpen !== 'undefined' && mapOpen && typeof paintMap === 'function') paintMap();
+  });
+}
 
 const fmtIDR = (n, d = 0) => isFinite(n) ? n.toLocaleString('id-ID', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
 function drawSpark(cv, closes, up){
@@ -429,12 +488,14 @@ function alertCards(){
   if (alertCache && alertCache.xp === xPosts && alertCache.tp === tPosts &&
       alertCache.xc === xSignalCurrent && alertCache.tc === tSignalCurrent &&
       alertCache.v === v && alertCache.bucket === bucket &&
-      alertCache.sit === SIT && alertCache.sg === SIG_GROUPS) {
+      alertCache.sit === SIT && alertCache.sg === SIG_GROUPS && alertCache.win === sitWindow) {
     return alertCache.cards;
   }
   const cards = [];
   const socGroups = SIG_GROUPS;
-  const newsGroups = SIT ? buildClusters().filter(g => g.latest && g.latest <= Date.now() && Date.now() - g.latest <= 90 * 60e3).slice(0, 6) : [];
+  const allClusters = SIT ? buildClusters().filter(g => g.latest && g.latest <= Date.now()) : [];
+  const hotClusters = allClusters.filter(g => Date.now() - g.latest <= 90 * 60e3);
+  const newsGroups = (hotClusters.length ? hotClusters : allClusters.filter(g => Date.now() - g.latest <= 6 * 3600e3)).slice(0, 6);
   const { pairs, socLeft, newsLeft } = correlateCards(socGroups, newsGroups);
   for (const p of pairs) {
     const g = p.g, c = p.c, k = c.items.length, s = c.sources.size;

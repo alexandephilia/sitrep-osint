@@ -24,6 +24,7 @@ function createNewsService({
   recordUpstream,
   urlToCanon,
   mediaCacheGet,
+  persistHist = true,
 }) {
   const { cleanTitle } = FEEDTEXT;
   const rdImgKey = u => MEDIA.imageKey(u);
@@ -197,7 +198,41 @@ function createNewsService({
   const NEWS_FEED_CAP = 200;
   const NEWS_DISK_MAX = 4500;
   const newsHistByFeed = new Map();
+  const INCIDENT_HIST_FILE = path.join(HIST_DIR, 'incident-history.json');
+  const INCIDENT_RETAIN_MS = 48 * 3600e3;
+  const INCIDENT_DISK_MAX = 2500;
+  const INCIDENT_API_CAP = 1500;
+  const OPS_CATS = new Set(['demo', 'fire', 'flood', 'disaster', 'insiden', 'kriminal', 'kesehatan']);
+  const incidentHistByEid = new Map();
   let newsHistDirty = false, newsHistSaveAt = 0, newsHistInflight = false;
+  let incHistDirty = false, incHistSaveAt = 0, incHistInflight = false;
+
+  const wibDayStartMs = (now = Date.now()) =>
+    Math.floor((now + 7 * 3600e3) / 86400e3) * 86400e3 - 7 * 3600e3;
+
+  function writeHistAtomicSync(file, payload) {
+    try {
+      fs.mkdirSync(HIST_DIR, { recursive: true });
+      const tmp = file + '.' + process.pid + '.tmp';
+      fs.writeFileSync(tmp, payload);
+      fs.renameSync(tmp, file);
+      return true;
+    } catch (e) {
+      console.error('[hist] gagal simpan ' + file + ': ' + (e.message || e));
+      return false;
+    }
+  }
+  function writeHistAtomicAsync(file, payload, onFail) {
+    const tmp = file + '.' + process.pid + '.' + Math.random().toString(36).slice(2, 7) + '.tmp';
+    return fs.promises.mkdir(HIST_DIR, { recursive: true })
+      .then(() => fs.promises.writeFile(tmp, payload))
+      .then(() => fs.promises.rename(tmp, file))
+      .catch(e => {
+        if (onFail) onFail();
+        try { fs.unlinkSync(tmp); } catch {}
+        console.error('[hist] gagal simpan async ' + file + ': ' + (e.message || e));
+      });
+  }
 
   function newsHistPayload() {
     const all = [], now = Date.now();
@@ -216,26 +251,61 @@ function createNewsService({
     newsHistSaveAt = now;
     newsHistDirty = false;
     if (force) {
-      try {
-        fs.mkdirSync(HIST_DIR, { recursive: true });
-        const tmp = NEWS_HIST_FILE + '.' + process.pid + '.tmp';
-        fs.writeFileSync(tmp, newsHistPayload());
-        fs.renameSync(tmp, NEWS_HIST_FILE);
-      } catch (e) { console.error('[hist] gagal simpan ' + NEWS_HIST_FILE + ': ' + (e.message || e)); }
+      writeHistAtomicSync(NEWS_HIST_FILE, newsHistPayload());
       return;
     }
     newsHistInflight = true;
-    const payload = newsHistPayload();
-    const tmp = NEWS_HIST_FILE + '.' + process.pid + '.' + Math.random().toString(36).slice(2, 7) + '.tmp';
-    fs.promises.mkdir(HIST_DIR, { recursive: true })
-      .then(() => fs.promises.writeFile(tmp, payload))
-      .then(() => fs.promises.rename(tmp, NEWS_HIST_FILE))
-      .catch(e => {
-        newsHistDirty = true;
-        try { fs.unlinkSync(tmp); } catch {}
-        console.error('[hist] gagal simpan async ' + NEWS_HIST_FILE + ': ' + (e.message || e));
-      })
+    writeHistAtomicAsync(NEWS_HIST_FILE, newsHistPayload(), () => { newsHistDirty = true; })
       .finally(() => { newsHistInflight = false; });
+  }
+
+  function incHistPayload(now = Date.now()) {
+    const all = [];
+    for (const ev of incidentHistByEid.values()) {
+      if (!ev || !ev.eid || ev.fixed || ev.kind === 'node') continue;
+      if (!ev.ts || ev.ts > now + 5 * 60e3 || now - ev.ts > INCIDENT_RETAIN_MS) continue;
+      if (isBannedNewsItem(ev)) continue;
+      all.push(ev);
+    }
+    all.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    return JSON.stringify({ classifierVersion: SOC.CLASSIFIER_VERSION, events: all.slice(0, INCIDENT_DISK_MAX) });
+  }
+  function saveIncidentHist(force, opts = {}) {
+    if (!opts.explicit && !persistHist) return;
+    if (!incHistDirty && !force) return;
+    const now = Date.now();
+    if (!force && (now - incHistSaveAt < 45000 || incHistInflight)) return;
+    incHistSaveAt = now;
+    incHistDirty = false;
+    const payload = incHistPayload(now);
+    if (force) {
+      writeHistAtomicSync(INCIDENT_HIST_FILE, payload);
+      return;
+    }
+    incHistInflight = true;
+    writeHistAtomicAsync(INCIDENT_HIST_FILE, payload, () => { incHistDirty = true; })
+      .finally(() => { incHistInflight = false; });
+  }
+  function loadIncidentHist() {
+    try {
+      const j = JSON.parse(fs.readFileSync(INCIDENT_HIST_FILE, 'utf8'));
+      const now = Date.now();
+      for (const ev of (j.events || [])) {
+        if (!ev || !ev.eid || ev.fixed || ev.kind === 'node' || !ev.name) continue;
+        if (typeof ev.la !== 'number' || typeof ev.lo !== 'number') continue;
+        const ts = Number(ev.ts) || 0;
+        if (ts <= 0 || ts > now + 5 * 60e3 || now - ts > INCIDENT_RETAIN_MS) continue;
+        if (isBannedNewsItem(ev)) continue;
+        if (FEEDTEXT.newsEnglish(ev.title, ev.desc)) continue;
+        if (!plotOk(ev.title, ev.kind)) continue;
+        incidentHistByEid.set(ev.eid, ev);
+        if (ev.url) registerNewsUrl(ev.url);
+      }
+      lastIncidentPins = [...incidentHistByEid.values()]
+        .filter(ev => now - (ev.ts || 0) <= 24 * 3600e3)
+        .sort((a, b) => (b.ts || 0) - (a.ts || 0))
+        .slice(0, INCIDENT_API_CAP);
+    } catch (e) {}
   }
 
   const newsHistKey = it => {
@@ -652,12 +722,26 @@ function createNewsService({
   const FEED_CAT = { demo:'demo', kebakaran:'fire', banjir:'flood', bencana:'disaster', insiden:'insiden', kriminal:'kriminal', kesehatan:'kesehatan', keracunan:'kesehatan', ekonomi:'ekonomi', politik:'politik', siber:'siber', lingkungan:'disaster' };
   const feedCatOf = id => FEED_CAT[String(id || '').toLowerCase().split('·').pop().trim()] || '';
 
+  const hydrateFailedSources = (srcs, now = Date.now()) => srcs.map(s => {
+    if (!s || (s.ok && Array.isArray(s.items) && s.items.length)) return s;
+    const hm = newsHistByFeed.get(s.id);
+    if (!hm || !hm.size) return s;
+    const fallback = [];
+    for (const it of hm.values()) {
+      if (!it || !it.ts || it.ts > now + 5 * 60e3 || now - it.ts > GEO_WINDOW) continue;
+      if (isBannedNewsItem(it) || FEEDTEXT.newsEnglish(it.title, it.desc)) continue;
+      fallback.push(it);
+    }
+    fallback.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    return fallback.length ? { ...s, items: fallback, _fromHist: true } : s;
+  });
+
   const breaking = () => memo('breaking', 25000, async () => {
-    const srcs = await news(), seen = new Set(), items = [];
-    const now = Date.now(), assessed = await assessedNewsFor(srcs);
+    const rawSrcs = await news(), now = Date.now(), srcs = hydrateFailedSources(rawSrcs, now);
+    const seen = new Set(), items = [], assessed = await assessedNewsFor(srcs);
     let matched = 0;
     for (const s of srcs) {
-      if (!s.ok) continue;
+      if (!s.ok && !s._fromHist) continue;
       const rows = assessed.get(s.id) || [];
       for (let idx = 0; idx < s.items.length; idx++) {
         const it = s.items[idx], ev = rows[idx];
@@ -706,15 +790,25 @@ function createNewsService({
   };
   const GEO_WINDOW = 24 * 3600e3;
   let lastIncidentPins = [];
+  loadIncidentHist();
   const buildIncidentNodes = (now = Date.now()) => GEO.NODES.map(p => ({
     name: p.name, la: p.la, lo: p.lo, prov: p.prov, prec: 'kab', kind: 'node', label: 'Node',
     title: 'Node pemantauan · ' + p.name, src: 'NODE', url: '', ts: now, weight: 0.16, fixed: true
   }));
 
+  const recalcPinWeight = (p, now = Date.now()) => {
+    const age = p && p.ts ? Math.max(0, now - p.ts) : 12 * 3600e3;
+    const meta = catMeta(p && p.kind);
+    const recency = Math.max(0.16, Math.exp(-age / (20 * 3600e3)));
+    const w = +(meta.sev * recency / (p && p.approx ? 2 : 1)).toFixed(3);
+    return { ...p, weight: w };
+  };
+
   const incidents = () => memo('incidents', 55000, async () => {
-    const srcs = await news(), now = Date.now(), out = [], seen = new Set(), assessed = await assessedNewsFor(srcs);
+    const rawSrcs = await news(), now = Date.now(), srcs = hydrateFailedSources(rawSrcs, now);
+    const out = [], seen = new Set(), assessed = await assessedNewsFor(srcs);
     for (const s of srcs) {
-      if (!s.ok) continue;
+      if (!s.ok && !s._fromHist) continue;
       const rows = assessed.get(s.id) || [];
       for (let idx = 0; idx < s.items.length; idx++) {
         const it = s.items[idx], ev = rows[idx];
@@ -756,27 +850,110 @@ function createNewsService({
     }
     out.sort((a, b) => b.ts - a.ts);
 
-    const prevPins = ((((cache.get('incidents') || {}).v) || {}).items) || lastIncidentPins;
-    const merged = EVM.mergeEvents(out, prevPins, { normPlace: s => GEO.norm(s) });
+    const cachePrev = ((((cache.get('incidents') || {}).v) || {}).items) || lastIncidentPins;
+    const prevByEid = new Map();
+    for (const p of cachePrev) if (p && p.eid && !p.fixed) prevByEid.set(p.eid, p);
+    for (const [eid, p] of incidentHistByEid) {
+      if (!p || !p.ts || now - p.ts > INCIDENT_RETAIN_MS || isBannedNewsItem(p)) {
+        incidentHistByEid.delete(eid);
+        incHistDirty = true;
+        continue;
+      }
+      if (!prevByEid.has(eid) && now - p.ts <= GEO_WINDOW) prevByEid.set(eid, p);
+    }
+    const prevPins = [...prevByEid.values()];
+    const merged = EVM.mergeEvents(out, prevPins, {
+      normPlace: s => GEO.norm(s),
+      retainPrevMs: GEO_WINDOW,
+      now,
+      filterPrev: p => !isBannedNewsItem(p) && plotOk(p.title, p.kind),
+      onCarry: recalcPinWeight,
+    });
     merged.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-    const items = merged.slice(0, 800);
-    lastIncidentPins = items.slice();
+    const active = merged.slice(0, INCIDENT_API_CAP);
+
+    let touched = false;
+    for (const ev of active) {
+      if (!ev || !ev.eid) continue;
+      const old = incidentHistByEid.get(ev.eid);
+      if (!old || (ev.ts || 0) > (old.ts || 0) || (ev.n || 1) > (old.n || 1) || ev.title !== old.title) {
+        const { carried: _c, ...stored } = ev;
+        incidentHistByEid.set(ev.eid, stored);
+        touched = true;
+      }
+    }
+    if (touched) {
+      incHistDirty = true;
+      saveIncidentHist(false);
+    }
+
+    lastIncidentPins = active.slice();
+    const wibStart = wibDayStartMs(now);
+    const eventStats = {};
+    for (const c of CATS) eventStats[c.id] = 0;
+    let todayCount = 0, liveCount = 0, active12hCount = 0, prev24hCount = 0;
+    for (const p of active) {
+      if (p.kind && eventStats[p.kind] !== undefined) eventStats[p.kind]++;
+      if ((p.ts || 0) >= wibStart) todayCount++;
+      if (now - (p.ts || 0) <= 2 * 3600e3) liveCount++;
+      if (now - (p.ts || 0) <= 12 * 3600e3) active12hCount++;
+    }
+    for (const p of incidentHistByEid.values()) {
+      const age = now - (p.ts || 0);
+      if (age > GEO_WINDOW && age <= INCIDENT_RETAIN_MS) prev24hCount++;
+    }
+
+    const items = active.slice();
     const nodes = buildIncidentNodes(now);
     for (const nd of nodes) items.push(nd);
 
-    const newest = items.find(i => !i.fixed);
+    const newest = active[0];
     const stale = !!newest && now - (newest.ts || 0) > 3 * 3600e3;
-    return { ok: true, classifierVersion: SOC.CLASSIFIER_VERSION, items, total: merged.length, raw: out.length, places: GEO.NODES.length, at: now, newest: newest ? newest.ts : 0, stale };
+    return {
+      ok: true,
+      classifierVersion: SOC.CLASSIFIER_VERSION,
+      items,
+      total: active.length,
+      raw: out.length,
+      places: GEO.NODES.length,
+      wibStart,
+      todayCount,
+      liveCount,
+      active12hCount,
+      prev24hCount,
+      eventStats,
+      at: now,
+      newest: newest ? newest.ts : 0,
+      stale,
+    };
   });
 
+  const selectSituationItems = (items, limit = 180, opsQuota = 120) => {
+    if (items.length <= limit) return items;
+    const ops = [], rest = [];
+    for (const it of items) {
+      if (!it.foreign && OPS_CATS.has(it.cat)) ops.push(it);
+      else rest.push(it);
+    }
+    const pickedOps = ops.slice(0, opsQuota);
+    const remBudget = limit - pickedOps.length;
+    const pickedRest = rest.slice(0, remBudget);
+    const usedOps = pickedOps.length;
+    const extraOps = ops.slice(usedOps, usedOps + Math.max(0, limit - pickedOps.length - pickedRest.length));
+    return [...pickedOps, ...extraOps, ...pickedRest]
+      .sort((a, b) => b.weight - a.weight || (b.ts || 0) - (a.ts || 0))
+      .slice(0, limit);
+  };
+
   const situation = () => memo('situation', 45000, async () => {
-    const [srcs, inc] = await Promise.all([news(), incidents()]);
-    const now = Date.now(), items = [], seen = new Set(), assessed = await assessedNewsFor(srcs);
+    const [rawSrcs, inc] = await Promise.all([news(), incidents()]);
+    const now = Date.now(), srcs = hydrateFailedSources(rawSrcs, now);
+    const items = [], seen = new Set(), assessed = await assessedNewsFor(srcs);
     const stats = {}; for (const c of CATS) stats[c.id] = 0;
     const regions = new Map();
     let foreignN = 0;
     for (const s of srcs) {
-      if (!s.ok) continue;
+      if (!s.ok && !s._fromHist) continue;
       const rows = assessed.get(s.id) || [];
       for (let idx = 0; idx < s.items.length; idx++) {
         const it = s.items[idx], ev = rows[idx];
@@ -800,16 +977,58 @@ function createNewsService({
       }
     }
     for (const p of (inc && inc.items) || []) {
-      if (p && !p.fixed && !p.approx && p.name) {
-        regions.set(p.name, (regions.get(p.name) || 0) + 1);
+      if (!p || p.fixed || !p.title || !p.kind) continue;
+      const age = p.ts ? Math.max(0, now - p.ts) : 12 * 3600e3;
+      if (!Number.isFinite(p.ts) || p.ts <= 0 || age > GEO_WINDOW) continue;
+      const k = breakNorm(p.title).slice(0, 56);
+      if (k && !seen.has(k)) {
+        seen.add(k);
+        const meta = catMeta(p.kind);
+        const recency = Math.max(0.12, Math.exp(-age / (24 * 3600e3)));
+        items.push({
+          title: p.title,
+          url: p.url,
+          src: p.src,
+          ts: p.ts,
+          assessment: p.assessment,
+          cat: p.kind,
+          label: p.label || meta.label,
+          place: p.name || '',
+          pub: p.pub || undefined,
+          sources: p.sources,
+          n: p.n,
+          carried: p.carried || undefined,
+          weight: +(meta.sev * recency).toFixed(3),
+        });
+        if (stats[p.kind] !== undefined) stats[p.kind]++;
       }
+      if (!p.approx && p.name) regions.set(p.name, (regions.get(p.name) || 0) + 1);
     }
     const located = inc && typeof inc.total === 'number' ? inc.total : 0;
     items.sort((a, b) => b.weight - a.weight || (b.ts || 0) - (a.ts || 0));
     const regionRows = [...regions.entries()].map(([name, n]) => ({ name, n }))
       .sort((a, b) => b.n - a.n).slice(0, 20);
-    return { ok: true, classifierVersion: SOC.CLASSIFIER_VERSION, stats, total: items.length, located, items: items.slice(0, 60), regions: regionRows, foreign: foreignN,
-      sources: srcs.map(s => ({ id: s.id, ok: s.ok, n: s.items.length, err: s.err || '', at: s.at || 0 })), at: now };
+    return {
+      ok: true,
+      classifierVersion: SOC.CLASSIFIER_VERSION,
+      stats,
+      incidentStats: inc && inc.eventStats ? inc.eventStats : undefined,
+      daily: inc ? {
+        wibStart: inc.wibStart,
+        today: inc.todayCount || 0,
+        live2h: inc.liveCount || 0,
+        active12h: inc.active12hCount || 0,
+        prev24h: inc.prev24hCount || 0,
+        total24h: located,
+      } : undefined,
+      total: items.length,
+      located,
+      items: selectSituationItems(items, 180, 120),
+      regions: regionRows,
+      foreign: foreignN,
+      sources: rawSrcs.map(s => ({ id: s.id, ok: s.ok, n: s.items.length, err: s.err || '', at: s.at || 0 })),
+      at: now,
+    };
   });
 
   const newsRevSnapshots = new Map();
@@ -898,6 +1117,9 @@ function createNewsService({
     mergeNewsHist,
     newsHistByFeed,
     saveNewsHist,
+    incidentHistByEid,
+    loadIncidentHist,
+    saveIncidentHist,
     invalidateDerivedFromNews,
     rssSem,
     getFeedHealthSummary,

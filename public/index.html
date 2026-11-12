@@ -622,6 +622,10 @@ a{color:inherit;text-decoration:none;text-underline-offset:2px}
 .sit-kpi-side{font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--text3)}
 .sit-kpi-main b{font:600 40px/1 var(--disp);letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:#f4f4f4}
 .sit-kpi-sub2{flex-basis:100%;font:500 11px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--text)}
+.sit-win{flex-basis:100%;display:inline-flex;align-items:center;gap:10px;margin-top:5px;width:fit-content;padding:0;border:0;background:transparent;pointer-events:auto}
+.sw-b{border:0;border-bottom:1px solid transparent;background:transparent;color:var(--text3);font:600 8.5px/1.2 var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:2px 0;cursor:pointer;transition:color .14s ease,border-color .14s ease}
+.sw-b:hover{color:var(--text)}
+.sw-b[aria-pressed="true"]{background:transparent;border-bottom-color:#f4f4f4;color:#f4f4f4}
 .sit-kpi-sync{display:flex;flex-direction:column;align-items:flex-end;gap:3px;padding-top:3px;text-align:right}
 .sit-kpi-sync span{display:inline-flex;align-items:center;gap:6px;font:600 10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ok)}
 .sit-kpi-sync span::before{content:"";width:6px;height:6px;background:var(--ok);animation:pulse 2s infinite}
@@ -2781,7 +2785,15 @@ button.mp-src{background:none;border-top:0;border-left:0;border-right:0;cursor:p
         <canvas id="sit-globe" role="img" aria-label="Globe dunia dengan titik insiden live, bisa di-drag dan di-zoom"></canvas>
         <div class="sit-corners" aria-hidden="true"><i class="ctl"></i><i class="ctr"></i><i class="cbl"></i><i class="cbr"></i></div>
         <div class="sit-globe-kpi">
-          <div class="sit-kpi-main"><b id="sit-total">—</b><span class="sit-kpi-side">Insiden</span><span id="sit-total-lbl" class="sit-kpi-sub2">—</span></div>
+          <div class="sit-kpi-main">
+            <b id="sit-total">—</b><span class="sit-kpi-side">Insiden</span>
+            <span id="sit-total-lbl" class="sit-kpi-sub2">—</span>
+            <div class="sit-win" id="sit-win" role="group" aria-label="Rentang waktu insiden">
+              <button type="button" class="sw-b" data-win="24h" aria-pressed="true">24J</button>
+              <button type="button" class="sw-b" data-win="today" aria-pressed="false">Hari Ini</button>
+              <button type="button" class="sw-b" data-win="live" aria-pressed="false">&lt;2J</button>
+            </div>
+          </div>
           <div class="sit-kpi-sync"><span id="sit-sync-state">live</span><time id="sit-sync-time">—</time></div>
         </div>
         <div class="sit-globe-tag">Globe · live</div>
@@ -3254,6 +3266,23 @@ const num = n => { n = +n || 0;
        : n >= 1e3 ? (n/1e3).toFixed(1).replace('.0','') + 'K' : String(n); };
 const wibTime = t => new Date(t).toLocaleTimeString('id-ID',
   { timeZone:'Asia/Jakarta', hour12:false, hour:'2-digit', minute:'2-digit' }).replace(/\./g, ':');
+const wibDayStart = (now = Date.now()) => { const j = new Date(now + 7 * 3600e3); j.setUTCHours(0, 0, 0, 0); return j.getTime() - 7 * 3600e3; };
+let sitWindow = '24h';
+const inSitWindow = (p, now = Date.now(), win = sitWindow) => {
+  if (!p || p.fixed) return true;
+  const ts = Number(p.ts) || 0;
+  if (win === '24h') return !ts || (ts <= now + 5 * 60e3 && now - ts <= 24 * 3600e3);
+  if (win === 'today') {
+    if (!ts) return p.sub === 'volcano' || p.sub === 'tma';
+    return ts >= wibDayStart(now) && ts <= now + 5 * 60e3;
+  }
+  if (win === 'live') {
+    if (!ts) return p.sub === 'volcano';
+    return ts <= now + 5 * 60e3 && now - ts <= 2 * 3600e3;
+  }
+  return true;
+};
+const sitWindowLabel = (win = sitWindow) => win === 'today' ? 'Hari Ini' : win === 'live' ? '<2J' : '24J';
 const wibFull = t => new Date(t).toLocaleString('id-ID',
   { timeZone:'Asia/Jakarta', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:false }).replace(/\./g, ':');
 function rel(ts){
@@ -3563,22 +3592,24 @@ const magOf = p => {
 const HOT_MS = 90 * 60e3;
 function focusCandidates(){
   const now = Date.now();
-  const winOf = p => {
-    if (p.sub === 'gempa') { const m = magOf(p); return (m != null && m >= 6.5) ? 8 * 3600e3 : 3 * 3600e3; }
-    return 2 * 3600e3;
+  const winOf = (p, fallback12h) => {
+    if (p.sub === 'gempa') { const m = magOf(p); return (m != null && m >= 6.5) ? 8 * 3600e3 : (fallback12h ? 12 * 3600e3 : 3 * 3600e3); }
+    return fallback12h ? 12 * 3600e3 : 2 * 3600e3;
   };
-  return (PULSE || []).concat(DIS_PULSE || []).filter(p => {
+  const pick = (fallback12h) => (PULSE || []).concat(DIS_PULSE || []).filter(p => {
     if (p.fixed || typeof p.la !== 'number' || typeof p.lo !== 'number') return false;
+    if (!inSitWindow(p, now)) return false;
     if (legendOn[legendKeyOf(p)] === false) return false;
     if (!(p.la > -12 && p.la < 8 && p.lo > 92 && p.lo < 145)) return false;
-    if (!p.ts || now - p.ts > winOf(p) || p.ts > now + 5 * 60e3) return false;
+    if (!p.ts || now - p.ts > winOf(p, fallback12h) || p.ts > now + 5 * 60e3) return false;
     if (p.sub === 'gempa') {
-
       const isBmkg = p.src === 'BMKG' || (p.eid || '').startsWith('bmkg:');
       if (!isBmkg) { const m = magOf(p); if (m != null && m < MAG_MIN_FOCUS) return false; }
     }
     return true;
   });
+  const hot = pick(false);
+  return hot.length || sitWindow === 'live' ? hot : pick(true);
 }
 
 const isCriticalFlood = p => !!(p && p.kind === 'flood' && ((p.siaga && p.siaga <= 2) || (p.state && p.state >= 3)));
@@ -3933,11 +3964,14 @@ function drawGlobe(now){
   }
   for (const p of (PULSE || []).concat(DIS_PULSE || [])) {
     if (p.fixed || typeof p.la !== 'number' || typeof p.lo !== 'number') continue;
+    if (!inSitWindow(p, tsNow)) continue;
     if (legendOn[legendKeyOf(p)] === false) continue;
     if (d3.geoDistance([p.lo, p.la], globeCenter) >= Math.PI / 2 - 0.03) continue;
     const xy = proj([p.lo, p.la]);
     if (!xy) continue;
-    const fresh = (tsNow - (p.ts || 0)) < 45 * 60e3;
+    const ageMs = p.ts ? Math.max(0, tsNow - p.ts) : 3 * 3600e3;
+    const fresh = ageMs < 45 * 60e3;
+    const alpha = ageMs < 2 * 3600e3 ? 0.96 : (ageMs < 12 * 3600e3 ? 0.78 : 0.46);
     const name = p.name || '';
     const real = !!p.sub;
     const slot = real ? 0 : (slotCount[name] || 0);
@@ -3945,9 +3979,10 @@ function drawGlobe(now){
     const jl = jitterGeo(name, p.la, p.lo, slot, p.prec);
     const xy2 = jl[0] === p.la && jl[1] === p.lo ? xy : proj([jl[1], jl[0]]);
     if (!xy2) continue;
-    const r = 1.35 + (p.weight || .3) * 2.5 + zoomBoost;
+    const baseR = 1.35 + (p.weight || .3) * 2.5 + zoomBoost;
+    const r = ageMs >= 12 * 3600e3 ? baseR * 0.84 : baseR;
     pts.push({ x: xy2[0], y: xy2[1],
-      r, cat: p.kind, color: p.sub === 'gempa' ? '#ff5a4e' : p.sub === 'volcano' ? (LVL_COLOR[p.lvl] || '#8d8d8d') : p.sub === 'tma' ? (p.siaga === 1 ? '#ff3b30' : p.siaga === 2 ? '#ff9500' : '#4589ff') : p.sub === 'flood' ? (p.state >= 4 ? '#ff3b30' : p.state === 3 ? '#ff9500' : '#4589ff') : (CAT_COLOR[p.kind] || '#8d8d8d'), fresh, p });
+      r, cat: p.kind, color: p.sub === 'gempa' ? '#ff5a4e' : p.sub === 'volcano' ? (LVL_COLOR[p.lvl] || '#8d8d8d') : p.sub === 'tma' ? (p.siaga === 1 ? '#ff3b30' : p.siaga === 2 ? '#ff9500' : '#4589ff') : p.sub === 'flood' ? (p.state >= 4 ? '#ff3b30' : p.state === 3 ? '#ff9500' : '#4589ff') : (CAT_COLOR[p.kind] || '#8d8d8d'), fresh, alpha, ageMs, p });
   }
   pts.sort((a, b) => a.r - b.r);
   const focusId = linkItem ? itemIdOf(linkItem) : '';
@@ -4032,8 +4067,8 @@ function drawGlobe(now){
     ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
     ctx.save();
     ctx.shadowColor = d.color;
-    ctx.shadowBlur = dim ? 0 : 7;
-    ctx.fillStyle = hexA(d.color, (d.fresh ? 0.96 : 0.65) * (dim ? 0.3 : 1));
+    ctx.shadowBlur = dim ? 0 : (d.ageMs < 2 * 3600e3 ? 7 : (d.ageMs < 12 * 3600e3 ? 4 : 0));
+    ctx.fillStyle = hexA(d.color, (d.alpha || 0.65) * (dim ? 0.3 : 1));
     ctx.fill();
     ctx.restore();
     ctx.lineWidth = .7; ctx.strokeStyle = '#0d0d0d'; ctx.stroke();
@@ -4510,7 +4545,10 @@ document.addEventListener('keydown', e => {
 addEventListener('resize', () => drawGlobe(performance.now()));
 
 function buildClusters(){
-  const items = [...(SIT && SIT.items || [])].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const now = Date.now();
+  const items = [...(SIT && SIT.items || [])]
+    .filter(it => it && it.ts && inSitWindow(it, now))
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const groups = [];
   const usedIds = new Set();
   for (const it of items) {
@@ -4564,6 +4602,7 @@ function clusterHtml(g, i){
         <span class="cl-srcs">${g.sources.size} sumber</span></div>
       <div class="cl-t">${esc(cleanTitle(deEmoji(lead.title || ''), lead.pub || lead.src))}</div>
       <div class="cl-f"><span>${g.items.length} kabar</span>
+        ${g.latest ? `<span>·</span><span>${esc(rel(g.latest))}</span>` : ``}
         ${g.earliest && g.latest && g.latest > g.earliest ? `<span>·</span><span>${esc(wibTime(g.earliest))} - ${esc(wibTime(g.latest))}</span>` : ``}
         <button class="cl-more" type="button" data-toggle="${esc(g.id)}" aria-expanded="${open ? 'true' : 'false'}">${open ? 'tutup' : 'timeline'}</button></div>
       <div class="cl-body" ${open ? '' : 'hidden'}>${lines}</div>
@@ -5103,11 +5142,47 @@ addEventListener('pagehide', () => {
   const box = $('#cl-toasts'); if (box) box.innerHTML = '';
 });
 
+function activeWindowPointStats(now = Date.now()){
+  const st = {};
+  if (geoIncLoaded) {
+    let incCount = 0;
+    for (const p of (PULSE || [])) {
+      if (!p || p.fixed || typeof p.la !== 'number' || typeof p.lo !== 'number') continue;
+      if (!inSitWindow(p, now)) continue;
+      incCount++;
+      const k = legendKeyOf(p);
+      if (k) st[k] = (st[k] || 0) + 1;
+    }
+    let disCount = 0;
+    for (const p of (DIS_PULSE || [])) {
+      if (!p || p.fixed || typeof p.la !== 'number' || typeof p.lo !== 'number') continue;
+      if (!inSitWindow(p, now)) continue;
+      disCount++;
+      const k = legendKeyOf(p);
+      if (k) st[k] = (st[k] || 0) + 1;
+    }
+    return { st, incCount, disCount };
+  }
+  const base = (SIT && (SIT.incidentStats || SIT.stats)) || {};
+  Object.assign(st, base);
+  const daily = (SIT && SIT.daily) || null;
+  const incCount = sitWindow === 'today' && daily ? (daily.today || 0)
+    : sitWindow === 'live' && daily ? (daily.live2h || 0)
+    : ((SIT && typeof SIT.located === 'number' && SIT.located > 0) ? SIT.located : ((SIT && SIT.total) || 0));
+  let disCount = 0;
+  for (const p of (DIS_PULSE || [])) {
+    if (!p || p.fixed || typeof p.la !== 'number' || !inSitWindow(p, now)) continue;
+    disCount++;
+    const k = legendKeyOf(p);
+    if (k) st[k] = (st[k] || 0) + 1;
+  }
+  return { st, incCount, disCount };
+}
 function renderBrandCase(st){
   const g = {
     demo: st.demo || 0,
     insiden: (st.insiden || 0) + (st.fire || 0),
-    bencana: (st.disaster || 0) + (st.flood || 0),
+    bencana: (st.disaster || 0) + (st.flood || 0) + (st.gempa || 0) + (st.gunung || 0),
   };
   const total = g.demo + g.insiden + g.bencana;
   document.querySelectorAll('.bc-stat b[data-bc]').forEach(b => { b.textContent = g[b.dataset.bc]; });
@@ -5117,23 +5192,33 @@ function renderBrandCase(st){
     [g.demo, g.insiden, g.bencana].forEach((n, i) => { mix.children[i].style.flexGrow = total ? n : 1; });
   }
   const sum = $('#bc-sum');
-  if (sum) sum.textContent = total + ' titik · 24j';
+  if (sum) sum.textContent = total + ' titik · ' + (sitWindow === '24h' ? '24j' : sitWindowLabel().toLowerCase());
 }
 function renderSituation(){
   if (!SIT) return;
-  const st = { ...(SIT.stats || {}) };
-  st.gempa = (DIS_PULSE || []).filter(p => p.sub === 'gempa').length
-    + (PULSE || []).filter(p => p.sub === 'gempa' && typeof p.la === 'number').length;
-  st.gunung = (DIS_PULSE || []).filter(p => p.sub === 'volcano').length;
-  st.flood = (st.flood || 0) + (DIS_PULSE || []).filter(p => p.kind === 'flood').length;
+  const { st, incCount, disCount } = activeWindowPointStats();
   const sitTotal = SIT.total || 0;
   const sitLocated = (typeof SIT.located === 'number' && isFinite(SIT.located)) ? SIT.located : 0;
-  $('#sit-total').textContent = sitLocated > 0 ? sitLocated : sitTotal;
+  const daily = SIT.daily || null;
+  const total24h = sitLocated || (daily ? daily.total24h : sitTotal) || 0;
+  const todayN = daily ? daily.today : incCount;
+  const shownCount = geoIncLoaded ? incCount : (sitLocated > 0 ? incCount : sitTotal);
+  $('#sit-total').textContent = shownCount;
   const sitLbl = $('#sit-total-lbl');
-  if (sitLbl) sitLbl.textContent = sitLocated > 0 ? `${sitTotal} berita · 24 jam` : '24 jam';
+  if (sitLbl) {
+    if (sitWindow === 'today') {
+      sitLbl.textContent = `sejak 00:00 WIB · ${total24h} dlm 24J`;
+    } else if (sitWindow === 'live') {
+      sitLbl.textContent = `2 jam terakhir · ${total24h} dlm 24J`;
+    } else {
+      sitLbl.textContent = sitLocated > 0
+        ? `${todayN} hari ini · ${sitTotal} kabar${disCount > 0 ? ' · +' + disCount + ' sensor' : ''}`
+        : `${sitTotal} kabar · 24 jam`;
+    }
+  }
   renderMapLegend(st);
   renderBrandCase(st);
-  $('#dmeta').textContent = (SIT.total || 0) + ' insiden';
+  $('#dmeta').textContent = shownCount + ' insiden · ' + sitTotal + ' berita · ' + sitWindowLabel();
   const syncBox = document.querySelector('.sit-kpi-sync');
   syncBox.dataset.state = SIT_STALE ? 'stale' : 'live';
   $('#sit-sync-state').textContent = SIT_STALE ? 'stale' : 'live';
@@ -5179,6 +5264,19 @@ async function pullSituation(fresh){
   }
 }
 schedulePoll(() => pullSituation(), 60000, { dedupGlobalMs: 18000 });
+const sitWinEl = document.getElementById('sit-win');
+if (sitWinEl) {
+  sitWinEl.addEventListener('click', e => {
+    const btn = e.target.closest('.sw-b[data-win]');
+    if (!btn || btn.dataset.win === sitWindow) return;
+    sitWindow = btn.dataset.win;
+    sitWinEl.querySelectorAll('.sw-b').forEach(b => b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'));
+    if (SIT) renderSituation();
+    renderGeoTelemetry();
+    drawGlobe(performance.now());
+    if (typeof mapOpen !== 'undefined' && mapOpen && typeof paintMap === 'function') paintMap();
+  });
+}
 
 const fmtIDR = (n, d = 0) => isFinite(n) ? n.toLocaleString('id-ID', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
 function drawSpark(cv, closes, up){
@@ -5534,12 +5632,14 @@ function alertCards(){
   if (alertCache && alertCache.xp === xPosts && alertCache.tp === tPosts &&
       alertCache.xc === xSignalCurrent && alertCache.tc === tSignalCurrent &&
       alertCache.v === v && alertCache.bucket === bucket &&
-      alertCache.sit === SIT && alertCache.sg === SIG_GROUPS) {
+      alertCache.sit === SIT && alertCache.sg === SIG_GROUPS && alertCache.win === sitWindow) {
     return alertCache.cards;
   }
   const cards = [];
   const socGroups = SIG_GROUPS;
-  const newsGroups = SIT ? buildClusters().filter(g => g.latest && g.latest <= Date.now() && Date.now() - g.latest <= 90 * 60e3).slice(0, 6) : [];
+  const allClusters = SIT ? buildClusters().filter(g => g.latest && g.latest <= Date.now()) : [];
+  const hotClusters = allClusters.filter(g => Date.now() - g.latest <= 90 * 60e3);
+  const newsGroups = (hotClusters.length ? hotClusters : allClusters.filter(g => Date.now() - g.latest <= 6 * 3600e3)).slice(0, 6);
   const { pairs, socLeft, newsLeft } = correlateCards(socGroups, newsGroups);
   for (const p of pairs) {
     const g = p.g, c = p.c, k = c.items.length, s = c.sources.size;
@@ -9211,7 +9311,8 @@ const joff = it => {
 };
 function paintMap(){
   if (!mapReady) return;
-  const visData = mapData.filter(i => i.fixed || legendOn[legendKeyOf(i)] !== false);
+  const now = Date.now();
+  const visData = mapData.filter(i => i.fixed || (inSitWindow(i, now) && legendOn[legendKeyOf(i)] !== false));
   if (heat) heat.setLatLngs(visData.filter(i => i.kind !== 'node').map(i => {
     const [dx, dy] = joff(i); return [i.la + dy, i.lo + dx, Math.max(0.18, Math.min(1, i.weight || 0.3))];
   }));
@@ -9220,7 +9321,8 @@ function paintMap(){
     if (it.fixed) continue;
     const c = it.sub === 'gempa' ? '#ff5a4e' : (KIND_COLOR[it.kind] || '#8d8d8d');
     const [dx, dy] = joff(it);
-    const fresh = it.ts && (Date.now() - it.ts) < 3 * 3600e3;
+    const ageMs = it.ts ? Math.max(0, now - it.ts) : 3 * 3600e3;
+    const fresh = ageMs < 2 * 3600e3;
     let m;
     if (fresh) {
       const sz = 18 + Math.round(Math.min(1, it.weight || 0.3) * 8);
@@ -9229,11 +9331,17 @@ function paintMap(){
           html: `<div class="pin-fresh" style="--pc:${c};width:${sz}px;height:${sz}px"><i></i></div>` }),
         keyboard: false
       });
-    } else {
+    } else if (ageMs < 12 * 3600e3) {
       m = L.circleMarker([it.la + dy, it.lo + dx], {
         radius: 4 + Math.round(Math.min(1, it.weight || 0.3) * 3),
         color: '#101010', weight: 1, opacity: .85, fillColor: c,
-        fillOpacity: .9
+        fillOpacity: .88
+      });
+    } else {
+      m = L.circleMarker([it.la + dy, it.lo + dx], {
+        radius: 3 + Math.round(Math.min(1, it.weight || 0.3) * 2),
+        color: '#101010', weight: 1, opacity: .55, fillColor: c,
+        fillOpacity: .50
       });
     }
     m.bindPopup(mapPopup(it), { maxWidth: 290, keepInView: true });
@@ -9613,8 +9721,9 @@ function renderGeoTelemetry(){
     if (countEl) countEl.textContent = '— titik';
     return;
   }
+  const now = Date.now();
   const pts = (PULSE || []).concat(DIS_PULSE || [])
-    .filter(p => p && !p.fixed && typeof p.la === 'number' && typeof p.lo === 'number');
+    .filter(p => p && !p.fixed && typeof p.la === 'number' && typeof p.lo === 'number' && inSitWindow(p, now));
   const counts = Object.create(null);
   for (const p of pts) {
     const k = legendKeyOf(p);
@@ -9727,6 +9836,7 @@ async function pullIncidents(fresh){
       maybeFocusFresh();
       const nReal = mapData.filter(i => !i.fixed).length;
       renderGeoTelemetry();
+      if (SIT && typeof renderSituation === 'function') renderSituation();
       $('#map-meta').textContent = nReal + ' titik · ' + (mapData.length - nReal) + ' node · sync ' + wibTime(d.at) + (d.stale ? ' · DATA LAMA' : '');
       wireSrcText = 'wire ' + (d.total || nReal) + (d.raw && d.raw > d.total ? ' · ' + d.raw + ' artikel' : '') + ' · kamera ' + CAMS.length;
       paintMapSrc();
@@ -10082,7 +10192,6 @@ const wxSize = () => { const s = Math.pow(1.3, (map ? map.getZoom() : 10) - 10);
 const wxIcon = (code, col) => { const sz = wxSize(); return L.divIcon({ className: 'mk-cuaca-ic',
   iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2],
   html: `<div class="mk-cuaca" style="--wc:${col}">${wxGlyph(code)}</div>` }); };
-const wibDayStart = () => { const j = new Date(Date.now() + 7 * 3600e3); j.setUTCHours(0, 0, 0, 0); return j.getTime() - 7 * 3600e3; };
 async function pullDisaster(){
   if (API == null) return;
   try {
@@ -10359,7 +10468,8 @@ async function pullDisaster(){
     DIS_PULSE = dp;
     geoDisLoaded = true;
     renderGeoTelemetry();
-    if (SIT) renderMapLegend({ ...(SIT.stats || {}),
+    if (SIT && typeof renderSituation === 'function') renderSituation();
+    else if (SIT) renderMapLegend({ ...(SIT.stats || {}),
       flood: ((SIT.stats && SIT.stats.flood) || 0) + dp.filter(p => p.kind === 'flood').length,
       gempa: dp.filter(p => p.sub === 'gempa').length,
       gunung: dp.filter(p => p.sub === 'volcano').length });

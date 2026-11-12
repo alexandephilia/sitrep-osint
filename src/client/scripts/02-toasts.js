@@ -1,5 +1,8 @@
 function buildClusters(){
-  const items = [...(SIT && SIT.items || [])].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const now = Date.now();
+  const items = [...(SIT && SIT.items || [])]
+    .filter(it => it && it.ts && inSitWindow(it, now))
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const groups = [];
   const usedIds = new Set();
   for (const it of items) {
@@ -53,6 +56,7 @@ function clusterHtml(g, i){
         <span class="cl-srcs">${g.sources.size} sumber</span></div>
       <div class="cl-t">${esc(cleanTitle(deEmoji(lead.title || ''), lead.pub || lead.src))}</div>
       <div class="cl-f"><span>${g.items.length} kabar</span>
+        ${g.latest ? `<span>·</span><span>${esc(rel(g.latest))}</span>` : ``}
         ${g.earliest && g.latest && g.latest > g.earliest ? `<span>·</span><span>${esc(wibTime(g.earliest))} - ${esc(wibTime(g.latest))}</span>` : ``}
         <button class="cl-more" type="button" data-toggle="${esc(g.id)}" aria-expanded="${open ? 'true' : 'false'}">${open ? 'tutup' : 'timeline'}</button></div>
       <div class="cl-body" ${open ? '' : 'hidden'}>${lines}</div>

@@ -1,22 +1,24 @@
 const HOT_MS = 90 * 60e3;
 function focusCandidates(){
   const now = Date.now();
-  const winOf = p => {
-    if (p.sub === 'gempa') { const m = magOf(p); return (m != null && m >= 6.5) ? 8 * 3600e3 : 3 * 3600e3; }
-    return 2 * 3600e3;
+  const winOf = (p, fallback12h) => {
+    if (p.sub === 'gempa') { const m = magOf(p); return (m != null && m >= 6.5) ? 8 * 3600e3 : (fallback12h ? 12 * 3600e3 : 3 * 3600e3); }
+    return fallback12h ? 12 * 3600e3 : 2 * 3600e3;
   };
-  return (PULSE || []).concat(DIS_PULSE || []).filter(p => {
+  const pick = (fallback12h) => (PULSE || []).concat(DIS_PULSE || []).filter(p => {
     if (p.fixed || typeof p.la !== 'number' || typeof p.lo !== 'number') return false;
+    if (!inSitWindow(p, now)) return false;
     if (legendOn[legendKeyOf(p)] === false) return false;
     if (!(p.la > -12 && p.la < 8 && p.lo > 92 && p.lo < 145)) return false;
-    if (!p.ts || now - p.ts > winOf(p) || p.ts > now + 5 * 60e3) return false;
+    if (!p.ts || now - p.ts > winOf(p, fallback12h) || p.ts > now + 5 * 60e3) return false;
     if (p.sub === 'gempa') {
-
       const isBmkg = p.src === 'BMKG' || (p.eid || '').startsWith('bmkg:');
       if (!isBmkg) { const m = magOf(p); if (m != null && m < MAG_MIN_FOCUS) return false; }
     }
     return true;
   });
+  const hot = pick(false);
+  return hot.length || sitWindow === 'live' ? hot : pick(true);
 }
 
 const isCriticalFlood = p => !!(p && p.kind === 'flood' && ((p.siaga && p.siaga <= 2) || (p.state && p.state >= 3)));
@@ -371,11 +373,14 @@ function drawGlobe(now){
   }
   for (const p of (PULSE || []).concat(DIS_PULSE || [])) {
     if (p.fixed || typeof p.la !== 'number' || typeof p.lo !== 'number') continue;
+    if (!inSitWindow(p, tsNow)) continue;
     if (legendOn[legendKeyOf(p)] === false) continue;
     if (d3.geoDistance([p.lo, p.la], globeCenter) >= Math.PI / 2 - 0.03) continue;
     const xy = proj([p.lo, p.la]);
     if (!xy) continue;
-    const fresh = (tsNow - (p.ts || 0)) < 45 * 60e3;
+    const ageMs = p.ts ? Math.max(0, tsNow - p.ts) : 3 * 3600e3;
+    const fresh = ageMs < 45 * 60e3;
+    const alpha = ageMs < 2 * 3600e3 ? 0.96 : (ageMs < 12 * 3600e3 ? 0.78 : 0.46);
     const name = p.name || '';
     const real = !!p.sub;
     const slot = real ? 0 : (slotCount[name] || 0);
@@ -383,9 +388,10 @@ function drawGlobe(now){
     const jl = jitterGeo(name, p.la, p.lo, slot, p.prec);
     const xy2 = jl[0] === p.la && jl[1] === p.lo ? xy : proj([jl[1], jl[0]]);
     if (!xy2) continue;
-    const r = 1.35 + (p.weight || .3) * 2.5 + zoomBoost;
+    const baseR = 1.35 + (p.weight || .3) * 2.5 + zoomBoost;
+    const r = ageMs >= 12 * 3600e3 ? baseR * 0.84 : baseR;
     pts.push({ x: xy2[0], y: xy2[1],
-      r, cat: p.kind, color: p.sub === 'gempa' ? '#ff5a4e' : p.sub === 'volcano' ? (LVL_COLOR[p.lvl] || '#8d8d8d') : p.sub === 'tma' ? (p.siaga === 1 ? '#ff3b30' : p.siaga === 2 ? '#ff9500' : '#4589ff') : p.sub === 'flood' ? (p.state >= 4 ? '#ff3b30' : p.state === 3 ? '#ff9500' : '#4589ff') : (CAT_COLOR[p.kind] || '#8d8d8d'), fresh, p });
+      r, cat: p.kind, color: p.sub === 'gempa' ? '#ff5a4e' : p.sub === 'volcano' ? (LVL_COLOR[p.lvl] || '#8d8d8d') : p.sub === 'tma' ? (p.siaga === 1 ? '#ff3b30' : p.siaga === 2 ? '#ff9500' : '#4589ff') : p.sub === 'flood' ? (p.state >= 4 ? '#ff3b30' : p.state === 3 ? '#ff9500' : '#4589ff') : (CAT_COLOR[p.kind] || '#8d8d8d'), fresh, alpha, ageMs, p });
   }
   pts.sort((a, b) => a.r - b.r);
   const focusId = linkItem ? itemIdOf(linkItem) : '';
@@ -470,8 +476,8 @@ function drawGlobe(now){
     ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
     ctx.save();
     ctx.shadowColor = d.color;
-    ctx.shadowBlur = dim ? 0 : 7;
-    ctx.fillStyle = hexA(d.color, (d.fresh ? 0.96 : 0.65) * (dim ? 0.3 : 1));
+    ctx.shadowBlur = dim ? 0 : (d.ageMs < 2 * 3600e3 ? 7 : (d.ageMs < 12 * 3600e3 ? 4 : 0));
+    ctx.fillStyle = hexA(d.color, (d.alpha || 0.65) * (dim ? 0.3 : 1));
     ctx.fill();
     ctx.restore();
     ctx.lineWidth = .7; ctx.strokeStyle = '#0d0d0d'; ctx.stroke();

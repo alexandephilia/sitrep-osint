@@ -137,6 +137,23 @@ const num = n => { n = +n || 0;
        : n >= 1e3 ? (n/1e3).toFixed(1).replace('.0','') + 'K' : String(n); };
 const wibTime = t => new Date(t).toLocaleTimeString('id-ID',
   { timeZone:'Asia/Jakarta', hour12:false, hour:'2-digit', minute:'2-digit' }).replace(/\./g, ':');
+const wibDayStart = (now = Date.now()) => { const j = new Date(now + 7 * 3600e3); j.setUTCHours(0, 0, 0, 0); return j.getTime() - 7 * 3600e3; };
+let sitWindow = '24h';
+const inSitWindow = (p, now = Date.now(), win = sitWindow) => {
+  if (!p || p.fixed) return true;
+  const ts = Number(p.ts) || 0;
+  if (win === '24h') return !ts || (ts <= now + 5 * 60e3 && now - ts <= 24 * 3600e3);
+  if (win === 'today') {
+    if (!ts) return p.sub === 'volcano' || p.sub === 'tma';
+    return ts >= wibDayStart(now) && ts <= now + 5 * 60e3;
+  }
+  if (win === 'live') {
+    if (!ts) return p.sub === 'volcano';
+    return ts <= now + 5 * 60e3 && now - ts <= 2 * 3600e3;
+  }
+  return true;
+};
+const sitWindowLabel = (win = sitWindow) => win === 'today' ? 'Hari Ini' : win === 'live' ? '<2J' : '24J';
 const wibFull = t => new Date(t).toLocaleString('id-ID',
   { timeZone:'Asia/Jakarta', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:false }).replace(/\./g, ':');
 function rel(ts){

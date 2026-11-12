@@ -87,6 +87,11 @@ function mergeEvents(out, prevPins, opts) {
     for (const t of seenInGroup) groupDf.set(t, (groupDf.get(t) || 0) + 1);
   }
 
+  const now = Number.isFinite(opts.now) ? opts.now : Date.now();
+  const retainPrevMs = Number(opts.retainPrevMs) > 0 ? Number(opts.retainPrevMs) : 0;
+  const filterPrev = typeof opts.filterPrev === 'function' ? opts.filterPrev : null;
+  const onCarry = typeof opts.onCarry === 'function' ? opts.onCarry : null;
+
   const merged = [];
   const used = new Set();
   for (const [key, members0] of groups) {
@@ -123,6 +128,7 @@ function mergeEvents(out, prevPins, opts) {
       const newestTs = Math.max(...members.map(m => m.p.ts || 0));
       const earliestTs = Math.min(...members.map(m => m.p.ts || newestTs || 0));
       let eid = '';
+      let matchedPrev = null;
       for (const pp of (prevByKey.get(key) || [])) {
         if (used.has(pp.eid)) continue;
         if (newestTs && pp.ts && Math.abs(newestTs - pp.ts) > 24 * 3600e3) continue;
@@ -134,7 +140,7 @@ function mergeEvents(out, prevPins, opts) {
         const sameHazPrev = (cat === 'disaster' || cat === 'flood') && hzRep && hzRep === hazardOf(pp.title) &&
           (!newestTs || !pp.ts || Math.abs(newestTs - pp.ts) <= (hzRep === 'flood' ? 6 : 12) * 3600e3);
         if (shared >= 2 || singleExact || sameExact || sameHazPrev) {
-          eid = pp.eid; used.add(eid); break;
+          eid = pp.eid; matchedPrev = pp; used.add(eid); break;
         }
       }
       if (!eid) {
@@ -148,9 +154,46 @@ function mergeEvents(out, prevPins, opts) {
         used.add(eid);
       }
 
-      const item = { ...rep, eid, rt: [...rareU], reportedTs: rep.ts || 0, lastSeenTs: newestTs, ts: newestTs };
-      if (members.length > 1) item.n = members.length;
+      const srcSet = new Set();
+      for (const s of (matchedPrev && Array.isArray(matchedPrev.sources) ? matchedPrev.sources : (matchedPrev && matchedPrev.src ? [matchedPrev.src] : []))) {
+        if (s) srcSet.add(s);
+      }
+      for (const m of members) {
+        if (m.p && m.p.src) srcSet.add(m.p.src);
+      }
+      const firstSeenTs = matchedPrev
+        ? Math.min(earliestTs || newestTs || now, matchedPrev.firstSeenTs || matchedPrev.reportedTs || matchedPrev.ts || earliestTs || now)
+        : (earliestTs || newestTs || 0);
+      const totalN = Math.max(members.length, srcSet.size, (matchedPrev && matchedPrev.n) || 1);
+      const item = {
+        ...rep,
+        eid,
+        rt: [...rareU],
+        sources: srcSet.size ? [...srcSet] : undefined,
+        firstSeenTs,
+        reportedTs: rep.ts || 0,
+        lastSeenTs: newestTs,
+        ts: Math.max(newestTs, (matchedPrev && matchedPrev.ts) || 0),
+      };
+      if (totalN > 1) item.n = totalN;
       merged.push(item);
+    }
+  }
+
+  if (retainPrevMs > 0) {
+    for (const pp of (prevPins || [])) {
+      if (!pp || !pp.eid || pp.kind === 'node' || pp.fixed || used.has(pp.eid)) continue;
+      const pts = Number(pp.ts) || 0;
+      if (pts <= 0 || pts > now + 5 * 60e3 || now - pts > retainPrevMs) continue;
+      if (filterPrev && !filterPrev(pp)) continue;
+      used.add(pp.eid);
+      const kept = {
+        ...pp,
+        carried: true,
+        firstSeenTs: pp.firstSeenTs || pp.reportedTs || pts,
+        lastSeenTs: pp.lastSeenTs || pts,
+      };
+      merged.push(onCarry ? onCarry(kept, now) : kept);
     }
   }
   return merged;

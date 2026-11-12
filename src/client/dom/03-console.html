@@ -7,7 +7,15 @@
         <canvas id="sit-globe" role="img" aria-label="Globe dunia dengan titik insiden live, bisa di-drag dan di-zoom"></canvas>
         <div class="sit-corners" aria-hidden="true"><i class="ctl"></i><i class="ctr"></i><i class="cbl"></i><i class="cbr"></i></div>
         <div class="sit-globe-kpi">
-          <div class="sit-kpi-main"><b id="sit-total">—</b><span class="sit-kpi-side">Insiden</span><span id="sit-total-lbl" class="sit-kpi-sub2">—</span></div>
+          <div class="sit-kpi-main">
+            <b id="sit-total">—</b><span class="sit-kpi-side">Insiden</span>
+            <span id="sit-total-lbl" class="sit-kpi-sub2">—</span>
+            <div class="sit-win" id="sit-win" role="group" aria-label="Rentang waktu insiden">
+              <button type="button" class="sw-b" data-win="24h" aria-pressed="true">24J</button>
+              <button type="button" class="sw-b" data-win="today" aria-pressed="false">Hari Ini</button>
+              <button type="button" class="sw-b" data-win="live" aria-pressed="false">&lt;2J</button>
+            </div>
+          </div>
           <div class="sit-kpi-sync"><span id="sit-sync-state">live</span><time id="sit-sync-time">—</time></div>
         </div>
         <div class="sit-globe-tag">Globe · live</div>

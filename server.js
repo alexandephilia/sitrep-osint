@@ -363,6 +363,7 @@ newsSvc = require('./src/news-service').createNewsService({
   recordUpstream,
   urlToCanon,
   mediaCacheGet,
+  persistHist: require.main === module || Boolean(process.env.SITREP_DATA_DIR),
 });
 
 const {
@@ -375,6 +376,9 @@ const {
   mergeNewsHist,
   newsHistByFeed,
   saveNewsHist,
+  incidentHistByEid,
+  loadIncidentHist,
+  saveIncidentHist,
   invalidateDerivedFromNews,
   rssSem,
   getFeedHealthSummary,
@@ -510,6 +514,7 @@ stopAis = _stopAis;
 const histFlushAll = () => {
   flushSocialHist(true);
   saveNewsHist(true);
+  saveIncidentHist(true);
   if (typeof saveMktCloses === 'function') saveMktCloses(true);
 };
 
@@ -517,6 +522,7 @@ const histFlushTimer = setInterval(() => {
   SEC.runIsolated('histFlush', () => {
     flushSocialHist(false);
     saveNewsHist(false);
+    saveIncidentHist(false);
   });
 }, 30000);
 if (histFlushTimer.unref) histFlushTimer.unref();
@@ -1759,6 +1765,9 @@ module.exports = {
   mergeNewsHist,
   loadNewsHist,
   newsHistByFeed,
+  incidentHistByEid,
+  loadIncidentHist,
+  saveIncidentHist,
   invalidateDerivedFromNews,
   isBannedHostUrl,
   isBannedNewsItem,
