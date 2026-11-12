@@ -27,10 +27,10 @@ function getJakLoader(){
   return _JakLoader;
 }
 const hlsJak = cfg => { const jl = getJakLoader(); return jl ? Object.assign({loader:jl}, cfg) : cfg; };
-let aliveMap = null, district = 'Semua', camList = [];
+let aliveMap = null, district = 'Semua', camList = [], showOfflineCams = false;
 
-const MAXL = 8, PERHOST = 4, LIVE_CAP = 12, SOFT_MS = 12000, OFF_FREE_MS = 20000;
-let camSnapOK = false;
+const MAXL = 8, PERHOST = 4, LIVE_CAP = 12, SOFT_MS = 12000, OFF_FREE_MS = 20000, ORDER_COOLDOWN_MS = 4000;
+let camSnapOK = false, lastOrderAt = 0, orderTimer = 0, orderDeferred = false;
 
 const HEDGE_MS = 2500, hostMode = new Map(), hostWin = new Map();
 hostMode.set('dki-jkt.balitower.co.id:7028', 'proxy');
@@ -81,7 +81,7 @@ function showSnap(cell, p){
       clearSnapTimer(p);
       if (im.naturalWidth <= 0) { im.onerror(); return; }
       p.snapOk = true; p.snapFail = 0; p.snapFailN = 0;
-      if (p.snapMode) { p.loaded = true; badge(cell, 'live', 'Live'); upd(); }
+      if (p.snapMode) { p.loaded = true; badge(cell, 'live', 'Live'); orderCams(); upd(); }
     };
     im.onerror = () => {
       clearSnapTimer(p);
@@ -129,16 +129,27 @@ function releaseCell(cell){
 function cols(){ return Math.max(1, Math.min(4, Math.round(camGrid.clientWidth / 165))); }
 function badge(cell, cls, txt){ const b = cell.querySelector('.badge'); if (b) { b.className = 'badge ' + cls; b.textContent = txt; } }
 function upd(){
-  let ok = 0, live = 0, off = 0;
+  const now = Date.now();
+  let ok = 0, live = 0, buf = 0, off = 0;
   P.forEach(p => {
+    const tier = CctvCore.camTier(p, now);
     const snapLive = p.snapMode && p.snapOk;
     if (p.loaded || snapLive) ok++;
     if (p.playing || (snapLive && p.vis)) live++;
-    if (p.dead && !p.snapMode) off++;
+    if (tier === 3) buf++;
+    if (tier === 4) off++;
   });
-  const visTotal = Math.max(0, P.size - off);
-  $('#ccount').textContent = ok + '/' + visTotal + ' · ' + live + ' live' + (off ? ' · ' + off + ' off' : '');
-  $('#f-cams').textContent = live + '/' + visTotal;
+  const activeTotal = Math.max(0, P.size - off);
+  const totalOff = (wantList.srvOff || 0) + off;
+  $('#ccount').textContent = ok + '/' + activeTotal + ' · ' + live + ' live' + (buf ? ' · ' + buf + ' buf' : '');
+  $('#f-cams').textContent = live + '/' + activeTotal;
+  const tog = $('#cam-off-tog');
+  if (tog) {
+    tog.hidden = totalOff === 0 && !showOfflineCams;
+    tog.setAttribute('aria-pressed', String(showOfflineCams));
+    const sp = tog.querySelector('span');
+    if (sp) sp.textContent = String(totalOff);
+  }
 }
 function syncLiveEdge(cell, p, v){
   if (!v) v = vid(cell);
@@ -312,13 +323,19 @@ function startCell(cell){
     clearTimeout(p.mp4Timer);
     if (p.waitTimer) { clearTimeout(p.waitTimer); p.waitTimer = null; }
     if (p.stopped || !p.vis) { try { v.pause(); } catch (e) {} p.playing = false; return; }
-    p.playing = true; p.waitT = 0; cell.classList.add('is-playing'); dropSnap(cell); badge(cell, 'live', 'Live'); upd();
+    p.playing = true; p.waitT = 0; p.stall = 0; p.rest = 0; p.bad = false;
+    cell.classList.add('is-playing'); dropSnap(cell); badge(cell, 'live', 'Live'); orderCams(); upd();
   };
   v.onwaiting = () => {
-    p.playing = false; p.waitT = Date.now(); p.stl = (p.stl || 0) + 1;
+    p.playing = false; p.waitT = p.waitT || Date.now(); p.stl = (p.stl || 0) + 1;
     if (p.waitTimer) clearTimeout(p.waitTimer);
     p.waitTimer = setTimeout(() => {
-      if (!p.playing && p.vis) badge(cell, 'wait', 'Buffering');
+      if (!p.playing && p.vis) {
+        badge(cell, 'buf', 'Buffering');
+        orderCams();
+        pumpSoon();
+        upd();
+      }
     }, 800);
   };
 }
@@ -345,11 +362,82 @@ function camReport(u, ok){
 }
 function camCooling(cam){ const cb = cam && camBad.get(camKey(cam.s)); return cb && cb.until > Date.now() ? cb.until : 0; }
 
-function orderCams(){
+function applyOrder(force){
+  orderTimer = 0;
+  orderDeferred = false;
+  const lb = $('#lightbox');
+  if (!force && ((camGrid && camGrid.matches(':hover')) || (lb && !lb.hidden))) {
+    orderDeferred = true;
+    return;
+  }
+  const now = Date.now();
+  lastOrderAt = now;
+  let changed = false;
   P.forEach((p, c) => {
-    c.style.order = String((p.bad ? 100000 : 0) + (p.idx || 0));
+    const nextOrd = String(CctvCore.camOrderValue(p, p.idx || 0, now));
+    if (c.style.order !== nextOrd) {
+      c.style.order = nextOrd;
+      changed = true;
+    }
   });
-  layout();
+  if (changed) {
+    layout();
+    if (!force) pumpSoon();
+  }
+}
+function orderCams(force){
+  if (force) {
+    clearTimeout(orderTimer);
+    applyOrder(true);
+    return;
+  }
+  const elapsed = Date.now() - lastOrderAt;
+  if (elapsed >= ORDER_COOLDOWN_MS) {
+    clearTimeout(orderTimer);
+    applyOrder(false);
+  } else if (!orderTimer) {
+    orderTimer = setTimeout(() => applyOrder(false), ORDER_COOLDOWN_MS - elapsed);
+  }
+}
+function syncOfflineCell(cell, p){
+  const snapLive = Boolean(p && p.snapMode && p.snapOk);
+  const isOff = Boolean(p && p.dead && !snapLive);
+  cell.classList.toggle('is-offline', isOff);
+  cell.hidden = isOff && !showOfflineCams;
+}
+function probeOfflineCell(cell){
+  const p = P.get(cell), c = camOfCell(cell);
+  if (!p || !c || !p.dead || p._probing || !cell.isConnected) return;
+  const revive = () => {
+    p._probing = false;
+    if (!P.has(cell) || !cell.isConnected) return;
+    p.dead = false; p.bad = false; p.tries = 0; p.snapFail = 0; p.snapFailN = 0; p.stl = 0; p.rest = 0;
+    syncOfflineCell(cell, p);
+    badge(cell, 'wait', 'Antre');
+    orderCams(true);
+    layout(); upd(); pumpSoon();
+  };
+  const giveUp = () => { p._probing = false; };
+  p._probing = true;
+  if (API != null) {
+    const probeSrc = c.snap || c.s;
+    const u = tokQ(API + '/api/cctv/snap?u=' + encodeURIComponent(probeSrc) + '&t=' + Math.floor(Date.now() / 15000));
+    fetch(u, { credentials: 'same-origin' }).then(r => {
+      const ct = (r.headers && r.headers.get('content-type')) || '';
+      if (r.ok && /^image\//i.test(ct)) revive();
+      else giveUp();
+    }).catch(giveUp);
+    return;
+  }
+  if (c.snap) {
+    const im = new Image();
+    const tm = setTimeout(() => { im.onload = im.onerror = null; giveUp(); }, 8000);
+    im.onload = () => { clearTimeout(tm); if (im.naturalWidth > 0) revive(); else giveUp(); };
+    im.onerror = () => { clearTimeout(tm); giveUp(); };
+    im.src = snapUrl(c, false);
+    return;
+  }
+  giveUp();
 }
 function kill(cell){
   const p = P.get(cell); if (!p) return;
@@ -389,24 +477,20 @@ function kill(cell){
         cb.until = Date.now() + Math.min(30000, 3000 * cb.n); camBad.set(k, cb); }
     }
     badge(cell, 'off', 'Offline');
-    if (p.tries >= 2 || (rc && CAMS[rc._i] && CAMS[rc._i].fails >= 2)) {
-      cell.hidden = true;
-      cell.classList.add('is-offline');
-      layout();
-    } else {
-      orderCams();
-    }
+    syncOfflineCell(cell, p);
+    orderCams(true);
+    layout();
   }
   clearTimeout(p.retry);
   const backoff = p.snapMode ? 15000 : Math.min(300000, 10000 * Math.pow(2, Math.min(p.tries - 1, 5)));
   p.retry = setTimeout(() => {
-    p.dead = false;
-    if (cell.hidden) {
-      cell.hidden = false;
-      cell.classList.remove('is-offline');
-      layout();
+    if (!P.has(cell) || !cell.isConnected) return;
+    if (!p.snapMode) {
+      probeOfflineCell(cell);
+      return;
     }
-    if (!p.snapMode) badge(cell, 'wait', 'Antre');
+    p.dead = false;
+    syncOfflineCell(cell, p);
     pump();
   }, backoff * (0.8 + Math.random() * 0.4));
   pump(); upd();
@@ -484,7 +568,9 @@ function pump(){
       p.visFrac = m.visFrac;
       if (m.inView) {
         clearTimeout(p.t); clearTimeout(p.rel); p.t = 0; p.rel = 0;
-        if (!p.dead) liveCands.push({ key: c, rect, frameRect, m, bad: !!p.bad, idx: p.idx });
+        const nowTs = Date.now();
+        const tierNow = CctvCore.camTier(p, nowTs);
+        if (!p.dead) liveCands.push({ key: c, rect, frameRect, m, bad: !!(p.bad || tierNow >= 3), health: tierNow >= 3 ? 2 : (p.waitT ? 1 : 0), idx: p.idx });
       } else if (!p.dead && (p.h || p.loading || p.loaded) && !p.rel) {
         p.rel = setTimeout(() => { p.rel = 0; if (!isCellVisible(c)) releaseCell(c); }, OFF_FREE_MS);
       }
@@ -704,7 +790,7 @@ setInterval(() => {
       const dv = vid(c); if (dv) cleanVid(dv);
       p.h = null; p.loading = false; p.dem = (p.dem || 0) + 1;
       if (p.dem >= 2 && p.steps && (p.step || 0) < p.steps.length - 1) p.step = (p.step || 0) + 1;
-      badge(c, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live' : 'Antre'); pumpSoon(); return;
+      badge(c, (p.snapMode && p.snapOk) ? 'live' : 'wait', (p.snapMode && p.snapOk) ? 'Live' : 'Antre'); orderCams(); pumpSoon(); return;
     }
     if (p.loading && !p.loaded && !p.hedged && p.steps && API != null && Date.now() - p.t0 > HEDGE_MS && proxyIdx([p.steps[p.step || 0]]) !== 0) {
       const pi = proxyIdx(p.steps);
@@ -721,18 +807,33 @@ setInterval(() => {
       p.waitT = 0; syncLiveEdge(c, p, v);
       if (p.h !== 'native') { try { p.h.stopLoad(); p.h.startLoad(); } catch (e) {} }
       v.play().catch(() => {});
+      orderCams();
     }
     const stuck = v.paused || v.currentTime === p.ct;
     if (stuck) {
       if (++p.stall >= 2) {
         p.stall = 0;
-        if ((p.rest = (p.rest || 0) + 1) >= 5) { p.rest = 0; kill(c); return; }
+        if ((p.rest = (p.rest || 0) + 1) >= 3) {
+          p.rest = 0;
+          if (enterSnapFallback(c, p)) { orderCams(); return; }
+          if (p.steps && (p.step = (p.step || 0) + 1) < p.steps.length) {
+            if (p.h && p.h !== 'native') { try { p.h.destroy(); } catch (e) {} }
+            p.h = null; p.loaded = false; p.loading = false; startCell(c);
+            return;
+          }
+          kill(c);
+          return;
+        }
         syncLiveEdge(c, p, v);
         if (p.h !== 'native') { try { p.h.stopLoad(); p.h.startLoad(); } catch (e) {} }
         v.play().catch(() => {});
-        if (p.vis) badge(c, 'wait', 'Buffering');
+        if (p.vis) { badge(c, 'buf', 'Buffering'); orderCams(); pumpSoon(); upd(); }
       }
-    } else { p.stall = 0; p.rest = 0; }
+    } else {
+      p.stall = 0; p.rest = 0; p.waitT = 0;
+      if (p.stl > 0) p.stl--;
+      if (p.bad) { p.bad = false; orderCams(); }
+    }
     p.ct = v.currentTime;
   });
 }, 5000);
@@ -746,7 +847,7 @@ function cellHtml(c, i){
 function layout(){
   const n = cols(); camGrid.style.setProperty('--cols', n);
   const cells = [...camGrid.children]
-    .filter(c => !c.hidden && c.style.display !== 'none' && !c.classList.contains('is-offline'))
+    .filter(c => !c.hidden && c.style.display !== 'none' && (showOfflineCams || !c.classList.contains('is-offline')))
     .sort((a, b) => Number(a.style.order || 0) - Number(b.style.order || 0));
   const total = cells.length, r = total % n;
   cells.forEach(c => c.style.gridColumn = '');
@@ -756,11 +857,23 @@ function layout(){
 }
 function wantList(){
   const q = ($('#cq').value || '').toLowerCase();
-  const l = CAMS.map((c, i) => ({ ...c, _i:i })).filter(c =>
-    (district === 'Semua' || c.c === district || cityLabel(c.c) === district || (district === 'Pantau Banjir' && /^pantau\s+banjir/i.test(c.c)) || (district === 'Kota Jakarta' && /^(?:kota\s+)?jakarta/i.test(c.c))) && (!q || c.n.toLowerCase().includes(q))
-    && c._hide !== true && !(district === 'Semua' && aliveMap && aliveMap[c._i] === false));
-  if (aliveMap) l.sort((a, b) => (aliveMap[b._i] !== false) - (aliveMap[a._i] !== false));
-  return l;
+  const list = [];
+  let srvOff = 0;
+  for (let i = 0; i < CAMS.length; i++) {
+    const c = CAMS[i];
+    if (c._hide === true) continue;
+    const inDist = district === 'Semua' || c.c === district || cityLabel(c.c) === district ||
+      (district === 'Pantau Banjir' && /^pantau\s+banjir/i.test(c.c)) ||
+      (district === 'Kota Jakarta' && /^(?:kota\s+)?jakarta/i.test(c.c));
+    if (!inDist) continue;
+    if (q && !c.n.toLowerCase().includes(q)) continue;
+    const isSrvOff = Boolean(aliveMap && aliveMap[i] === false);
+    if (isSrvOff && !showOfflineCams) { srvOff++; continue; }
+    list.push({ ...c, _i: i, _srvOff: isSrvOff });
+  }
+  wantList.srvOff = srvOff;
+  if (aliveMap) list.sort((a, b) => (a._srvOff ? 1 : 0) - (b._srvOff ? 1 : 0));
+  return list;
 }
 let camsRenderQueued = false;
 function renderCams(){
@@ -772,8 +885,11 @@ function renderCams(){
     camList = nextList;
     camGrid.innerHTML = camList.map(cellHtml).join('');
     camGrid.querySelectorAll('.cam').forEach((el, i) => {
-      el.style.order = String(i);
-      P.set(el, { vis:false, idx:i, host: CctvCore.hostOf(camList[i].s) });
+      const c = camList[i];
+      const p = { vis: false, idx: i, host: CctvCore.hostOf(c.s) };
+      if (c._srvOff) { p.dead = true; p.bad = true; p.tries = 1; badge(el, 'off', 'Offline'); el.classList.add('is-offline'); }
+      el.style.order = String(CctvCore.camOrderValue(p, i));
+      P.set(el, p);
       vio.observe(el);
     });
     layout(); upd(); pump();
@@ -784,7 +900,7 @@ function renderCams(){
   const keepUrls = new Set(nextList.map(c => c.s));
   for (const [url, { el, p }] of byUrl) {
     if (keepUrls.has(url)) continue;
-    clearTimeout(p.t); clearTimeout(p.retry); clearTimeout(p.rel);
+    clearTimeout(p.t); clearTimeout(p.retry); clearTimeout(p.rel); clearSnapTimer(p);
     if (p.h && p.h !== 'native') { try { p.h.destroy(); } catch (e) {} }
     const v = vid(el); if (v) cleanVid(v);
     try { vio.unobserve(el); } catch (e) {}
@@ -798,17 +914,21 @@ function renderCams(){
     if (ex) {
       ex.p.idx = i;
       ex.el.dataset.i = String(i);
-      ex.el.style.order = String((ex.p.bad ? 100000 : 0) + i);
+      syncOfflineCell(ex.el, ex.p);
+      ex.el.style.order = String(CctvCore.camOrderValue(ex.p, i));
     } else {
       tpl.innerHTML = cellHtml(c, i);
       const el = tpl.firstElementChild;
-      el.style.order = String(i);
-      P.set(el, { vis:false, idx:i, host: CctvCore.hostOf(c.s) });
+      const p = { vis: false, idx: i, host: CctvCore.hostOf(c.s) };
+      if (c._srvOff) { p.dead = true; p.bad = true; p.tries = 1; badge(el, 'off', 'Offline'); el.classList.add('is-offline'); }
+      el.style.order = String(CctvCore.camOrderValue(p, i));
+      P.set(el, p);
       vio.observe(el);
       frag.appendChild(el);
     }
   }
   if (frag.childNodes.length) camGrid.appendChild(frag);
+  orderCams(true);
   layout(); upd(); pump();
 }
 function drawCityBar(){
@@ -836,6 +956,15 @@ $('#citybar').addEventListener('click', e => {
   district = b.dataset.city; drawCityBar(); renderCams();
 });
 $('#cq').addEventListener('input', debounce(renderCams, 200));
+if ($('#cam-off-tog')) {
+  $('#cam-off-tog').addEventListener('click', () => {
+    showOfflineCams = !showOfflineCams;
+    camGrid.classList.toggle('show-offline', showOfflineCams);
+    P.forEach((p, c) => syncOfflineCell(c, p));
+    renderCams();
+  });
+}
+camGrid.addEventListener('mouseleave', () => { if (orderDeferred) orderCams(); });
 new ResizeObserver(debounce(() => { layout(); refreshCamVis(); }, 120)).observe(camGrid);
 camGrid.addEventListener('click', e => {
   const cell = e.target.closest('.cam'); if (!cell) return;
@@ -880,7 +1009,7 @@ function glbFallbackEmbed(){
     glbSetOffline(true, 'Kamera tidak mengirim sinyal video atau snapshot — kemungkinan offline di sumber.');
     if (lbTrigger) {
       const p = P.get(lbTrigger);
-      if (p) { p.bad = true; p.snapMode = false; badge(lbTrigger, 'off', 'Offline'); upd(); }
+      if (p) { p.dead = true; p.bad = true; p.snapMode = false; badge(lbTrigger, 'off', 'Offline'); syncOfflineCell(lbTrigger, p); orderCams(true); upd(); }
     }
     return false;
   }
@@ -965,7 +1094,8 @@ function glbPlay(){
         const p = P.get(lbTrigger);
         if (p) {
           if (p.retry) { clearTimeout(p.retry); p.retry = null; }
-          p.dead = false; p.bad = false; p.tries = 0;
+          p.dead = false; p.bad = false; p.tries = 0; p.loaded = true; p.playing = true; p.waitT = 0;
+          syncOfflineCell(lbTrigger, p);
           badge(lbTrigger, 'live', 'Live');
           orderCams();
           upd();
@@ -1050,10 +1180,10 @@ function openLightbox(url, nama, kota, embed, steps, trigger){
         if (ifr && ifr.style.display !== 'none') {
           if (glbSnapTimer) { clearInterval(glbSnapTimer); glbSnapTimer = 0; }
           if (glbUrl) { camBad.delete(camKey(glbUrl)); camReport(glbUrl, true); }
-          if (lbTrigger && trigP) { trigP.dead = false; trigP.bad = false; badge(lbTrigger, 'live', 'Live'); orderCams(); upd(); }
+          if (lbTrigger && trigP) { trigP.dead = false; trigP.bad = false; syncOfflineCell(lbTrigger, trigP); badge(lbTrigger, 'live', 'Live'); orderCams(); upd(); }
         } else if (sim.style.display !== 'none') {
           if (glbUrl) { camBad.delete(camKey(glbUrl)); camReport(glbUrl, true); }
-          if (lbTrigger && trigP) { trigP.dead = false; trigP.bad = false; trigP.snapMode = true; trigP.snapOk = true; badge(lbTrigger, 'live', 'Live'); orderCams(); upd(); }
+          if (lbTrigger && trigP) { trigP.dead = false; trigP.bad = false; trigP.snapMode = true; trigP.snapOk = true; syncOfflineCell(lbTrigger, trigP); badge(lbTrigger, 'live', 'Live'); orderCams(); upd(); }
         }
       };
       sim.onerror = () => {
@@ -1113,6 +1243,7 @@ function closeLightbox(){
   });
   const t = lbTrigger; lbTrigger = null;
   if (t && t.focus) { try { t.focus({ preventScroll: true, focusVisible: false }); } catch (e) { try { t.focus({ preventScroll: true }); } catch (err) {} } }
+  if (orderDeferred) orderCams();
   pump();
 }
 $('#glb-close').addEventListener('click', closeLightbox);
@@ -1157,23 +1288,14 @@ async function pullCctv(){
     drawCityBar(); renderCams();
   } catch (e) {}
 }
+let offProbeCursor = 0;
 setInterval(() => {
   if (document.hidden) return;
   const offCells = [...camGrid.querySelectorAll('.cam.is-offline')];
   if (!offCells.length) return;
-  offCells.slice(0, 3).forEach(cell => {
-    const p = P.get(cell);
-    const c = camOfCell(cell);
-    if (!p || !c) return;
-    const probe = c.snap || (API != null ? tokQ(API + '/api/cctv/snap?u=' + encodeURIComponent(c.s)) : null);
-    if (!probe) return;
-    fetch(probe, { method: 'HEAD', mode: 'no-cors' }).then(() => {
-      cell.hidden = false;
-      cell.classList.remove('is-offline');
-      p.dead = false; p.bad = false; p.tries = 0;
-      badge(cell, 'wait', 'Antre');
-      layout(); upd(); pump();
-    }).catch(() => {});
-  });
+  for (let k = 0; k < Math.min(3, offCells.length); k++) {
+    const cell = offCells[(offProbeCursor++) % offCells.length];
+    probeOfflineCell(cell);
+  }
 }, 60000);
 

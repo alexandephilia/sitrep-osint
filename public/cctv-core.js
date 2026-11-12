@@ -97,6 +97,23 @@
     return !!(p && p.loading && !p.loaded && hasWaitingOthers && now - p.t0 > softMs && (p.dem || 0) < 3);
   }
 
+  function camTier(p, now) {
+    if (!p) return 2;
+    const ts = now || Date.now();
+    const snapLive = !!(p.snapMode && p.snapOk);
+    if (p.dead && !snapLive) return 4;
+    const stalled = !!(p.waitT && ts - p.waitT > 3500);
+    if (p.bad || stalled || (p.rest || 0) >= 2 || (p.stl || 0) >= 4) return snapLive ? 1 : 3;
+    if (p.playing || (p.loaded && !p.snapMode)) return 0;
+    if (snapLive) return 1;
+    return 2;
+  }
+
+  function camOrderValue(p, baseIdx, now) {
+    const idx = p && typeof p.idx === 'number' ? p.idx : (baseIdx | 0);
+    return camTier(p, now) * 100000 + idx;
+  }
+
   function quantile(arr, q) {
     if (!arr.length) return null;
     const a = arr.slice().sort((x, y) => x - y);
@@ -156,6 +173,7 @@
       const entry = {
         key: item.key,
         bad: item.bad ? 1 : 0,
+        health: Number(item.health) || 0,
         tier,
         idx: item.idx || 0,
         top: (item.rect && item.rect.top) || 0,
@@ -168,15 +186,15 @@
       else if (topSafe && m.boxVisH >= (atBottom ? 18 : 24)) fallback.push(entry);
     }
     const cmp = (a, b) =>
-      (atBottom ? 0 : (a.bad - b.bad)) ||
+      (atBottom ? 0 : ((a.bad - b.bad) || (a.health - b.health))) ||
       (a.tier - b.tier) ||
       (a.tier === 0
-        ? (atBottom ? (b.top - a.top) || (a.left - b.left) || (a.bad - b.bad) || (b.idx - a.idx) : (a.top - b.top) || (a.left - b.left) || (a.idx - b.idx))
-        : (atBottom ? (b.top - a.top) || (b.visFrac - a.visFrac) || (a.left - b.left) || (a.bad - b.bad) || (b.idx - a.idx) : (b.visFrac - a.visFrac) || (a.topClip - b.topClip) || (a.top - b.top) || (a.left - b.left) || (a.idx - b.idx)));
+        ? (atBottom ? (b.top - a.top) || (a.left - b.left) || (a.bad - b.bad) || (a.health - b.health) || (b.idx - a.idx) : (a.top - b.top) || (a.left - b.left) || (a.idx - b.idx))
+        : (atBottom ? (b.top - a.top) || (b.visFrac - a.visFrac) || (a.left - b.left) || (a.bad - b.bad) || (a.health - b.health) || (b.idx - a.idx) : (b.visFrac - a.visFrac) || (a.topClip - b.topClip) || (a.top - b.top) || (a.left - b.left) || (a.idx - b.idx)));
     const list = cands.length ? cands : fallback;
     list.sort(cmp);
     const out = list.map(x => x.key);
     return cap == null ? out : out.slice(0, Math.max(0, cap | 0));
   }
-  return { hostOf, norm, streamKey, dedupe, sanitizeFb, playSteps, pickStarts, shouldDemote, quantile, effectiveVisBounds, measureCell, pickLiveKeys };
+  return { hostOf, norm, streamKey, dedupe, sanitizeFb, playSteps, pickStarts, shouldDemote, camTier, camOrderValue, quantile, effectiveVisBounds, measureCell, pickLiveKeys };
 });

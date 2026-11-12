@@ -602,3 +602,35 @@ test('gateway & safeFetch: retries transient ECONNRESET/TLS socket drops once be
     assert.equal(gwTries, 2);
   });
 });
+
+test('adaptive grid priority: camTier, camOrderValue, health-aware pickLiveKeys, offline toggle, and real probe', () => {
+  const now = 100000;
+  assert.equal(C.camTier({ playing: true, loaded: true, waitT: 0, rest: 0 }, now), 0);
+  assert.equal(C.camTier({ snapMode: true, snapOk: true, playing: false }, now), 1);
+  assert.equal(C.camTier({ loaded: false, dead: false }, now), 2);
+  assert.equal(C.camTier({ playing: false, loaded: true, waitT: now - 4000 }, now), 3);
+  assert.equal(C.camTier({ loaded: true, rest: 2 }, now), 3);
+  assert.equal(C.camTier({ dead: true, snapMode: false }, now), 4);
+
+  const ordLive = C.camOrderValue({ playing: true, loaded: true, idx: 9 }, 9, now);
+  const ordSnap = C.camOrderValue({ snapMode: true, snapOk: true, idx: 3 }, 3, now);
+  const ordQueue = C.camOrderValue({ idx: 2 }, 2, now);
+  const ordBuf = C.camOrderValue({ loaded: true, rest: 2, idx: 0 }, 0, now);
+  const ordOff = C.camOrderValue({ dead: true, idx: 1 }, 1, now);
+  assert.ok(ordLive < ordSnap && ordSnap < ordQueue && ordQueue < ordBuf && ordBuf < ordOff);
+
+  const vr = { top: 0, bot: 600, atBottom: false };
+  const cands = [
+    { key: 'buf-top', idx: 0, bad: false, health: 2, rect: { top: 20, bottom: 120, left: 0, width: 160, height: 100 }, frameRect: { top: 20, bottom: 110, left: 0, width: 160, height: 90 } },
+    { key: 'healthy-mid', idx: 1, bad: false, health: 0, rect: { top: 140, bottom: 240, left: 0, width: 160, height: 100 }, frameRect: { top: 140, bottom: 230, left: 0, width: 160, height: 90 } },
+  ];
+  assert.deepEqual(C.pickLiveKeys(cands, vr, 1), ['healthy-mid'], 'healthy candidate must outrank buffering candidate when LIVE_CAP is tight');
+
+  const cctvSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'scripts', '07-cctv.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(html.includes('id="cam-off-tog"'), 'must render #cam-off-tog offline inspector toggle button');
+  assert.ok(html.includes('.camgrid.show-offline .cam.is-offline'), 'must allow toggling .is-offline visibility via .show-offline');
+  assert.ok(!cctvSrc.includes("mode: 'no-cors'"), 'offline probe must never use fake no-cors fetch reviver');
+  assert.ok(cctvSrc.includes('function probeOfflineCell(cell)') && cctvSrc.includes("camGrid.matches(':hover')"), 'must validate offline revival and defer grid reorder while hovering');
+  assert.ok(!cctvSrc.includes("district === 'Semua' && aliveMap"), 'aliveMap offline filter must apply across all city tabs when offline toggle is off');
+});
