@@ -67,6 +67,9 @@ function snapUrl(cam, viaProxy){
   return tokQ(API + '/api/cctv/snap?u=' + encodeURIComponent(cam.s) + '&v=' + Math.floor(Date.now() / step));
 }
 const snapCooldown = p => p.snapFail ? Math.min(60000, 10000 * (p.snapFailN || 1)) : 0;
+function clearSnapTimer(p){
+  if (p && p.snapTimer) { clearTimeout(p.snapTimer); p.snapTimer = null; }
+}
 function showSnap(cell, p){
   const c = camList[+cell.dataset.i];
   if (!c) return false;
@@ -75,17 +78,21 @@ function showSnap(cell, p){
   if (!im) {
     im = document.createElement('img'); im.className = 'snap'; im.alt = ''; im.decoding = 'async'; im.loading = 'lazy';
     im.onload = () => {
+      clearSnapTimer(p);
+      if (im.naturalWidth <= 0) { im.onerror(); return; }
       p.snapOk = true; p.snapFail = 0; p.snapFailN = 0;
-      if (p.snapMode) { badge(cell, 'live', 'Live'); upd(); }
+      if (p.snapMode) { p.loaded = true; badge(cell, 'live', 'Live'); upd(); }
     };
     im.onerror = () => {
+      clearSnapTimer(p);
       if (c.snap && !p.snapProxy && API != null) {
         p.snapProxy = true; p.snapAt = Date.now();
+        p.snapTimer = setTimeout(() => { if (im.onerror) im.onerror(); }, 10000);
         im.src = snapUrl(c, true);
         return;
       }
       p.snapOk = false; p.snapFail = Date.now(); p.snapFailN = (p.snapFailN || 0) + 1; im.remove();
-      if (p.snapMode) { p.snapMode = false; p.bad = true; orderCams(); badge(cell, 'off', 'Offline'); upd(); }
+      if (p.snapMode) { p.snapMode = false; p.loaded = false; kill(cell); }
       else if (!p.h) badge(cell, 'wait', 'Antre');
     };
     fr.insertBefore(im, fr.firstChild);
@@ -93,12 +100,14 @@ function showSnap(cell, p){
   const isMjpeg = /(^|\.)dsdajakarta\.id/i.test(c.snap || c.s || '');
   if (!im.src || (!isMjpeg && (!p.snapAt || Date.now() - p.snapAt > ((c.snap || p.snapMode) ? 15000 : 60000)))) {
     p.snapAt = Date.now();
+    clearSnapTimer(p);
+    p.snapTimer = setTimeout(() => { if (im.onerror) im.onerror(); }, 10000);
     im.src = snapUrl(c, p.snapProxy);
   }
-  badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live' : (p.loading ? 'Memuat' : 'Snapshot'));
+  badge(cell, (p.snapMode && p.snapOk) ? 'live' : 'wait', (p.snapMode && p.snapOk) ? 'Live' : (p.loading ? 'Memuat' : 'Snapshot'));
   return true;
 }
-function dropSnap(cell){ const p = P.get(cell); if (p) { p.snapAt = 0; p.snapMode = false; } }
+function dropSnap(cell){ const p = P.get(cell); if (p) { clearSnapTimer(p); p.snapAt = 0; p.snapMode = false; } }
 
 function cleanVid(v){
   if (!v) return;
@@ -110,11 +119,12 @@ function cleanVid(v){
 function releaseCell(cell){
   const p = P.get(cell); if (!p || p.dead) return;
   if (p.waitTimer) { clearTimeout(p.waitTimer); p.waitTimer = null; }
+  clearSnapTimer(p);
   cell.classList.remove('is-playing');
   if (p.h && p.h !== 'native') { try { p.h.destroy(); } catch (e) {} }
   const v = vid(cell); if (v) { cleanVid(v); v.remove(); }
   p.h = null; p.loading = p.loaded = p.playing = p.stopped = false; p.visAt = 0;
-  badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live' : 'Antre'); upd();
+  badge(cell, (p.snapMode && p.snapOk) ? 'live' : 'wait', (p.snapMode && p.snapOk) ? 'Live' : 'Antre'); upd();
 }
 function cols(){ return Math.max(1, Math.min(4, Math.round(camGrid.clientWidth / 165))); }
 function badge(cell, cls, txt){ const b = cell.querySelector('.badge'); if (b) { b.className = 'badge ' + cls; b.textContent = txt; } }
@@ -153,17 +163,47 @@ function syncLiveEdge(cell, p, v){
     }
   }
 }
+function enterSnapFallback(cell, p){
+  if (!p) return false;
+  const c = camOfCell(cell);
+  if (!c || (!c.snap && !camSnapOK)) return false;
+  if (p.snapFail && Date.now() - p.snapFail < snapCooldown(p)) return false;
+  const oldV = vid(cell);
+  if (oldV) { cleanVid(oldV); oldV.remove(); }
+  if (p.mp4Timer) { clearTimeout(p.mp4Timer); p.mp4Timer = null; }
+  p.h = null; p.loading = false; p.playing = false;
+  const im = cell.querySelector('.frame img.snap');
+  const snapReady = Boolean(p.snapOk && im && im.complete && im.naturalWidth > 0);
+  p.snapMode = true; p.bad = false;
+  if (snapReady) {
+    p.loaded = true;
+    showSnap(cell, p);
+    badge(cell, 'live', 'Live');
+    upd(); pumpSoon();
+    return true;
+  }
+  p.loaded = false; p.snapOk = false;
+  if (!showSnap(cell, p)) {
+    p.snapMode = false;
+    return false;
+  }
+  upd(); pumpSoon();
+  return true;
+}
 function startCell(cell){
   const p = P.get(cell); if (!p || p.dead) return;
   const c = camList[+cell.dataset.i];
   if (c && isDirectSnapFeed(c.s, c)) {
-    p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false; p.stopped = false;
-    showSnap(cell, p); badge(cell, 'live', 'Live'); upd();
+    p.stopped = false;
+    if (!enterSnapFallback(cell, p)) kill(cell);
     return;
   }
   if (p.snapMode && !p.h) {
-    p.stopped = false; p.loading = false; p.loaded = true;
-    showSnap(cell, p); badge(cell, 'live', 'Live'); upd();
+    p.stopped = false; p.loading = false;
+    const snapReady = Boolean(p.snapOk);
+    p.loaded = snapReady;
+    if (!showSnap(cell, p) && !snapReady) { p.snapMode = false; kill(cell); return; }
+    badge(cell, snapReady ? 'live' : 'wait', snapReady ? 'Live' : 'Snapshot'); upd();
     return;
   }
   const v = mkVid(cell);
@@ -172,7 +212,7 @@ function startCell(cell){
     if (p.h !== 'native') { try { p.h.startLoad(); } catch (e) {} }
     p.stopped = false; p.loading = !p.loaded; p.nerr = p.merr = 0;
     syncLiveEdge(cell, p, v);
-    if (!p.loaded) { p.t0 = Date.now(); badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live' : 'Memuat'); }
+    if (!p.loaded) { p.t0 = Date.now(); badge(cell, (p.snapMode && p.snapOk) ? 'live' : 'wait', (p.snapMode && p.snapOk) ? 'Live' : 'Memuat'); }
     else { dropSnap(cell); if (p.vis) badge(cell, 'live', 'Live'); }
     v.play().catch(() => {}); return;
   }
@@ -190,22 +230,15 @@ function startCell(cell){
     p.mp4Timer = setTimeout(() => {
       if (p.loading && !p.loaded) {
         cleanVid(v); p.h = null;
-        if (c && (c.snap || camSnapOK)) {
-          p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
-          showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pumpSoon();
-        } else if ((p.step = (p.step || 0) + 1) < steps.length) {
-          startCell(cell);
-        } else kill(cell);
+        if (enterSnapFallback(cell, p)) return;
+        if ((p.step = (p.step || 0) + 1) < steps.length) startCell(cell);
+        else kill(cell);
       }
     }, 8000);
     v.onerror = () => {
       clearTimeout(p.mp4Timer);
       v.onerror = null;
-      if (c && (c.snap || camSnapOK) && !p.loaded) {
-        cleanVid(v); p.h = null; p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
-        showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pumpSoon();
-        return;
-      }
+      if (!p.loaded && enterSnapFallback(cell, p)) return;
       if ((p.step = (p.step || 0) + 1) < steps.length) { p.h = null; startCell(cell); }
       else kill(cell);
     };
@@ -228,15 +261,10 @@ function startCell(cell){
       if (d.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR || d.details === 'bufferStalledError') {
         p.stalls = (p.stalls || 0) + 1;
         if (p.stalls > 2) {
-          if (c && (c.snap || camSnapOK)) {
-            p.nerr = p.merr = p.stalls = 0; try { h.destroy(); } catch (e) {} p.h = null;
-            p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
-            showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pumpSoon();
-            return;
-          }
-          if ((p.step = (p.step || 0) + 1) < steps.length) {
-            p.nerr = p.merr = p.stalls = 0; try { h.destroy(); } catch (e) {} p.h = null; startCell(cell);
-          } else kill(cell);
+          p.nerr = p.merr = p.stalls = 0; try { h.destroy(); } catch (e) {} p.h = null;
+          if (enterSnapFallback(cell, p)) return;
+          if ((p.step = (p.step || 0) + 1) < steps.length) startCell(cell);
+          else kill(cell);
           return;
         }
         syncLiveEdge(cell, p, v);
@@ -251,13 +279,12 @@ function startCell(cell){
       } else if (d.type === Hls.ErrorTypes.MEDIA_ERROR && (p.merr = (p.merr || 0) + 1) < 3) {
         h.recoverMediaError();
         syncLiveEdge(cell, p, v);
-      } else if (c && (c.snap || camSnapOK)) {
+      } else {
         p.nerr = p.merr = 0; try { h.destroy(); } catch (e) {} p.h = null;
-        p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
-        showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pumpSoon();
-      } else if ((p.step = (p.step || 0) + 1) < steps.length) {
-        p.nerr = p.merr = 0; try { h.destroy(); } catch (e) {} p.h = null; startCell(cell);
-      } else kill(cell);
+        if (enterSnapFallback(cell, p)) return;
+        if ((p.step = (p.step || 0) + 1) < steps.length) startCell(cell);
+        else kill(cell);
+      }
     });
   } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
     p.h = 'native'; v.src = url;
@@ -299,7 +326,7 @@ function stopCell(cell){
   const p = P.get(cell); if (!p || (!p.h && !p.snapMode) || p.stopped) return;
   if (p.h && p.h !== 'native') { try { p.h.stopLoad(); } catch (e) {} }
   if (p.h) { try { vid(cell).pause(); } catch (e) {} }
-  p.stopped = true; p.playing = false; p.loading = false; badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live' : 'Jeda'); upd();
+  p.stopped = true; p.playing = false; p.loading = false; badge(cell, (p.snapMode && p.snapOk) ? 'live' : 'wait', (p.snapMode && p.snapOk) ? 'Live' : 'Jeda'); upd();
 }
 
 const camOfCell = cell => { const p = P.get(cell); if (!p) return null;
@@ -328,6 +355,7 @@ function kill(cell){
   const p = P.get(cell); if (!p) return;
   if (p.waitTimer) { clearTimeout(p.waitTimer); p.waitTimer = null; }
   if (p.mp4Timer) { clearTimeout(p.mp4Timer); p.mp4Timer = null; }
+  clearSnapTimer(p);
   if (p.h && p.h !== 'native') { try { p.h.destroy(); } catch (e) {} }
   const v = vid(cell); if (v) { cleanVid(v); v.remove(); }
   cell.classList.remove('is-playing');
@@ -338,11 +366,21 @@ function kill(cell){
   if (rc) { const cc = CAMS[rc._i]; if (cc) cc.fails = (cc.fails || 0) + 1; }
   const cam = camOfCell(cell);
   const hasSnap = !!(cam && (cam.snap || (camSnapOK && API != null)) && (!p.snapFail || Date.now() - p.snapFail >= snapCooldown(p)));
+  p.snapMode = false;
   if (hasSnap) {
-    p.snapMode = true; p.bad = false;
-    showSnap(cell, p);
-    badge(cell, 'live', 'Live');
-  } else {
+    p.bad = false;
+    const im = cell.querySelector('.frame img.snap');
+    const snapReady = Boolean(p.snapOk && im && im.complete && im.naturalWidth > 0);
+    p.snapMode = true;
+    p.loaded = snapReady;
+    if (showSnap(cell, p)) {
+      if (snapReady) badge(cell, 'live', 'Live');
+    } else {
+      p.snapMode = false;
+      p.loaded = false;
+    }
+  }
+  if (!p.snapMode) {
     p.snapMode = false; p.bad = true;
     if (cam) {
       camReport(cam.s, false);
@@ -375,7 +413,7 @@ function kill(cell){
 }
 function hideCell(cell){
   const p = P.get(cell); if (!p) return;
-  clearTimeout(p.retry); clearTimeout(p.t); clearTimeout(p.rel);
+  clearTimeout(p.retry); clearTimeout(p.t); clearTimeout(p.rel); clearSnapTimer(p);
   p.t = 0; p.rel = 0;
   if (p.h && p.h !== 'native') { try { p.h.destroy(); } catch (e) {} }
   const v = vid(cell); if (v) cleanVid(v);
@@ -423,7 +461,7 @@ function dropLoadingCell(cell){
   if (p.h && p.h !== 'native') { try { p.h.destroy(); } catch (e) {} }
   const v = vid(cell); if (v) cleanVid(v);
   p.h = null; p.loading = false; p.visAt = 0;
-  badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live' : 'Antre'); upd();
+  badge(cell, (p.snapMode && p.snapOk) ? 'live' : 'wait', (p.snapMode && p.snapOk) ? 'Live' : 'Antre'); upd();
 }
 let inPump = false;
 function pump(){
@@ -809,10 +847,20 @@ camGrid.addEventListener('keydown', e => {
   e.preventDefault();
   const c = camList[+cell.dataset.i]; openLightbox(camStream(c), c.n, c.c, c.e, camSteps(c), cell);
 });
-let glbHls = null, glbSteps = [], glbStep = 0, glbErr = 0, glbEmbed = '', glbSnapUrl = '', glbSnapProxy = false, glbSnapTimer = 0, glbMp4Timer = 0, lbTrigger = null, glbUrl = '';
+let glbHls = null, glbSteps = [], glbStep = 0, glbErr = 0, glbEmbed = '', glbSnapUrl = '', glbSnapProxy = false, glbSnapTimer = 0, glbSnapLoadTimer = 0, glbSnapState = 'idle', glbMp4Timer = 0, lbTrigger = null, glbUrl = '';
+function glbSetOffline(on, msg){
+  const errBox = $('#glb-err'), errMsg = $('#glb-err-msg');
+  if (errMsg && msg) errMsg.textContent = msg;
+  if (errBox) errBox.style.display = on ? 'flex' : 'none';
+}
 function glbSetSnapSrc(){
   const sim = $('#glb-snap');
   if (!sim || !glbSnapUrl) return;
+  if (glbSnapLoadTimer) { clearTimeout(glbSnapLoadTimer); glbSnapLoadTimer = 0; }
+  glbSnapLoadTimer = setTimeout(() => {
+    glbSnapLoadTimer = 0;
+    if (sim.onerror) sim.onerror();
+  }, 8000);
   if (/(^|\.)dsdajakarta\.id/i.test(glbSnapUrl) || /SourceEndpoint\.video/i.test(glbSnapUrl)) {
     sim.src = glbSnapUrl;
     return;
@@ -824,16 +872,30 @@ function glbSetSnapSrc(){
 }
 function glbFallbackEmbed(){
   const v = $('#glb-video'), ifr = $('#glb-frame'), sim = $('#glb-snap');
-  if (glbEmbed && ifr && !isDirectSnapFeed(glbUrl)) {
+  const isKotang = /dpuprkotang\.info/i.test(glbEmbed || glbUrl);
+  if (isKotang && glbSnapState === 'fail') {
     if (v) v.style.display = 'none';
     if (sim) { sim.style.display = 'none'; sim.removeAttribute('src'); }
-    if (glbSnapTimer) { clearInterval(glbSnapTimer); glbSnapTimer = 0; }
+    if (ifr) { ifr.removeAttribute('src'); ifr.style.display = 'none'; }
+    glbSetOffline(true, 'Kamera tidak mengirim sinyal video atau snapshot — kemungkinan offline di sumber.');
+    if (lbTrigger) {
+      const p = P.get(lbTrigger);
+      if (p) { p.bad = true; p.snapMode = false; badge(lbTrigger, 'off', 'Offline'); upd(); }
+    }
+    return false;
+  }
+  if (glbEmbed && ifr && !isDirectSnapFeed(glbUrl)) {
+    glbSetOffline(false);
+    if (v) v.style.display = 'none';
+    if (sim && !isKotang) { sim.style.display = 'none'; sim.removeAttribute('src'); }
+    else if (sim) { sim.style.display = 'none'; }
+    if (glbSnapTimer && !isKotang) { clearInterval(glbSnapTimer); glbSnapTimer = 0; }
     ifr.src = glbEmbed; ifr.style.display = 'block';
-    if (glbUrl) {
+    if (glbUrl && (!isKotang || glbSnapState === 'ok')) {
       camBad.delete(camKey(glbUrl));
       camReport(glbUrl, true);
     }
-    if (lbTrigger) {
+    if (lbTrigger && (!isKotang || glbSnapState === 'ok')) {
       const p = P.get(lbTrigger);
       if (p) {
         if (p.retry) { clearTimeout(p.retry); p.retry = null; }
@@ -846,33 +908,45 @@ function glbFallbackEmbed(){
     return true;
   }
   if (glbSnapUrl && sim) {
+    glbSetOffline(false);
     if (v) v.style.display = 'none';
     if (ifr) { ifr.removeAttribute('src'); ifr.style.display = 'none'; }
     sim.style.display = 'block';
-    glbSetSnapSrc();
+    if (!sim.src || glbSnapState === 'idle') glbSetSnapSrc();
     if (!glbSnapTimer && !isDirectSnapFeed(glbSnapUrl)) {
       glbSnapTimer = setInterval(glbSetSnapSrc, 15000);
     }
-    if (glbUrl) {
-      camBad.delete(camKey(glbUrl));
-      camReport(glbUrl, true);
-    }
-    if (lbTrigger) {
-      const p = P.get(lbTrigger);
-      if (p) {
-        if (p.retry) { clearTimeout(p.retry); p.retry = null; }
-        p.dead = false; p.bad = false; p.snapMode = true; p.snapOk = true;
-        badge(lbTrigger, 'live', 'Live');
-        orderCams();
-        upd();
+    if (glbSnapState === 'ok') {
+      if (glbUrl) {
+        camBad.delete(camKey(glbUrl));
+        camReport(glbUrl, true);
+      }
+      if (lbTrigger) {
+        const p = P.get(lbTrigger);
+        if (p) {
+          if (p.retry) { clearTimeout(p.retry); p.retry = null; }
+          p.dead = false; p.bad = false; p.snapMode = true; p.snapOk = true;
+          badge(lbTrigger, 'live', 'Live');
+          orderCams();
+          upd();
+        }
       }
     }
     return true;
+  }
+  if (v) v.style.display = 'none';
+  if (sim) { sim.style.display = 'none'; sim.removeAttribute('src'); }
+  if (ifr) { ifr.removeAttribute('src'); ifr.style.display = 'none'; }
+  glbSetOffline(true, 'Kamera tidak mengirim sinyal video atau snapshot — kemungkinan offline di sumber.');
+  if (lbTrigger) {
+    const p = P.get(lbTrigger);
+    if (p) { p.bad = true; p.snapMode = false; badge(lbTrigger, 'off', 'Offline'); upd(); }
   }
   return false;
 }
 function glbPlay(){
   const v = $('#glb-video'), ifr = $('#glb-frame'), sim = $('#glb-snap');
+  glbSetOffline(false);
   if (glbMp4Timer) { clearTimeout(glbMp4Timer); glbMp4Timer = 0; }
   if (glbHls) { try { glbHls.destroy(); } catch (e) {} glbHls = null; }
   try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
@@ -951,41 +1025,64 @@ function openLightbox(url, nama, kota, embed, steps, trigger){
   lb.hidden = false; document.body.style.overflow = 'hidden';
   lbTrigger = trigger || null;
   glbUrl = url || '';
+  glbSetOffline(false);
   if (glbSnapTimer) { clearInterval(glbSnapTimer); glbSnapTimer = 0; }
+  if (glbSnapLoadTimer) { clearTimeout(glbSnapLoadTimer); glbSnapLoadTimer = 0; }
+  glbSnapState = 'idle';
   const camObj = CAMS.find(x => x.s === url || (steps && steps.includes(x.s)));
   const trigP = trigger ? P.get(trigger) : null;
   glbSnapUrl = (camObj && camObj.snap) || '';
+  if (!glbSnapUrl && isDirectSnapFeed(url, camObj)) glbSnapUrl = url || '';
   glbSnapProxy = Boolean(trigP && trigP.snapProxy);
-  if (isDirectSnapFeed(url, camObj)) {
-    if (!glbSnapUrl) glbSnapUrl = (camObj && camObj.snap) || url;
-    glbFallbackEmbed();
-    return;
-  }
+  glbEmbed = (embed && /^(https?:)?\/\//i.test(embed) && /(?:embed|stream\.html)/i.test(embed) && !/balitower/i.test(embed)) ? safeUrl(embed) : '';
+  camGrid.querySelectorAll('video').forEach(cv => { if (!cv.paused && !cv._lbPaused) { cv._lbPaused = true; try { cv.pause(); } catch (e) {} } });
+  $('#glb-cap').innerHTML = `${esc(nama)} · ${esc(kota)}`;
   if (sim) {
     sim.style.display = 'none';
     if (glbSnapUrl) {
+      glbSnapState = 'pending';
+      sim.onload = () => {
+        if (glbSnapLoadTimer) { clearTimeout(glbSnapLoadTimer); glbSnapLoadTimer = 0; }
+        if (sim.naturalWidth <= 0) { if (sim.onerror) sim.onerror(); return; }
+        glbSnapState = 'ok';
+        if (trigP) { trigP.snapOk = true; trigP.snapFail = 0; trigP.snapFailN = 0; }
+        const ifr = $('#glb-frame');
+        if (ifr && ifr.style.display !== 'none') {
+          if (glbSnapTimer) { clearInterval(glbSnapTimer); glbSnapTimer = 0; }
+          if (glbUrl) { camBad.delete(camKey(glbUrl)); camReport(glbUrl, true); }
+          if (lbTrigger && trigP) { trigP.dead = false; trigP.bad = false; badge(lbTrigger, 'live', 'Live'); orderCams(); upd(); }
+        } else if (sim.style.display !== 'none') {
+          if (glbUrl) { camBad.delete(camKey(glbUrl)); camReport(glbUrl, true); }
+          if (lbTrigger && trigP) { trigP.dead = false; trigP.bad = false; trigP.snapMode = true; trigP.snapOk = true; badge(lbTrigger, 'live', 'Live'); orderCams(); upd(); }
+        }
+      };
       sim.onerror = () => {
-        if (!glbSnapProxy && API != null) {
+        if (glbSnapLoadTimer) { clearTimeout(glbSnapLoadTimer); glbSnapLoadTimer = 0; }
+        if (!glbSnapProxy && API != null && glbSnapUrl) {
           glbSnapProxy = true;
           if (trigP) trigP.snapProxy = true;
           glbSetSnapSrc();
         } else {
+          glbSnapState = 'fail';
           if (glbSnapTimer) { clearInterval(glbSnapTimer); glbSnapTimer = 0; }
           glbSnapUrl = '';
           sim.style.display = 'none';
-          const v = $('#glb-video');
-          if (!v || v.style.display === 'none') glbFallbackEmbed();
+          const v = $('#glb-video'), ifr = $('#glb-frame');
+          const vidHidden = !v || v.style.display === 'none';
+          const isKotangEmbed = Boolean(ifr && ifr.style.display !== 'none' && /dpuprkotang\.info/i.test(glbEmbed || glbUrl));
+          if (vidHidden && (!ifr || ifr.style.display === 'none' || isKotangEmbed)) glbFallbackEmbed();
         }
       };
       glbSetSnapSrc();
-      glbSnapTimer = setInterval(glbSetSnapSrc, 15000);
+      if (!isDirectSnapFeed(glbSnapUrl)) glbSnapTimer = setInterval(glbSetSnapSrc, 15000);
     } else {
-      sim.removeAttribute('src');
+      sim.onload = null; sim.onerror = null; sim.removeAttribute('src');
     }
   }
-  glbEmbed = (embed && /^(https?:)?\/\//i.test(embed) && /(?:embed|stream\.html)/i.test(embed) && !/balitower/i.test(embed)) ? safeUrl(embed) : '';
-  camGrid.querySelectorAll('video').forEach(cv => { if (!cv.paused && !cv._lbPaused) { cv._lbPaused = true; try { cv.pause(); } catch (e) {} } });
-  $('#glb-cap').innerHTML = `${esc(nama)} · ${esc(kota)}`;
+  if (isDirectSnapFeed(url, camObj)) {
+    glbFallbackEmbed();
+    return;
+  }
   glbSteps = (steps && steps.length ? steps : [url]); glbStep = 0; glbErr = 0;
   if (trigP && trigP.snapMode && trigP.snapOk && !/\.m3u8|\.mp4/i.test(url)) {
     glbFallbackEmbed();
@@ -995,10 +1092,12 @@ function openLightbox(url, nama, kota, embed, steps, trigger){
 }
 function closeLightbox(){
   $('#lightbox').hidden = true; document.body.style.overflow = '';
-  glbEmbed = ''; glbSnapUrl = ''; glbSnapProxy = false;
+  glbEmbed = ''; glbSnapUrl = ''; glbSnapProxy = false; glbSnapState = 'idle';
+  glbSetOffline(false);
   if (glbSnapTimer) { clearInterval(glbSnapTimer); glbSnapTimer = 0; }
+  if (glbSnapLoadTimer) { clearTimeout(glbSnapLoadTimer); glbSnapLoadTimer = 0; }
   if (glbMp4Timer) { clearTimeout(glbMp4Timer); glbMp4Timer = 0; }
-  const sim = $('#glb-snap'); if (sim) { sim.onerror = null; sim.removeAttribute('src'); sim.style.display = 'none'; }
+  const sim = $('#glb-snap'); if (sim) { sim.onload = null; sim.onerror = null; sim.removeAttribute('src'); sim.style.display = 'none'; }
   const ifr = $('#glb-frame'); if (ifr) { ifr.removeAttribute('src'); ifr.style.display = 'none'; }
   if (glbHls) { try { glbHls.destroy(); } catch (e) {} glbHls = null; }
   const v = $('#glb-video'); if (v) { v.onplaying = null; v.onloadeddata = null; v.onerror = null; v.style.display = 'block'; try { v.pause(); } catch (e) {} v.removeAttribute('src'); try { v.load(); } catch (e) {} }

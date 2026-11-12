@@ -570,6 +570,10 @@ test('cctv client pump re-entrancy lock and snapMode loop prevention', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   assert.ok(html.includes('.glb video,.glb img,.glb iframe{') && html.includes('aspect-ratio:16/9'), 'lightbox video, snap, and iframe must share unified 16:9 box dimensions');
   assert.ok(!html.includes('id="glb-frame" allow="autoplay; fullscreen" style="display:none;width:100%;height:100%'), 'lightbox iframe must not force 100% fullscreen sizing');
+  assert.ok(cctvSrc.includes('function enterSnapFallback(cell, p)'), 'must share enterSnapFallback helper across video/HLS fallbacks');
+  assert.ok(cctvSrc.includes('p.snapTimer = setTimeout(') && cctvSrc.includes('im.naturalWidth <= 0'), 'showSnap must enforce snapshot load timeout and naturalWidth check before marking Live');
+  assert.ok(cctvSrc.includes('glbSnapLoadTimer = setTimeout(') && cctvSrc.includes("isKotang && glbSnapState === 'fail'"), 'lightbox must enforce snapshot timeout and surface offline banner when dpuprkotang video+snap both fail');
+  assert.ok(html.includes('id="glb-err"') && html.includes('.glb .glb-err{'), 'lightbox must include #glb-err offline panel sharing 16:9 box dimensions');
 });
 
 test('gateway & safeFetch: retries transient ECONNRESET/TLS socket drops once before surfacing 502', async () => {
