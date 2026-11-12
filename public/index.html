@@ -6151,7 +6151,7 @@ $('#catbar').addEventListener('click', e => {
   renderNews();
 });
 
-const NEWS_BANNED = /infopublik|kompasiana|mozaik\.inilah\.com|mediacenter\.palangkaraya\.go\.id|viva\.co\.id\/foto|nokenlive|polreskedirikota|korankaltim/i;
+const NEWS_BANNED = /infopublik|kompasiana|mozaik\.inilah\.com|mediacenter\.palangkaraya\.go\.id|viva\.co\.id\/foto|nokenlive|polreskedirikota|korankaltim|aboutcirebon\.id|about\s*cirebon/i;
 function parseRss(xmlText, srcId){
   const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
   const out = [];
@@ -6558,7 +6558,7 @@ const stripPubTail = (title, pub) => {
 
 const NEWS_SRC_RE = /(kompas|detik\w*|tempo|liputan6|republika|tribun\w*|cnbc\w*|antara\w*|voi\.?id|sindonews|okezone|jawapos|merdeka\.com|bisnis\.com|kontan|inews|suara\.com|merahputih|katadata|markeyeers|metrotv\w*|tvonenews|grid\.id|wowkeren|hotliputan6|wolipop|cewekbanget|female daily|poskota|bali ?post|balipost|\bjabar\b|\bjogja\b|espos|malang post|suara merdeka|pikiran-rakyat|bola\.com|jalantikus|kumparan|beritasatu|rmol|hops\.id|mediaindonesia|media indonesia|\brri\b|tagar|cnn indonesia|cnnindonesia|viva|\bmoney\.kompas\b|finance detik)/i;
 const DESC_DOMAIN_RE = /\S*\.(com|co\.id|co\.uk|or\.id|go\.id|ac\.id|sch\.id|net|org|tv|info|media|news|id)\b/i;
-const BOT_CHALLENGE_RE = /captcha|recaptcha|lsrecaptcha|cf-chl|challenge-platform|just a moment|attention required|access denied|verify you are|are you a robot|enable javascript and cookies|bot verification|ddos-guard|pardon our interruption|security check|situs ini mungkin memblokir|requiring captcha/i;
+const BOT_CHALLENGE_RE = /captcha|recaptcha|lsrecaptcha|cf-chl|challenge-platform|just a moment|one moment,?\s*please|attention required|access denied|verify you are|are you a robot|enable javascript and cookies|bot verification|ddos-guard|pardon our interruption|security check|situs ini mungkin memblokir|requiring captcha/i;
 function cleanDesc(d){
   let t = String(d || '');
   if (!t || BOT_CHALLENGE_RE.test(t)) return '';
@@ -6680,7 +6680,9 @@ function dedupWire(mapped){
   return items;
 }
 function renderNews(){
-  const mapped = mergedMedia().map(h => {
+  const mapped = mergedMedia()
+    .filter(h => !NEWS_BANNED.test((h.title || '') + ' ' + (h.url || '') + ' ' + (h.src || '') + ' ' + (h.pub || '')))
+    .map(h => {
     const title = stripPubTail(cleanTitle(h.title, h.pub), tkPub(h.pub));
     const m = { ...h, title, desc: cleanDesc(h.desc) || descForItem(h) };
     m.cat = newsCatOf(m);

@@ -72,7 +72,7 @@ function rdAbs(u, base) {
   }
 }
 
-const BOT_CHALLENGE_RE = /captcha|recaptcha|lsrecaptcha|cf-chl|cf-turnstile|challenge-platform|just a moment|attention required|access denied|verify you are|are you a robot|human verification|checking your browser|please wait while we verify|enable javascript and cookies|bot verification|ddos-guard|pardon our interruption|security check|sorry, you have been blocked|situs ini mungkin memblokir|requiring captcha/i;
+const BOT_CHALLENGE_RE = /captcha|recaptcha|lsrecaptcha|cf-chl|cf-turnstile|challenge-platform|just a moment|one moment,?\s*please|attention required|access denied|verify you are|are you a robot|human verification|checking your browser|please wait while we verify|enable javascript and cookies|bot verification|ddos-guard|pardon our interruption|security check|sorry, you have been blocked|situs ini mungkin memblokir|requiring captcha/i;
 const ERROR_PAGE_RE = /^(?:404\s*(?:not\s*found|error)?|page\s*not\s*found|error\s*40[34]|403\s*forbidden|50[0234]\s*(?:bad gateway|service unavailable|gateway time-?out)?|halaman\s+tidak\s+ditemukan|artikel\s+tidak\s+ditemukan|maaf,?\s+halaman\s+yang\s+anda\s+cari\s+tidak\s+ditemukan|oops!?\s*that\s+page\s+can'?t\s+be\s+found)$/i;
 
 function rdMeta(html) {

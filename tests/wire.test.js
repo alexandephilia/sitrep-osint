@@ -527,6 +527,8 @@ test('reader resilience and banned news source enforcement', () => {
 
   assert.ok(serverJs.includes('mozaik\\.inilah\\.com'), 'BANNED_SRC in server.js must ban mozaik.inilah.com');
   assert.ok(html.includes('mozaik\\.inilah\\.com'), 'NEWS_BANNED in public/index.html must ban mozaik.inilah.com');
+  assert.ok(serverJs.includes('aboutcirebon\\.id'), 'BANNED_SRC in news-service.js must ban aboutcirebon.id');
+  assert.ok(html.includes('aboutcirebon\\.id'), 'NEWS_BANNED in public/index.html must ban aboutcirebon.id');
 
   assert.ok(!serverJs.includes('corsproxy.io'), 'dead paid proxy corsproxy.io must be pruned from RD_PROXIES');
   assert.ok(!serverJs.includes('proxy.corsfix.com'), 'dead proxy corsfix must be pruned from RD_PROXIES');

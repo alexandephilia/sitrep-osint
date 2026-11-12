@@ -226,7 +226,7 @@ const CHROME_HEAD_RE = new RegExp('^(?:' +
   'ikuti\\s|bagikan|share\\s|jangan\\s+lewatkan|lihat\\s+juga|berita\\s+terkait|topik\\s*:|' +
   'iklan\\b|advertisement\\b|advertorial\\b|sumber\\s*:|credit\\s*:|foto\\s*:)', 'i');
 
-const BOT_CHALLENGE_RE = /captcha|recaptcha|lsrecaptcha|cf-chl|cf-turnstile|challenge-platform|just a moment|attention required|access denied|verify you are|are you a robot|human verification|checking your browser|please wait while we verify|enable javascript and cookies|bot verification|ddos-guard|pardon our interruption|security check|sorry, you have been blocked|situs ini mungkin memblokir|requiring captcha/i;
+const BOT_CHALLENGE_RE = /captcha|recaptcha|lsrecaptcha|cf-chl|cf-turnstile|challenge-platform|just a moment|one moment,?\s*please|attention required|access denied|verify you are|are you a robot|human verification|checking your browser|please wait while we verify|enable javascript and cookies|bot verification|ddos-guard|pardon our interruption|security check|sorry, you have been blocked|situs ini mungkin memblokir|requiring captcha/i;
 
 const ABBR_END_RE = /\b(?:Dr|Prof|Ir|H|Hj|Bp|Bpk|Sdr|Ny|Tn|Jend|Letjen|Mayjen|Brigjen|Kol|Letkol|Mayor|Kapt|Lettu|Letda|Kombes|AKBP|Kompol|AKP|Iptu|Ipda|Bripka|Brigadir|Briptu|Bripda|Pol|TNI|PT|CV|UD|Tb|Tbk|Jl|Jln|No|Rp|Kec|Kab|Prov|Kel|Ds|RT|RW|KM|Km|St|Mt)\.\s*$/i;
 function ledeText(t) {

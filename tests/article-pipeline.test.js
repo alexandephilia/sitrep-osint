@@ -807,6 +807,8 @@ test('22. BANNED_SRC filters paid koran.tempo.co / majalah.tempo.co / plus.tempo
       <item><title>Edisi Koran Berbayar</title><link>https://koran.tempo.co/read/nasional/123</link><pubDate>${nowRfc}</pubDate><description>Edisi koran</description></item>
       <item><title>Edisi Majalah Berbayar</title><link>https://majalah.tempo.co/read/investigasi/456</link><pubDate>${nowRfc}</pubDate><description>Edisi majalah</description></item>
       <item><title>Tempo Plus Path</title><link>https://www.tempo.co/plus/789/eks</link><pubDate>${nowRfc}</pubDate><description>Plus</description></item>
+      <item><title>Konser Musik di Cirebon</title><link>https://aboutcirebon.id/penantian-14-tahun-berakhir/</link><pubDate>${nowRfc}</pubDate><description>Rilis album</description></item>
+      <item><title>GN About Cirebon</title><link>https://news.google.com/rss/articles/CBMiAboutCirebon</link><pubDate>${nowRfc}</pubDate><source url="https://aboutcirebon.id">About Cirebon</source></item>
       <item><title>GN Koran Tempo</title><link>https://news.google.com/rss/articles/CBMiKoranTest</link><pubDate>${nowRfc}</pubDate><source url="https://koran.tempo.co">Koran Tempo</source></item>
       <item><title>GN Majalah Tempo</title><link>https://news.google.com/rss/articles/CBMiMajalahTest</link><pubDate>${nowRfc}</pubDate><source url="https://majalah.tempo.co">Majalah Tempo</source></item>
       <item><title>Berita Tempo Gratis Politik Nasional</title><link>https://www.tempo.co/politik/berita-terbuka-999</link><pubDate>${nowRfc}</pubDate><description>Ringkasan berita terbuka untuk publik Indonesia.</description></item>
@@ -820,6 +822,11 @@ test('22. BANNED_SRC filters paid koran.tempo.co / majalah.tempo.co / plus.tempo
   const paidUrl = 'https://koran.tempo.co/read/ekonomi/98765/uji-eksklusif';
   assert.equal(await SRV.descForUrl(paidUrl), '', 'descForUrl must immediately return empty for banned paid Tempo URL');
   await assert.rejects(() => SRV.rdRead(paidUrl, false), err => err && err.transient === false && /berbayar|dikecualikan/i.test(err.message));
+
+  const acUrl = 'https://aboutcirebon.id/penantian-14-tahun-berakhir-badai-rilis-album-solo-baru-dan-gelar-intimate-showcase-bersama-aris-amund-di-cirebon/';
+  assert.equal(SRV.isBannedHostUrl(acUrl), true, 'aboutcirebon.id URL must be banned');
+  assert.equal(await SRV.descForUrl(acUrl), '', 'descForUrl must immediately return empty for banned aboutcirebon.id URL');
+  await assert.rejects(() => SRV.rdRead(acUrl, false), err => err && err.transient === false && /berbayar|dikecualikan/i.test(err.message));
 });
 
 test('23. Related-article card links & 15+ body thumbnails never starve og:image hero selection, and upgradeImage leaves .svg icons untouched', async () => {

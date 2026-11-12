@@ -104,7 +104,7 @@ function createNewsService({
     return v;
   };
 
-  const BANNED_SRC = /infopublik\.id|infopublik|kompasiana|koran\.tempo\.co|majalah\.tempo\.co|plus\.tempo\.co|tempo\.co\/(?:plus|langganan|subscribe)\b|mozaik\.inilah\.com|mediacenter\.palangkaraya\.go\.id|viva\.co\.id\/foto|nokenlive|polreskedirikota|korankaltim|pelakita|cilegon\.go\.id|twaslnews|kilangbara\.com|klikmu\.co/i;
+  const BANNED_SRC = /infopublik\.id|infopublik|kompasiana|koran\.tempo\.co|majalah\.tempo\.co|plus\.tempo\.co|tempo\.co\/(?:plus|langganan|subscribe)\b|mozaik\.inilah\.com|mediacenter\.palangkaraya\.go\.id|viva\.co\.id\/foto|nokenlive|polreskedirikota|korankaltim|pelakita|cilegon\.go\.id|twaslnews|kilangbara\.com|klikmu\.co|aboutcirebon\.id|about\s*cirebon/i;
   const BANNED_SOCIAL_HOST_RE = /(?:^|\.)(?:instagram\.com|instagr\.am|tiktok\.com|vt\.tiktok\.com|vm\.tiktok\.com|facebook\.com|fb\.com|fb\.watch|threads\.net|threads\.com|x\.com|twitter\.com)$/i;
   const BANNED_SOCIAL_PUB_RE = /^(?:instagram|tiktok|facebook|threads|x|twitter)$/i;
 
