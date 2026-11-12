@@ -20,6 +20,7 @@ function renderSituation(){
   st.gempa = (DIS_PULSE || []).filter(p => p.sub === 'gempa').length
     + (PULSE || []).filter(p => p.sub === 'gempa' && typeof p.la === 'number').length;
   st.gunung = (DIS_PULSE || []).filter(p => p.sub === 'volcano').length;
+  st.flood = (st.flood || 0) + (DIS_PULSE || []).filter(p => p.kind === 'flood').length;
   const sitTotal = SIT.total || 0;
   const sitLocated = (typeof SIT.located === 'number' && isFinite(SIT.located)) ? SIT.located : 0;
   $('#sit-total').textContent = sitLocated > 0 ? sitLocated : sitTotal;

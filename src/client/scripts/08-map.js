@@ -148,10 +148,12 @@ function syncLayers(){
     }
   }
   const pairs = [[heat, 'heat'], [pinLayer, 'pins'], [camLayer, 'cams'], [tmaLayer, 'tma'], [ttFlowLayer, 'ttflow'], [ttIncTileLayer, 'ttinc'], [ttIncDataLayer, 'ttdata'], [flightLayer, 'flight'], [shipLayer, 'ship'], [transitLayer, 'transit'], [gempaLayer, 'gempa'], [gunungLayer, 'gunung'], [wxLayer, 'cuaca'], [windVelocityLayer, 'wind'], [radarLayer, 'radar'], [radarBmkgLayer, 'radarbmkg'], [peringatanLayer, 'peringatan'], [satIrLayer, 'sat-ir'], [satNcLayer, 'sat-nc'], [satWvLayer, 'sat-wv'], [satRainLayer, 'sat-rain'], [airLayer, 'air']];
+  const legGate = { tma: 'flood', gempa: 'gempa', gunung: 'gunung' };
   for (const [l, k] of pairs) {
     if (!l) continue;
-    if (layerOn[k] && !map.hasLayer(l)) map.addLayer(l);
-    if (!layerOn[k] && map.hasLayer(l)) map.removeLayer(l);
+    const on = !!layerOn[k] && (!legGate[k] || legendOn[legGate[k]] !== false);
+    if (on && !map.hasLayer(l)) map.addLayer(l);
+    if (!on && map.hasLayer(l)) map.removeLayer(l);
   }
   if (sentinel2Layer) {
     const wantS2 = !!(layerOn.sentinel2 && s2Ok);
@@ -509,11 +511,12 @@ const joff = it => {
 };
 function paintMap(){
   if (!mapReady) return;
-  if (heat) heat.setLatLngs(mapData.filter(i => i.kind !== 'node').map(i => {
+  const visData = mapData.filter(i => i.fixed || legendOn[legendKeyOf(i)] !== false);
+  if (heat) heat.setLatLngs(visData.filter(i => i.kind !== 'node').map(i => {
     const [dx, dy] = joff(i); return [i.la + dy, i.lo + dx, Math.max(0.18, Math.min(1, i.weight || 0.3))];
   }));
   pinLayer.clearLayers();
-  for (const it of mapData) {
+  for (const it of visData) {
     if (it.fixed) continue;
     const c = it.sub === 'gempa' ? '#ff5a4e' : (KIND_COLOR[it.kind] || '#8d8d8d');
     const [dx, dy] = joff(it);
@@ -927,9 +930,11 @@ function renderGeoTelemetry(){
   const compactSensors = idxEl && idxEl.clientWidth > 0 && idxEl.clientWidth < 300;
   const nGempa = counts.gempa || 0;
   const nGunung = counts.gunung || 0;
+  const nBanjir = (DIS_PULSE || []).filter(p => p && (p.sub === 'tma' || p.sub === 'flood')).length;
   sensorEl.innerHTML =
     `<span class="geo-item is-sensor${nGempa ? '' : ' is-zero'}" style="--cat:${CAT_COLOR.gempa}"><i class="geo-pip" aria-hidden="true"></i><b class="geo-n">${nGempa}</b><span class="geo-l">${compactSensors ? 'GMP' : 'Gempa'}</span></span>` +
-    `<span class="geo-item is-sensor${nGunung ? '' : ' is-zero'}" style="--cat:${CAT_COLOR.gunung}"><i class="geo-pip" aria-hidden="true"></i><b class="geo-n">${nGunung}</b><span class="geo-l">${compactSensors ? 'API' : 'Gn.Api'}</span></span>`;
+    `<span class="geo-item is-sensor${nGunung ? '' : ' is-zero'}" style="--cat:${CAT_COLOR.gunung}"><i class="geo-pip" aria-hidden="true"></i><b class="geo-n">${nGunung}</b><span class="geo-l">${compactSensors ? 'API' : 'Gn.Api'}</span></span>` +
+    `<span class="geo-item is-sensor${nBanjir ? '' : ' is-zero'}" style="--cat:${CAT_COLOR.flood}"><i class="geo-pip" aria-hidden="true"></i><b class="geo-n">${nBanjir}</b><span class="geo-l">${compactSensors ? 'BNJ' : 'Banjir'}</span></span>`;
   const active = GEO_SHINGLE_ORDER
     .filter(k => (counts[k] || 0) > 0)
     .map(k => ({ k, label: CAT_LABEL[k] || k, n: counts[k], color: CAT_COLOR[k] || '#8d8d8d' }));
@@ -1361,6 +1366,7 @@ async function pullTransit(){
 }
 
 const seenGunung = new Map();
+const seenTma = new Map();
 const LVL_COLOR = { 'LEVEL IV': '#ff3b30', 'LEVEL III': '#ff9f0a', 'LEVEL II': '#ffd60a', 'LEVEL I': '#8d8d8d' };
 const LVL_RANK = { 'LEVEL IV': 4, 'LEVEL III': 3, 'LEVEL II': 2, 'LEVEL I': 1 };
 const WMO = c => c == null ? '—' : c <= 1 ? 'Cerah' : c <= 3 ? 'Berawan' : c <= 48 ? 'Kabut' : c <= 57 ? 'Hujan gerimis' : c <= 67 ? 'Hujan' : c <= 77 ? 'Salju' : c <= 82 ? 'Hujan lokal' : c <= 86 ? 'Hujan lebat' : 'Badai';
@@ -1519,7 +1525,10 @@ async function pullDisaster(){
         title: `${v.name} — ${v.level} (${v.status})`, name: v.name, label: 'GUNUNG API ' + v.level,
         src: 'MAGMA/PVMBG', url: 'magma://' + v.name + '/' + v.level, weight: .55 });
     }
-    if (!(d.gempa || []).length && !(d.gunung || []).length && !(d.tma || []).length && (DIS_PULSE || []).length) return;
+    const pb = d.floods || {};
+    const pbAreas = Array.isArray(pb.areas) ? pb.areas : [];
+    const pbReports = Array.isArray(pb.reports) ? pb.reports : [];
+    if (!(d.gempa || []).length && !(d.gunung || []).length && !(d.tma || []).length && !pbAreas.length && !pbReports.length && (DIS_PULSE || []).length) return;
     const tmaMarkers = [];
     for (const g of (d.tma || [])) {
       if (typeof g.lat !== 'number' || typeof g.lon !== 'number') continue;
@@ -1527,6 +1536,28 @@ async function pullDisaster(){
       const col = siaga === 1 ? '#ff3b30' : siaga === 2 ? '#ff9500' : siaga === 3 ? '#ffd60a' : '#00e5ff';
       const isDanger = siaga <= 2;
       const sz = isDanger ? 28 : 22;
+      if (siaga <= 3) {
+        const tmaKey = String(g.id || g.name || '');
+        const prevSiaga = seenTma.get(tmaKey);
+        const escalate = prevSiaga == null ? isDanger : siaga < prevSiaga;
+        seenTma.set(tmaKey, siaga);
+        dp.push({
+          kind: 'flood',
+          sub: 'tma',
+          siaga,
+          ketinggian: g.ketinggian,
+          la: g.lat,
+          lo: g.lon,
+          ts: escalate ? Date.now() : today,
+          eid: 'tma:' + tmaKey + ':s' + siaga,
+          title: `${g.name} — ${g.siaga_label || ('Siaga ' + siaga)} (${g.ketinggian} cm)`,
+          name: g.name,
+          label: 'PINTU AIR · ' + (g.siaga_label || ('SIAGA ' + siaga)).toUpperCase(),
+          src: 'DSDA DKI',
+          url: 'https://pantaubanjir.jakarta.go.id/',
+          weight: siaga === 1 ? 0.95 : siaga === 2 ? 0.8 : 0.55
+        });
+      }
       if (mapOpen) {
         const ic = L.divIcon({
           className: 'mk-tma-ic',
@@ -1562,10 +1593,74 @@ async function pullDisaster(){
         tmaMarkers.push(m);
       }
     }
+    for (const a of pbAreas) {
+      if (typeof a.lat !== 'number' || typeof a.lon !== 'number') continue;
+      const st = Number(a.state || 1);
+      const col = st >= 4 ? '#ff3b30' : st === 3 ? '#ff9500' : st === 2 ? '#ffd60a' : '#4589ff';
+      dp.push({
+        kind: 'flood',
+        sub: 'flood',
+        state: st,
+        la: a.lat,
+        lo: a.lon,
+        ts: a.ts || Date.now(),
+        eid: 'pb-area:' + (a.id || a.name) + ':s' + st,
+        title: `Genangan Banjir ${a.name}${a.city ? ' (' + a.city + ')' : ''} — Level ${st}`,
+        name: a.name,
+        label: 'BANJIR · PETABENCANA',
+        src: 'PetaBencana.id',
+        url: 'https://petabencana.id/',
+        weight: st >= 4 ? 0.92 : st === 3 ? 0.78 : 0.55
+      });
+      if (mapOpen && a.geometry) {
+        const poly = L.geoJSON(a.geometry, {
+          style: { color: col, weight: 1.5, fillColor: col, fillOpacity: 0.24 }
+        });
+        poly.bindPopup(`<div class="mp-k" style="color:${col}">GENANGAN BANJIR · PETABENCANA.ID</div>
+          <div class="mp-t">${esc(a.name)}${a.city ? ' — ' + esc(a.city) : ''}</div>
+          <div class="mp-m">${esc(a.parent || '')} · Siaga Level ${st}</div>`);
+        tmaMarkers.push(poly);
+      }
+    }
+    for (const r of pbReports) {
+      if (typeof r.lat !== 'number' || typeof r.lon !== 'number') continue;
+      const st = Number(r.state || 1);
+      dp.push({
+        kind: 'flood',
+        sub: 'flood',
+        state: st,
+        depth: r.depth || 0,
+        la: r.lat,
+        lo: r.lon,
+        ts: r.ts || Date.now(),
+        eid: 'pb-rep:' + (r.id || (r.lat + ',' + r.lon + ',' + r.ts)),
+        title: r.depth ? `${r.title} (${r.depth} cm)` : r.title,
+        name: r.src || 'PetaBencana',
+        label: 'LAPORAN BANJIR',
+        src: 'PetaBencana.id',
+        url: r.url || 'https://petabencana.id/',
+        weight: st >= 3 ? 0.78 : 0.52
+      });
+      if (mapOpen) {
+        const cm = L.circleMarker([r.lat, r.lon], {
+          radius: st >= 3 ? 7 : 5,
+          color: '#0d0d0d',
+          weight: 1.2,
+          fillColor: '#4589ff',
+          fillOpacity: 0.88
+        });
+        cm.bindPopup(`<div class="mp-k" style="color:#4589ff">LAPORAN BANJIR · PETABENCANA.ID</div>
+          <div class="mp-t">${esc(r.title)}${r.depth ? ' (' + r.depth + ' cm)' : ''}</div>
+          <div class="mp-m">${esc(r.text || '')}</div>`);
+        cm.bindTooltip(`${esc(r.title)}${r.depth ? ' · ' + r.depth + ' cm' : ''}`, { direction: 'top', offset: [0, -6], opacity: .9 });
+        tmaMarkers.push(cm);
+      }
+    }
     DIS_PULSE = dp;
     geoDisLoaded = true;
     renderGeoTelemetry();
     if (SIT) renderMapLegend({ ...(SIT.stats || {}),
+      flood: ((SIT.stats && SIT.stats.flood) || 0) + dp.filter(p => p.kind === 'flood').length,
       gempa: dp.filter(p => p.sub === 'gempa').length,
       gunung: dp.filter(p => p.sub === 'volcano').length });
     try { drawGlobe(performance.now()); } catch (e) {}

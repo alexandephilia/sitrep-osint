@@ -19,7 +19,8 @@ function focusCandidates(){
   });
 }
 
-const focusRank = p => ((p.sub === 'volcano' || (p.sub === 'gempa' && (magOf(p) || 0) >= 5)) && Date.now() - (p.ts || 0) < HOT_MS) ? 1 : 0;
+const isCriticalFlood = p => !!(p && p.kind === 'flood' && ((p.siaga && p.siaga <= 2) || (p.state && p.state >= 3)));
+const focusRank = p => ((p.sub === 'volcano' || (p.sub === 'gempa' && (magOf(p) || 0) >= 5) || isCriticalFlood(p)) && Date.now() - (p.ts || 0) < HOT_MS) ? 1 : 0;
 const focusSort = (a, b) => (focusRank(b) - focusRank(a)) || (b.ts || 0) - (a.ts || 0);
 
 function doFocus(t){
@@ -45,7 +46,10 @@ function maybeFocusFresh(){
     liveIds.add(id);
     if (!seenIds.has(id)) {
 
-      if (!(bootUntil && Date.now() < bootUntil && now - p.ts > 600e3) && !focusQueue.some(q => itemIdOf(q) === id)) focusQueue.push(p);
+      if (!(bootUntil && Date.now() < bootUntil && now - p.ts > 600e3)) {
+        if (!focusQueue.some(q => itemIdOf(q) === id)) focusQueue.push(p);
+        if (isCriticalFlood(p) && typeof clToastSensorAlert === 'function') clToastSensorAlert(p);
+      }
       seenIds.add(id);
     }
   }
@@ -381,7 +385,7 @@ function drawGlobe(now){
     if (!xy2) continue;
     const r = 1.35 + (p.weight || .3) * 2.5 + zoomBoost;
     pts.push({ x: xy2[0], y: xy2[1],
-      r, cat: p.kind, color: p.sub === 'gempa' ? '#ff5a4e' : p.sub === 'volcano' ? (LVL_COLOR[p.lvl] || '#8d8d8d') : (CAT_COLOR[p.kind] || '#8d8d8d'), fresh, p });
+      r, cat: p.kind, color: p.sub === 'gempa' ? '#ff5a4e' : p.sub === 'volcano' ? (LVL_COLOR[p.lvl] || '#8d8d8d') : p.sub === 'tma' ? (p.siaga === 1 ? '#ff3b30' : p.siaga === 2 ? '#ff9500' : '#4589ff') : p.sub === 'flood' ? (p.state >= 4 ? '#ff3b30' : p.state === 3 ? '#ff9500' : '#4589ff') : (CAT_COLOR[p.kind] || '#8d8d8d'), fresh, p });
   }
   pts.sort((a, b) => a.r - b.r);
   const focusId = linkItem ? itemIdOf(linkItem) : '';
@@ -425,6 +429,31 @@ function drawGlobe(now){
       ctx.save();
       ctx.shadowColor = d.color; ctx.shadowBlur = dim ? 0 : (alert ? 12 : 5);
       ctx.fillStyle = hexA(d.color, (alert ? 0.95 : 0.72) * (dim ? 0.3 : 1));
+      ctx.fill(); ctx.restore();
+      ctx.lineWidth = .9; ctx.strokeStyle = '#0d0d0d'; ctx.stroke();
+      continue;
+    }
+    if (sub === 'tma' || sub === 'flood') {
+      const alert = isCriticalFlood(d.p);
+      const s = d.r * (alert ? 2.1 : 1.7);
+      if (alert && !dim) {
+        if (!REDUCED) globeAnimOn = true;
+        for (let k = 0; k < 2; k++) {
+          const prog = REDUCED ? 0.5 : (((((now / 1000) * (0.68 - k * 0.14) + d.p.la * 4.3 + k * 0.45) % 1) + 1) % 1);
+          ctx.beginPath(); ctx.arc(d.x, d.y, s * 1.1 + prog * 15, 0, Math.PI * 2);
+          ctx.strokeStyle = hexA(d.color, (1 - prog) * (0.72 - k * 0.22));
+          ctx.lineWidth = k === 0 ? 1.4 : 0.95; ctx.stroke();
+        }
+      }
+      ctx.beginPath();
+      ctx.moveTo(d.x, d.y - s);
+      ctx.lineTo(d.x + s * 0.88, d.y);
+      ctx.lineTo(d.x, d.y + s);
+      ctx.lineTo(d.x - s * 0.88, d.y);
+      ctx.closePath();
+      ctx.save();
+      ctx.shadowColor = d.color; ctx.shadowBlur = dim ? 0 : (alert ? 12 : 6);
+      ctx.fillStyle = hexA(d.color, (alert ? 0.95 : 0.78) * (dim ? 0.3 : 1));
       ctx.fill(); ctx.restore();
       ctx.lineWidth = .9; ctx.strokeStyle = '#0d0d0d'; ctx.stroke();
       continue;
@@ -891,6 +920,10 @@ smlgBox.addEventListener('click', e => {
     const on = Object.keys(legendOn).filter(k => legendOn[k]).length;
     const cm = smlgBox.querySelector('.cm'); if (cm) cm.textContent = on + '/' + Object.keys(legendOn).length;
     drawGlobe(performance.now());
+    if (typeof mapOpen !== 'undefined' && mapOpen) {
+      if (typeof paintMap === 'function') paintMap();
+      if (typeof syncLayers === 'function') syncLayers();
+    }
     return;
   }
   if (e.target.closest('.smlg-btn')) {

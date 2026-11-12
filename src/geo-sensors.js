@@ -115,6 +115,96 @@ function createGeoSensors({
     }
   });
 
+  const pbFloodCache = { at: 0, data: null };
+  const geoCentroid = geom => {
+    if (!geom || !geom.coordinates) return [NaN, NaN];
+    const pts = [];
+    const walk = c => {
+      if (!Array.isArray(c)) return;
+      if (typeof c[0] === 'number' && typeof c[1] === 'number') { pts.push(c); return; }
+      for (let i = 0; i < c.length; i++) walk(c[i]);
+    };
+    walk(geom.coordinates);
+    if (!pts.length) return [NaN, NaN];
+    let minLa = 90, maxLa = -90, minLo = 180, maxLo = -180;
+    for (const [lo, la] of pts) {
+      if (!isFinite(la) || !isFinite(lo)) continue;
+      if (la < minLa) minLa = la;
+      if (la > maxLa) maxLa = la;
+      if (lo < minLo) minLo = lo;
+      if (lo > maxLo) maxLo = lo;
+    }
+    return isFinite(minLa) && minLa <= maxLa ? [(minLa + maxLa) / 2, (minLo + maxLo) / 2] : [NaN, NaN];
+  };
+  const petabencanaFloods = () => singleFlight(pbFloodCache, 120000, async () => {
+    const now = Date.now();
+    const maxAge = 48 * 3600 * 1000;
+    const [fRes, rRes] = await Promise.allSettled([
+      get('https://data.petabencana.id/floods?minimum_state=1&geoformat=geojson', {}, 15000).then(r => r.json()),
+      get('https://data.petabencana.id/reports?disaster=flood&timeperiod=86400&geoformat=geojson', {}, 15000).then(r => r.json())
+    ]);
+    const ok = fRes.status === 'fulfilled' || rRes.status === 'fulfilled';
+    if (!ok) return cacheFail(pbFloodCache, 120000, { ok: false, areas: [], reports: [] });
+    const prev = pbFloodCache.data;
+    const areas = [];
+    if (fRes.status === 'fulfilled') {
+      const feats = (fRes.value && fRes.value.result && fRes.value.result.features) || (fRes.value && fRes.value.features) || [];
+      for (const f of feats) {
+        const p = (f && f.properties) || {};
+        const ts = Date.parse(p.last_updated || '');
+        if (!isFinite(ts) || (now - ts) > maxAge) continue;
+        const [lat, lon] = geoCentroid(f.geometry);
+        if (!isFinite(lat) || !isFinite(lon)) continue;
+        areas.push({
+          id: String(p.area_id || p.area_name || ''),
+          name: String(p.area_name || ''),
+          parent: String(p.parent_name || ''),
+          city: String(p.city_name || ''),
+          state: Number(p.state || 1),
+          ts,
+          lat,
+          lon,
+          geometry: f.geometry
+        });
+      }
+    } else if (prev && Array.isArray(prev.areas)) {
+      areas.push(...prev.areas);
+    }
+    const reports = [];
+    if (rRes.status === 'fulfilled') {
+      const feats = (rRes.value && rRes.value.result && rRes.value.result.features) || (rRes.value && rRes.value.features) || [];
+      for (const f of feats) {
+        const p = (f && f.properties) || {};
+        const coords = f && f.geometry && f.geometry.coordinates;
+        const lon = Number(coords && coords[0]);
+        const lat = Number(coords && coords[1]);
+        if (!isFinite(lat) || !isFinite(lon)) continue;
+        const ts = Date.parse(p.created_at || '');
+        if (!isFinite(ts) || (now - ts) > maxAge) continue;
+        const rd = p.report_data || {};
+        const depth = Number(rd.flood_depth || 0);
+        reports.push({
+          id: String(p.pkey || ''),
+          title: String(p.title || p.text || 'Laporan Banjir'),
+          text: String(p.text || ''),
+          depth,
+          state: depth >= 70 ? 4 : depth >= 30 ? 3 : depth >= 10 ? 2 : 1,
+          ts,
+          lat,
+          lon,
+          img: p.image_url ? String(p.image_url) : '',
+          src: String(p.source || 'PetaBencana'),
+          url: 'https://petabencana.id/'
+        });
+      }
+    } else if (prev && Array.isArray(prev.reports)) {
+      reports.push(...prev.reports);
+    }
+    pbFloodCache.at = now;
+    pbFloodCache.data = { ok: true, areas, reports, at: now };
+    return pbFloodCache.data;
+  });
+
   const disaster = () => singleFlight(disCache, 120000, async () => {
     const now = Date.now();
     const [auto, hist, magma] = await Promise.allSettled([
@@ -135,13 +225,17 @@ function createGeoSensors({
     const seen = new Set(), dedup = gempa.filter(g => { const k = g.lat.toFixed(3) + g.lon.toFixed(3) + g.mag; if (seen.has(k)) return false; seen.add(k); return true; });
     const gempaOk = auto.status === 'fulfilled' || hist.status === 'fulfilled';
     const magmaOk = magma.status === 'fulfilled';
-    const tmaRes = await tmaPintuAir().catch(() => ({ ok: false, gates: [] }));
+    const [tmaRes, pbRes] = await Promise.all([
+      tmaPintuAir().catch(() => ({ ok: false, gates: [] })),
+      petabencanaFloods().catch(() => ({ ok: false, areas: [], reports: [] }))
+    ]);
     const prev = disCache.data;
     const gempaOut = gempaOk ? dedup : (prev ? prev.gempa : []);
     const gunungOut = magmaOk ? gunung : (prev ? prev.gunung : []);
     const tmaOut = tmaRes.ok ? tmaRes.gates : (prev ? prev.tma || [] : []);
+    const pbOut = pbRes.ok ? { areas: pbRes.areas, reports: pbRes.reports } : (prev && prev.floods ? prev.floods : { areas: [], reports: [] });
     const stale = !!prev && (!gempaOk || !magmaOk);
-    disCache.at = now; disCache.data = { ok: true, gempa: gempaOut, gunung: gunungOut, tma: tmaOut, at: now, stale, srcErr: { gempa: !gempaOk, gunung: !magmaOk } };
+    disCache.at = now; disCache.data = { ok: true, gempa: gempaOut, gunung: gunungOut, tma: tmaOut, floods: pbOut, at: now, stale, srcErr: { gempa: !gempaOk, gunung: !magmaOk, floods: !pbRes.ok } };
     return disCache.data;
   });
 
@@ -566,6 +660,7 @@ function createGeoSensors({
     weather,
     radar,
     tmaPintuAir,
+    petabencanaFloods,
     fires,
     sipongi,
     bmkgModelRun,

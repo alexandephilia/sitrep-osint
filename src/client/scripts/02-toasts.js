@@ -192,6 +192,40 @@ function clToastCard(c){
   clToastMount(box, el);
 }
 
+const sensorToastSeen = new Set();
+function clToastSensorAlert(p){
+  const box = $('#cl-toasts');
+  if (!box || !p) return;
+  const id = itemIdOf(p);
+  if (!id || sensorToastSeen.has(id)) return;
+  sensorToastSeen.add(id);
+  if (sensorToastSeen.size > 500) {
+    const first = sensorToastSeen.values().next().value;
+    sensorToastSeen.delete(first);
+  }
+  if (clToastOrder.length >= 6) { clToastSyncMore(); return; }
+  const cat = p.kind || 'flood';
+  const col = CAT_COLOR[cat] || '#4589ff';
+  const el = document.createElement('div');
+  el.className = 'cl-toast';
+  el.title = 'Klik untuk dismiss alert';
+  el.setAttribute('role', 'alert');
+  el.setAttribute('aria-label', 'Alert sensor banjir: klik untuk menutup');
+  el.dataset.url = p.url || '';
+  if (typeof p.la === 'number' && typeof p.lo === 'number') {
+    el.dataset.la = String(p.la);
+    el.dataset.lo = String(p.lo);
+  }
+  el.style.setProperty('--tc', col);
+  el.innerHTML =
+    `<i class="cl-c ptl"></i><i class="cl-c ptr"></i><i class="cl-c pbl"></i><i class="cl-c pbr"></i>` +
+    `<div class="cl-tk"><i></i><span>${esc(p.label || 'SIAGA BANJIR')} · ${esc(wibTime(p.ts || Date.now()))}</span><span class="cl-x" aria-hidden="true" title="Tutup">Tutup</span></div>` +
+    `<div class="cl-th">${esc(p.title || 'Peringatan Banjir')}</div>` +
+    `<div class="cl-tf"><span>${esc(p.name || 'Lokasi')} · ${esc(p.src || CAT_LABEL[cat] || 'Banjir')}</span></div>` +
+    `<i class="cl-cd"></i>`;
+  clToastMount(box, el);
+}
+
 function clToastDigest(cards, total, nNew, placesAll){
   const box = $('#cl-toasts'); if (!box || !cards.length) return;
   if (clToastOrder.length >= 6) { clToastSyncMore(); return; }
