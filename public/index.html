@@ -2347,9 +2347,17 @@ button.mp-src{background:none;border-top:0;border-left:0;border-right:0;cursor:p
 
 .glb{
   position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:14px;padding:24px;background:rgba(10,10,10,.96);
+  gap:14px;padding:56px 24px 24px;background:rgba(10,10,10,.96);
 }
-.glb video{width:min(1100px,94vw);aspect-ratio:16/9;background:#000;border:1px solid var(--border2)}
+.glb video,.glb img,.glb iframe{
+  width:min(1100px,94vw,calc((100vh - 120px) * 16 / 9));
+  width:min(1100px,94vw,calc((100dvh - 120px) * 16 / 9));
+  aspect-ratio:16/9;
+  max-height:calc(100dvh - 120px);
+  object-fit:contain;
+  background:#000;
+  border:1px solid var(--border2);
+}
 .gcap{font:400 9.5px/1.7 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:#C9C5BA;text-align:center}
 .gcap a{color:var(--text2);border-bottom:1px solid var(--border2)}
 .gcap a:hover{color:var(--accent);border-bottom-color:var(--accent)}
@@ -3072,8 +3080,8 @@ button.mp-src{background:none;border-top:0;border-left:0;border-right:0;cursor:p
 <div class="glb" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Player CCTV besar">
   <button class="gx" id="glb-close" type="button">Tutup <svg class="ic" aria-hidden="true"><use href="#i-close"></use></svg></button>
   <video id="glb-video" controls muted playsinline></video>
-  <img id="glb-snap" alt="" style="display:none;max-width:100%;max-height:100%;object-fit:contain;background:#000">
-  <iframe id="glb-frame" allow="autoplay; fullscreen" style="display:none;width:100%;height:100%;border:0;background:#000"></iframe>
+  <img id="glb-snap" alt="" style="display:none">
+  <iframe id="glb-frame" allow="autoplay; fullscreen" style="display:none"></iframe>
   <div class="gcap" id="glb-cap"></div>
 </div>
 

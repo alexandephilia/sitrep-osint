@@ -567,6 +567,9 @@ test('cctv client pump re-entrancy lock and snapMode loop prevention', () => {
   assert.ok(snapFnMatch && !snapFnMatch[0].includes('dpuprkotang'), 'isDirectSnapFeed must not blacklist dpuprkotang.info MP4 streams from video playback');
   assert.ok(cctvSrc.includes('glbMp4Timer = setTimeout(failMp4, 8000)'), 'lightbox MP4 playback must arm timeout fallback');
   assert.ok(cctvSrc.includes('if (glbEmbed && ifr && !isDirectSnapFeed(glbUrl))'), 'glbFallbackEmbed must prioritize live embed player over static snapshot');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(html.includes('.glb video,.glb img,.glb iframe{') && html.includes('aspect-ratio:16/9'), 'lightbox video, snap, and iframe must share unified 16:9 box dimensions');
+  assert.ok(!html.includes('id="glb-frame" allow="autoplay; fullscreen" style="display:none;width:100%;height:100%'), 'lightbox iframe must not force 100% fullscreen sizing');
 });
 
 test('gateway & safeFetch: retries transient ECONNRESET/TLS socket drops once before surfacing 502', async () => {
