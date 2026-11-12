@@ -24,6 +24,7 @@ Requirements: Node.js >= 24, Python 3.10+.
 ## Testing
 
 ```bash
+npm run check:client                      # verify public/index.html is in sync with src/client/
 npm test                                  # full suite (node --test tests/*.js)
 node --check server.js                    # syntax
 python3 -m py_compile vendor/*.py         # worker syntax
@@ -34,7 +35,8 @@ Every security fix needs a regression test. Tests must use synthetic fixtures an
 ## Pull requests
 
 - Keep changes focused; small reviewable diffs beat big rewrites.
-- `server.js` and `public/index.html` are large monoliths — extract modules only when it improves security/testability, not for aesthetics.
+- `server.js` orchestrates backend services in `src/`.
+- Frontend source code is modularized under `src/client/` (`styles/`, `dom/`, `data/`, `scripts/`) and compiled deterministically into `public/index.html` via `npm run build:client`. Always edit `src/client/` and verify with `npm run check:client`.
 - CI must stay green: tests on Node 24 & 26, gitleaks history scan, `npm audit`, `pip-audit`.
 - Do not weaken or bypass security controls (rate limits, SSRF guards, auth gates, TLS verification) to make tests pass.
 

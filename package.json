@@ -6,6 +6,10 @@
   "description": "SITREP OSINT console — news wire, social monitor, incident globe, market, live TV",
   "scripts": {
     "start": "bash start.sh",
+    "build": "node scripts/build-client.js",
+    "build:client": "node scripts/build-client.js",
+    "watch:client": "node scripts/build-client.js --watch",
+    "check:client": "node scripts/build-client.js --check",
     "test": "node --test tests/*.js",
     "test:signals": "node --test tests/signals.test.js tests/signal-engine.test.js",
     "audit:reader": "node scripts/audit-reader.js"

@@ -38,7 +38,7 @@ Real-time situation dashboard for Indonesia: incident news, social signals, disa
 
 - **Backend:** `server.js` (HTTP gateway, routing, auth) + modular domain services in `src/` — Node.js ≥24, native `http` + `franc` (only runtime dep)
 - **Worker:** `vendor/threads_*.py` — Python 3 + `curl_cffi` (pinned in `requirements.txt`)
-- **Frontend:** `public/index.html` — console dashboard (vanilla JS/CSS, no build step) with modular UMD browser cores (`public/cctv-core.js`, `public/signals.js`, `public/wire-core.js`)
+- **Frontend:** Modular client architecture under `src/client/` (`styles/`, `dom/`, `data/`, `scripts/`) compiled deterministically via zero-dependency `scripts/build-client.js` into `public/index.html` (single-request sub-50ms paint) with versioned UMD browser cores (`public/cctv-core.js`, `public/signals.js`, `public/wire-core.js`, `public/wxicons.js`)
 
 ## Quickstart
 
@@ -88,23 +88,46 @@ Full model, SSRF/DNS-pinning details, and reporting policy: [`SECURITY.md`](SECU
 ## Project layout
 
 ```text
-server.js              API surface, auth guard, boot + service wiring
-src/                   modular domain services & core engines (24 modules):
-                       ├── news-service, reader-service, social-service
-                       ├── cctv-gateway, cctv-catalog
-                       ├── security (SSRF guard, DNS-pinning, TLS chain repair)
-                       ├── geo-sensors, geocode, tomtom, copernicus
-                       ├── indonesian-nlp, nlp-adapter, feedtext, assessment, evmerge
-                       ├── article-extract, article-media (reader engine)
-                       ├── social, social-cluster, social-history, social-diagnostics, xpool
-                       └── market, metrics
-*.js (root shims)      16 backward-compatibility shims forwarding to src/*
-public/index.html      UI console (vanilla JS/CSS, no build)
-public/*.js            extracted UMD browser modules (cctv-core, signals, wire-core, wxicons)
-vendor/                Python Threads scraper (see vendor/THREADS-SCRAPER-LICENSE)
-geo/                   Indonesian gazetteer & village index
-tests/                 node:test suite (284 tests) — npm test
+server.js                API surface, auth guard, boot + service wiring
+scripts/build-client.js  deterministic zero-dependency compiler & watcher (<3ms)
+src/client/              modular frontend source tree:
+                         ├── styles/   (14 domain CSS modules: tokens, console, wire, cctv, map, hud, etc.)
+                         ├── dom/      (6 structural HTML components: sprites, header, ticker, console, etc.)
+                         ├── data/     (cams.json camera catalog)
+                         └── scripts/  (12 feature modules: auth, globe, toasts, market, social, wire, cctv, etc.)
+src/                     modular domain services & core engines (24 modules):
+                         ├── news-service, reader-service, social-service
+                         ├── cctv-gateway, cctv-catalog
+                         ├── security (SSRF guard, DNS-pinning, TLS chain repair)
+                         ├── geo-sensors, geocode, tomtom, copernicus
+                         ├── indonesian-nlp, nlp-adapter, feedtext, assessment, evmerge
+                         ├── article-extract, article-media (reader engine)
+                         ├── social, social-cluster, social-history, social-diagnostics, xpool
+                         └── market, metrics
+*.js (root shims)        16 backward-compatibility shims forwarding to src/*
+public/index.html        compiled production console (single-flight, sub-50ms FCP)
+public/*.js              versioned UMD browser modules (cctv-core, signals, wire-core, wxicons)
+vendor/                  Python Threads scraper (see vendor/THREADS-SCRAPER-LICENSE)
+geo/                     Indonesian gazetteer & village index
+tests/                   node:test suite (284+ tests) — npm test
 ```
+
+## Frontend Architecture & Modularization
+
+The frontend combines clean developer modularity with high-performance, single-flight tactical delivery:
+
+- **Source Modularization (`src/client/`):**
+  - **`styles/` (14 modules):** Discrete domain style definitions for tokens, header, ticker, console, situasi, wire, cctv, social, map, hud, tv-foot, reader, responsive, and toasts.
+  - **`dom/` (6 components):** Isolated markup fragments for SVG sprites, top header navigation, breaking ticker bar, four-column tactical console, footer telemetry, and full-screen CCTV lightbox.
+  - **`data/cams.json`:** Curated catalog of traffic, toll road, and Pantau Banjir river cameras.
+  - **`scripts/` (12 modules):** Decoupled client logic covering authentication, canvas 3D globe, toast notifications deck, market data/charts, social feeds, newswire pipeline, CCTV streaming and adaptive grid, Leaflet incident layers, floating live TV dock, in-app reader, and application bootstrapper.
+
+- **Zero-Dependency Build Pipeline (`scripts/build-client.js`):**
+  - Instantaneous deterministic compilation (<3ms) using native Node.js builtins.
+  - Generates production-ready `public/index.html` without bundler bloat, node_modules overhead, or external build tools.
+  - **`npm run build:client`**: Compiles `src/client/` into `public/index.html`.
+  - **`npm run watch:client`**: Watches `src/client/` and automatically recompiles on changes.
+  - **`npm run check:client`**: Validates in CI that `public/index.html` matches `src/client/` byte-for-byte with zero drift.
 
 ## Deploy
 
@@ -134,6 +157,9 @@ Honest scope, so you know what you're running:
 ## Development
 
 ```bash
+npm run build:client          # compile src/client/ into public/index.html
+npm run watch:client          # watch src/client/ for live frontend edits
+npm run check:client          # verify public/index.html is in sync with src/client/
 npm test                      # full suite (tests/*.js)
 node scripts/audit-reader.js  # reader audit: [maxPerSource] [baseUrl]
 ```

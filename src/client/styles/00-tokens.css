@@ -1,0 +1,29 @@
+
+:root{
+  --bg:#161616; --layer:#1f1f1f; --layer2:#262626; --field:#262626;
+  --border:#333333; --border2:#525252;
+  --text:#EFECE6; --text2:#c6c6c6; --text3:#d6d3cb85;
+  --accent:#da1e28; --ok:#42be65; --warn:#f1c21b; --info:#4589ff;
+  --sans:"Plus Jakarta Sans",ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --disp:"Bricolage Grotesque","Plus Jakarta Sans",ui-sans-serif,system-ui,sans-serif;
+  --lex:"Lexend",ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;
+  --hdr:48px; --tick:32px; --foot:30px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  height:100dvh; display:flex; flex-direction:column; overflow:hidden;
+  background:var(--bg); color:var(--text);
+  font-family:var(--sans); font-size:14px; line-height:1.45; font-weight:400;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  font-synthesis-weight:none;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;border-radius:0;-webkit-tap-highlight-color:transparent}
+a{color:inherit;text-decoration:none;text-underline-offset:2px}
+::selection{background:var(--accent);color:#fff}
+:focus{outline:none}
+:focus-visible{outline:1px solid rgba(255,255,255,.28);outline-offset:-1px}
+.mono{font-family:var(--mono)}
+[hidden]{display:none!important}
+

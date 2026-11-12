@@ -1,0 +1,319 @@
+<main class="console">
+
+  <section class="pane" aria-label="Situasi nasional">
+    <div class="ph"><span class="ph-k">[01]</span><h2 class="ph-t">Situasi</h2><span class="ph-m" id="dmeta">sync —</span></div>
+    <div class="pb sit-body">
+      <div class="sit-mapwrap">
+        <canvas id="sit-globe" role="img" aria-label="Globe dunia dengan titik insiden live, bisa di-drag dan di-zoom"></canvas>
+        <div class="sit-corners" aria-hidden="true"><i class="ctl"></i><i class="ctr"></i><i class="cbl"></i><i class="cbr"></i></div>
+        <div class="sit-globe-kpi">
+          <div class="sit-kpi-main"><b id="sit-total">—</b><span class="sit-kpi-side">Insiden</span><span id="sit-total-lbl" class="sit-kpi-sub2">—</span></div>
+          <div class="sit-kpi-sync"><span id="sit-sync-state">live</span><time id="sit-sync-time">—</time></div>
+        </div>
+        <div class="sit-globe-tag">Globe · live</div>
+        <div class="sit-tip" id="sit-tip" hidden></div>
+        <div class="sit-pop" id="sit-pop" hidden></div>
+        <div class="sit-alert" id="sit-alert" hidden></div>
+        <div class="sit-legend-left" id="sit-map-legend" role="group" aria-label="Filter kategori pada globe"></div>
+        <div class="sit-legend-right">
+          <span>geser</span><span>zoom</span><span>klik</span>
+        </div>
+      </div>
+      <div class="cl-h" id="cl-h">Klaster aktif</div>
+      <div class="cl-list" id="cl-list"></div>
+      <div class="segwrap" id="segwrap">
+        <div class="seg-h" id="seg-h" role="button" tabindex="0" aria-expanded="true">
+          <span>Detail situasi</span><i class="chev" aria-hidden="true"></i>
+        </div>
+        <div class="seg" id="dseg" role="tablist" aria-label="Bagian situasi">
+          <button class="seg-b" data-view="claims" role="tab" aria-selected="true">Sinyal</button>
+          <button class="seg-b" data-view="krono" role="tab" aria-selected="false">Wilayah</button>
+          <button class="seg-b" data-view="net" role="tab" aria-selected="false">Sumber</button>
+        </div>
+        <div class="seg-body">
+          <div id="view-claims"><div class="triage" id="triage"></div></div>
+          <div id="view-krono" hidden><div class="sit-regions" id="sit-regions"></div></div>
+          <div id="view-net" hidden><div class="src-health" id="src-health"></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="pane mkt" aria-label="Pasar saham Indonesia">
+    <div class="ph"><span class="ph-k">[02]</span><h2 class="ph-t">Market · IDX</h2>
+      <span class="ph-m" id="stk-meta">—</span></div>
+    <div class="mkt-body">
+    <div class="tape" id="tape" hidden><div class="tapetrack" id="tapetrack"></div></div>
+    <div class="stk">
+      <div class="stk-r1">
+        <div class="stk-ihsg">
+          <span class="stk-k">IHSG</span>
+          <div class="stk-hd"><b class="stk-p" id="stk-ihsg">—</b>
+            <span class="stk-d" id="stk-ihsg-d">—</span></div>
+          <canvas class="stk-spark" id="stk-spark" width="165" height="46" aria-hidden="true"></canvas>
+        </div>
+        <div class="stk-chips" id="stk-chips"></div>
+      </div>
+      <div class="stk-r2">
+        <div class="stk-ihsg">
+          <span class="stk-k">USD/<br>IDR</span>
+          <div class="stk-hd"><b class="stk-p" id="fx-idr">—</b>
+            <span class="stk-d" id="fx-idr-d">—</span></div>
+          <canvas class="stk-spark" id="fx-spark" width="165" height="46" aria-hidden="true"></canvas>
+        </div>
+        <div class="stk-chips" id="fx-chips"></div>
+      </div>
+    </div>
+    </div>
+  </section>
+
+  <section class="pane" aria-label="Social live">
+    <div class="ph soc-ph">
+      <span class="ph-k">[03]</span>
+      <h2 class="ph-t">Social</h2>
+      <div class="soc-tabs" role="tablist" aria-label="Sumber sosial">
+        <button class="soc-tab" id="tab-x" type="button" role="tab" aria-selected="true" aria-controls="pane-x" data-tab="x">
+          <span class="lbl"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg><span class="tx">Tweets</span></span>
+        </button>
+        <button class="soc-tab" id="tab-th" type="button" role="tab" aria-selected="false" aria-controls="pane-th" data-tab="threads">
+          <span class="lbl"><svg class="ic" aria-hidden="true"><use href="#i-threads"></use></svg><span class="tx">Threads</span></span>
+        </button>
+      </div>
+      <span class="ph-m" id="xmeta" hidden aria-hidden="true">—</span>
+      <span class="ph-m" id="tmeta" hidden aria-hidden="true">—</span>
+    </div>
+    <div class="pb" id="pane-x" role="tabpanel" aria-labelledby="tab-x">
+      <div class="tools"><input class="inp cmd" id="xq" type="search" placeholder="Cari post atau akun…" aria-label="Cari post X"></div>
+      <div class="qchips" id="qchips"></div>
+      <div id="xlist"><div class="empty">Menghubungkan ke X…</div></div>
+    </div>
+    <div class="pb" id="pane-th" role="tabpanel" aria-labelledby="tab-th" hidden>
+      <div class="tools"><input class="inp cmd" id="tq" type="search" placeholder="Cari post Threads…" aria-label="Cari post Threads"></div>
+      <div class="qchips" id="qchips-th"></div>
+      <div id="tlist"><div class="empty">Menghubungkan ke Threads…</div></div>
+    </div>
+  </section>
+
+  <section class="pane" aria-label="Wire berita">
+    <div class="ph"><span class="ph-k">[04]</span><h2 class="ph-t">News Wire</h2><span class="ph-m" id="nmeta">Memuat…</span></div>
+    <div class="pb">
+      <div class="catbar" id="catbar" role="group" aria-label="Kategori berita"></div>
+      <div class="flt-wrap" id="fltwrap">
+        <div class="flt-drawer" id="newstools" role="search">
+          <div class="flt-in">
+            <input class="inp cmd" id="fq" type="search" placeholder="Saring berita…" aria-label="Saring berita" autocomplete="off" spellcheck="false" tabindex="-1">
+          </div>
+        </div>
+        <button class="flt-tab" id="fltpill" type="button" aria-expanded="false" aria-controls="newstools"><svg class="flt-cv" viewBox="0 0 10 10" width="9" height="9" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="square"/></svg><span class="flt-lb">filter</span><i class="flt-dot" aria-hidden="true"></i></button>
+      </div>
+      <div id="lead" aria-busy="true" aria-label="Memuat berita utama">
+        <div class="lead lead-skeleton" aria-hidden="true">
+          <div class="nw-sk-line lead-sk-image"></div><div class="nw-sk-line lead-sk-meta"></div>
+          <div class="nw-sk-line lead-sk-title"></div><div class="nw-sk-line lead-sk-title short"></div>
+          <div class="nw-sk-line lead-sk-desc"></div><div class="nw-sk-line lead-sk-desc"></div><div class="nw-sk-line lead-sk-desc mid"></div>
+        </div>
+      </div>
+      <div id="nlist" aria-busy="true" aria-label="Memuat daftar berita">
+        <div class="nw-sk-card" aria-hidden="true"><div class="nw-sk-line nw-sk-meta"></div><div class="nw-sk-line nw-sk-src"></div><div class="nw-sk-line nw-sk-title"></div><div class="nw-sk-line nw-sk-title short"></div><div class="nw-sk-line nw-sk-desc"></div><div class="nw-sk-line nw-sk-desc short"></div></div>
+        <div class="nw-sk-card" aria-hidden="true"><div class="nw-sk-line nw-sk-meta"></div><div class="nw-sk-line nw-sk-src"></div><div class="nw-sk-line nw-sk-title"></div><div class="nw-sk-line nw-sk-title short"></div><div class="nw-sk-line nw-sk-desc"></div><div class="nw-sk-line nw-sk-desc short"></div></div>
+        <div class="nw-sk-card" aria-hidden="true"><div class="nw-sk-line nw-sk-meta"></div><div class="nw-sk-line nw-sk-src"></div><div class="nw-sk-line nw-sk-title"></div><div class="nw-sk-line nw-sk-title short"></div><div class="nw-sk-line nw-sk-desc"></div><div class="nw-sk-line nw-sk-desc short"></div></div>
+        <div class="nw-sk-card" aria-hidden="true"><div class="nw-sk-line nw-sk-meta"></div><div class="nw-sk-line nw-sk-src"></div><div class="nw-sk-line nw-sk-title"></div><div class="nw-sk-line nw-sk-title short"></div><div class="nw-sk-line nw-sk-desc"></div><div class="nw-sk-line nw-sk-desc short"></div></div>
+        <div class="nw-sk-card" aria-hidden="true"><div class="nw-sk-line nw-sk-meta"></div><div class="nw-sk-line nw-sk-src"></div><div class="nw-sk-line nw-sk-title"></div><div class="nw-sk-line nw-sk-title short"></div><div class="nw-sk-line nw-sk-desc"></div><div class="nw-sk-line nw-sk-desc short"></div></div>
+        <div class="nw-sk-card" aria-hidden="true"><div class="nw-sk-line nw-sk-meta"></div><div class="nw-sk-line nw-sk-src"></div><div class="nw-sk-line nw-sk-title"></div><div class="nw-sk-line nw-sk-title short"></div><div class="nw-sk-line nw-sk-desc"></div><div class="nw-sk-line nw-sk-desc short"></div></div>
+        <div class="nw-sk-card" aria-hidden="true"><div class="nw-sk-line nw-sk-meta"></div><div class="nw-sk-line nw-sk-src"></div><div class="nw-sk-line nw-sk-title"></div><div class="nw-sk-line nw-sk-title short"></div><div class="nw-sk-line nw-sk-desc"></div><div class="nw-sk-line nw-sk-desc short"></div></div>
+        <div class="nw-sk-card" aria-hidden="true"><div class="nw-sk-line nw-sk-meta"></div><div class="nw-sk-line nw-sk-src"></div><div class="nw-sk-line nw-sk-title"></div><div class="nw-sk-line nw-sk-title short"></div><div class="nw-sk-line nw-sk-desc"></div><div class="nw-sk-line nw-sk-desc short"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="pane" aria-label="CCTV Regional">
+    <div class="ph"><span class="ph-k">[05]</span><h2 class="ph-t">CCTV · Regional</h2><span class="ph-m" id="ccount">—</span></div>
+    <div class="pb">
+      <div class="tools"><input class="inp cmd" id="cq" type="search" placeholder="Cari kamera…" aria-label="Cari kamera"></div>
+      <div class="citybar" id="citybar" role="tablist" aria-label="Wilayah kamera"></div>
+      <div class="camgrid" id="camgrid"></div>
+    </div>
+  </section>
+
+</main>
+
+<div class="cl-toasts" id="cl-toasts" role="status" aria-live="polite" aria-atomic="false"></div>
+
+<div class="geobar" aria-label="Peta insiden">
+  <span class="geo-head" aria-label="Globe Indonesia Live">
+    <svg class="geo-globe" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="8" cy="8" r="6.3" stroke="#62c97f" stroke-width="1.2"/>
+      <ellipse cx="8" cy="8" rx="2.8" ry="6.2" stroke="#42be65" stroke-width="1" opacity=".72"/>
+      <line x1="2" y1="8" x2="14" y2="8" stroke="#42be65" stroke-width="1" opacity=".72"/>
+    </svg>
+    <span class="geo-k">IDN</span>
+    <i class="geo-live" aria-hidden="true"></i>
+  </span>
+  <div class="geo-telemetry" id="geo-telemetry" aria-label="Ringkasan insiden globe hari ini">
+    <div class="geo-spec" id="geo-spec" aria-hidden="true"></div>
+    <div class="geo-idx" id="geo-idx">
+      <div class="geo-sensor" id="geo-sensor" aria-label="Sensor geofisika aktif"></div>
+      <div class="geo-shingles" id="geo-shingles" aria-label="Kategori insiden globe">
+        <span class="geo-item is-muted"><span class="geo-l">Sinkronisasi globe…</span></span>
+      </div>
+    </div>
+  </div>
+  <span class="geo-c" id="geo-count">— titik</span>
+  <span class="geo-acts">
+    <button class="geo-btn" id="btn-tv" type="button" aria-expanded="false" aria-controls="tvwrap">
+      <span class="pod-led tv-led" aria-hidden="true"></span>
+      <svg class="ic" aria-hidden="true"><use href="#i-tv"></use></svg>
+      <span>Live TV</span>
+      <span class="pod-tag">SIGINT</span>
+    </button>
+    <button class="geo-btn" id="btn-map" type="button" aria-expanded="false" aria-controls="mapwrap">
+      <svg class="ic" aria-hidden="true"><use href="#i-map"></use></svg>
+      <span>Peta Insiden</span>
+      <span class="pod-tag">RADAR</span>
+    </button>
+  </span>
+</div>
+
+<aside class="mapwrap" id="mapwrap" aria-label="Peta insiden Indonesia" aria-hidden="true" inert>
+  <div class="map-h">
+    <svg class="ic" aria-hidden="true"><use href="#i-pin"></use></svg>
+    <span class="map-t">Peta Insiden · Indonesia</span>
+    <span class="map-live"><i></i>Data Live</span>
+    <span class="map-m" id="map-meta">—</span>
+    <button class="map-x" id="map-close" type="button">Tutup <svg class="ic" aria-hidden="true"><use href="#i-close"></use></svg></button>
+  </div>
+  <div class="map-layers" role="group" aria-label="Layer peta">
+    <div class="mly-tabs">
+    <span class="mly-unit"><span class="mly-grp">Insiden</span>
+    <button class="mly" type="button" data-layer="heat" aria-pressed="true" title="Heat" aria-label="Heat"><svg class="ic" aria-hidden="true"><use href="#i-m-heat"></use></svg><span>Heat</span></button>
+    <button class="mly" type="button" data-layer="pins" aria-pressed="true" title="Titik insiden" aria-label="Titik insiden"><svg class="ic" aria-hidden="true"><use href="#i-pin"></use></svg><span>Titik</span></button>
+    <button class="mly" type="button" data-layer="cams" aria-pressed="true" title="CCTV" aria-label="CCTV"><svg class="ic" aria-hidden="true"><use href="#i-cam"></use></svg><span>CCTV</span></button></span>
+    <span class="mly-unit"><span class="mly-grp">Lalin</span>
+    <button class="mly" type="button" data-layer="ttflow" aria-pressed="false" title="TomTom Flow" aria-label="TomTom Flow"><svg class="ic" aria-hidden="true"><use href="#i-flow"></use></svg><span>Flow</span></button>
+    <button class="mly" type="button" data-layer="ttinc" aria-pressed="false" title="TomTom Insiden" aria-label="TomTom Insiden"><svg class="ic" aria-hidden="true"><use href="#i-alert"></use></svg><span>Insid.</span></button>
+    <button class="mly" type="button" data-layer="ttdata" aria-pressed="false" title="Data Insiden TomTom" aria-label="Data Insiden TomTom" hidden><svg class="ic" aria-hidden="true"><use href="#i-map"></use></svg><span>Data</span></button>
+    <button class="mly" type="button" data-layer="rute" aria-pressed="false" title="Rute & Jarak" aria-label="Rute & Jarak"><svg class="ic" aria-hidden="true"><use href="#i-route"></use></svg><span>Rute</span></button>
+    <button class="mly" type="button" data-layer="lalin" aria-pressed="false" title="Cek Kecepatan Jalan" aria-label="Cek Kecepatan Jalan"><svg class="ic" aria-hidden="true"><use href="#i-gauge"></use></svg><span>Lalin</span></button></span>
+    <span class="mly-unit"><span class="mly-grp">Transport</span>
+    <button class="mly" type="button" data-layer="flight" aria-pressed="false" title="Penerbangan" aria-label="Penerbangan"><svg class="ic" aria-hidden="true"><use href="#i-plane"></use></svg><span>Flt</span></button>
+    <button class="mly" type="button" data-layer="ship" aria-pressed="false" title="Kapal" aria-label="Kapal"><svg class="ic" aria-hidden="true"><use href="#i-ship"></use></svg><span>Kpl</span></button>
+    <button class="mly" type="button" data-layer="transit" aria-pressed="false" title="Transit" aria-label="Transit"><svg class="ic" aria-hidden="true"><use href="#i-bus"></use></svg><span>Bjkt</span></button></span>
+    <span class="mly-unit"><span class="mly-grp">Bencana</span>
+    <button class="mly" type="button" data-layer="gempa" aria-pressed="true" title="Gempa BMKG (hari ini)" aria-label="Gempa"><svg class="ic" aria-hidden="true"><use href="#i-activity"></use></svg><span>Gempa</span></button>
+    <button class="mly" type="button" data-layer="gunung" aria-pressed="true" title="Gunung Api MAGMA (Siaga+)" aria-label="Gunung api"><svg class="ic" aria-hidden="true"><use href="#i-m-volcano"></use></svg><span>Gn.Api</span></button></span>
+    </div>
+    <div class="mly-sub">
+    <span class="mly-unit"><span class="mly-grp">Cuaca</span>
+    <button class="mly" type="button" data-layer="cuaca" aria-pressed="false" title="Cuaca &amp; Angin (Open-Meteo)" aria-label="Cuaca dan angin"><svg class="ic" aria-hidden="true"><use href="#i-cloud"></use></svg><span>Cuaca</span></button>
+    <button class="mly" type="button" data-layer="wind" aria-pressed="true" title="Partikel Angin Animasi (Open-Meteo)" aria-label="Partikel angin"><svg class="ic" aria-hidden="true"><use href="#i-wind"></use></svg><span>Wind</span></button>
+    <button class="mly" type="button" data-layer="radar" aria-pressed="false" title="Radar hujan RainViewer (timeline)" aria-label="Radar hujan timeline"><svg class="ic" aria-hidden="true"><use href="#i-radar"></use></svg><span>Radar</span></button>
+    <button class="mly" type="button" data-layer="radarbmkg" aria-pressed="false" title="Radar Curah Hujan BMKG" aria-label="Radar BMKG"><svg class="ic" aria-hidden="true"><use href="#i-cloud-rain"></use></svg><span>BMKG</span></button></span>
+    <span class="mly-unit"><span class="mly-grp">Satelit</span>
+    <button class="mly" type="button" data-layer="sat-ir" aria-pressed="false" title="Himawari-9 IR Enhanced (update 10 menit)" aria-label="IR Enhanced"><svg class="ic" aria-hidden="true"><use href="#i-m-ir"></use></svg><span>IR</span></button>
+    <button class="mly" type="button" data-layer="sat-nc" aria-pressed="false" title="Himawari-9 Natural Color (siang)" aria-label="Natural Color"><svg class="ic" aria-hidden="true"><use href="#i-m-nat"></use></svg><span>Nat</span></button>
+    <button class="mly" type="button" data-layer="sat-wv" aria-pressed="false" title="Himawari-9 Water Vapor Enhanced" aria-label="Water Vapor"><svg class="ic" aria-hidden="true"><use href="#i-drop"></use></svg><span>WV</span></button>
+    <button class="mly" type="button" data-layer="sat-rain" aria-pressed="false" title="Himawari-9 Rainfall Potential (produk turunan)" aria-label="Rainfall Potential"><svg class="ic" aria-hidden="true"><use href="#i-bolt"></use></svg><span>Rain</span></button></span>
+    <span class="mly-unit"><span class="mly-grp">API</span>
+    <button class="mly" type="button" data-layer="fires" aria-pressed="true" title="Hotspot karhutla (SiPongi Kemenhut + NASA FIRMS)" aria-label="Hotspot kebakaran"><svg class="ic" aria-hidden="true"><use href="#i-sg-burst"></use></svg><span>Hotspot</span></button>
+    <button class="mly" type="button" data-layer="air" aria-pressed="true" title="Kualitas Udara — stasiun AQMS (SiPongi Kemenhut)" aria-label="Kualitas udara"><svg class="ic" aria-hidden="true"><use href="#i-m-aqms"></use></svg><span>Udara</span></button>
+    <button class="mly" type="button" data-layer="peringatan" aria-pressed="true" title="Peringatan Dini Cuaca (BMKG CAP)" aria-label="Peringatan dini"><svg class="ic" aria-hidden="true"><use href="#i-cloud-warn"></use></svg><span>Warn</span></button></span>
+    <span class="mly-unit"><span class="mly-grp">Citra</span>
+    <button class="mly" type="button" data-layer="basemap-sat" aria-pressed="true" title="Basemap foto satelit resolusi tinggi (Esri World Imagery)" aria-label="Basemap foto satelit"><svg class="ic" aria-hidden="true"><use href="#i-m-ortho"></use></svg><span>Foto</span></button>
+    <button class="mly" type="button" data-layer="sentinel2" aria-pressed="false" title="Copernicus Sentinel-2 L2A 10m (citra satelit resolusi tinggi seluruh Indonesia, cache server 24 jam)" aria-label="Copernicus Sentinel-2"><svg class="ic" aria-hidden="true"><use href="#i-m-s2"></use></svg><span>S2</span></button></span>
+    <button class="mly" type="button" id="map-refresh" title="Refresh semua data peta" aria-label="Refresh peta"><svg class="ic" aria-hidden="true"><use href="#i-sync"></use></svg></button>
+    <span class="map-hint" id="map-hint">Mode: Rute A/B · Lalin probe</span>
+    </div>
+  </div>
+  <div class="radar-ctrl" id="radar-ctrl" hidden aria-label="Kontrol timeline radar hujan">
+    <button type="button" id="radar-step-back" title="Frame sebelumnya" aria-label="Frame sebelumnya">←</button>
+    <button type="button" id="radar-play" aria-pressed="false" title="Putar / jeda radar" aria-label="Putar atau jeda radar">▶</button>
+    <button type="button" id="radar-step-forward" title="Frame berikutnya" aria-label="Frame berikutnya">→</button>
+    <input id="radar-range" type="range" min="0" max="0" value="0" step="1" aria-label="Timeline radar hujan">
+    <span class="rv-time" id="radar-time">—</span>
+    <button type="button" id="radar-latest" title="Lompat ke frame terakhir" aria-label="Lompat ke frame terakhir">Terbaru</button>
+  </div>
+  <div class="map-route" id="map-route" hidden>
+    <input class="rp-inp" id="rp-from" placeholder="Dari: lat,lon (atau klik peta)" aria-label="Titik asal">
+    <input class="rp-inp" id="rp-to" placeholder="Ke: lat,lon (atau klik peta)" aria-label="Titik tujuan">
+    <button class="rp-btn" type="button" id="rp-go">Hitung rute</button>
+    <div class="rp-out" id="rp-out">TomTom routing · jarak & estimasi waktu. Klik peta untuk isi A lalu B, atau ketik koordinat.</div>
+  </div>
+  <div id="map" role="application" aria-label="Peta interaktif insiden Indonesia"></div>
+  <div class="flow-hint" id="flow-hint" hidden>Klik pada peta untuk cek kecepatan jalan</div>
+  <div class="map-f">
+    <span class="map-leg-items" id="map-leg-items">
+      <span class="lg"><i style="background:#f1c21b"></i>Demo</span>
+      <span class="lg"><i style="background:#da1e28"></i>Kebakaran</span>
+      <span class="lg"><i style="background:#4589ff"></i>Banjir</span>
+      <span class="lg"><i style="background:#be95ff"></i>Bencana</span>
+      <span class="lg"><i style="background:#8d8d8d"></i>Insiden</span>
+      <span class="lg"><i style="background:#c8f04b"></i>Siber</span>
+      <span class="lg"><i style="background:#ff9f43"></i>Kriminal</span>
+      <span class="lg"><i style="background:#ff6b9d"></i>Kesehatan</span>
+      <span class="lg"><i style="background:#3ddc97"></i>Ekonomi</span>
+      <span class="lg"><i style="background:#6ea8fe"></i>Politik</span>
+      <span class="lg"><i style="background:#ff5a4e"></i>Gempa</span>
+      <span class="lg"><i style="background:#ff9f0a"></i>Gunung Api</span>
+    </span>
+    <span class="sp" id="map-src">sumber —</span>
+    <span class="cred">© Esri · TomTom · BMKG · PVMBG</span>
+  </div>
+</aside>
+
+<aside class="tvwrap" id="tvwrap" aria-label="Live TV" aria-hidden="true">
+  <div class="tv-h" id="tv-drag" title="Tarik untuk memindahkan · geser ke tepi untuk menempel">
+    <span class="tv-live"><i aria-hidden="true"></i>Live</span>
+    <span class="tv-name" id="tv-name">Metro TV</span>
+    <span class="tv-hm" aria-hidden="true">geser</span>
+    <button class="tv-x" id="tv-close" type="button" aria-label="Tutup live TV">
+      <svg class="ic" aria-hidden="true"><use href="#i-close"></use></svg>
+    </button>
+  </div>
+  <div class="tv-body" id="tv-body" data-state="idle">
+    <video id="tv-video" playsinline muted preload="none"></video>
+    <div class="tv-msg">
+      <b id="tv-msg-t">Menghubungkan…</b>
+      <span id="tv-msg-s">siaran langsung</span>
+      <a id="tv-link" href="#" target="_blank" rel="noopener">Buka di sumber</a>
+    </div>
+  </div>
+  <div class="tv-f">
+    <button class="tv-ch-btn" id="tv-ch-btn" type="button" aria-expanded="false" aria-controls="tv-menu" aria-label="Daftar channel TV" title="Pilih Channel">
+      <svg class="ic" aria-hidden="true"><use href="#i-tv"></use></svg>
+      <span id="tv-ch-label">Channels</span>
+      <svg class="ic tv-ch-caret" aria-hidden="true"><use href="#i-chev-d"></use></svg>
+    </button>
+    <span class="tv-src" id="tv-src">hls</span>
+    <button class="tv-mute" id="tv-mute" type="button" aria-pressed="true" aria-label="Suara">
+      <svg class="ic" aria-hidden="true"><use href="#i-volx"></use></svg>
+    </button>
+  </div>
+  <div class="tv-menu" id="tv-menu" hidden role="dialog" aria-label="Pilih Channel"></div>
+  <span class="tv-grip" id="tv-grip" role="separator" aria-orientation="horizontal" tabindex="0"
+    aria-label="Ubah ukuran panel TV" title="Seret untuk mengubah ukuran · klik dua kali untuk reset">
+    <svg class="ic" aria-hidden="true"><use href="#i-grip"></use></svg>
+  </span>
+</aside>
+
+
+<aside class="reader" id="reader" role="dialog" aria-label="Pembaca tautan" aria-hidden="true">
+  <div class="rd-h" id="rd-drag" title="Tarik untuk memindahkan panel">
+    <button class="rd-back" id="rd-back" type="button" aria-label="Kembali" hidden>
+      <svg class="ic" aria-hidden="true"><use href="#i-chev-l"></use></svg>
+    </button>
+    <span class="rd-k" id="rd-kind">Baca</span>
+    <span class="rd-host" id="rd-host">—</span>
+    <span class="rd-hm" aria-hidden="true">geser</span>
+    <button class="rd-x" id="rd-close" type="button" aria-label="Tutup pembaca">
+      <svg class="ic" aria-hidden="true"><use href="#i-close"></use></svg>
+    </button>
+  </div>
+  <div class="rd-b" id="rd-body"></div>
+  <div class="rd-f">
+    <span class="rd-state" id="rd-state">siap</span>
+    <a class="rd-open" id="rd-open" href="#" target="_blank" rel="noopener">Buka sumber
+      <svg class="ic" aria-hidden="true"><use href="#i-src"></use></svg>
+    </a>
+  </div>
+</aside>
+
