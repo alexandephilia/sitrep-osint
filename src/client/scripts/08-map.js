@@ -1153,7 +1153,7 @@ $$('.mly').forEach(b => b.addEventListener('click', () => {
   if (k === 'flight' && layerOn[k]) pullFlights();
   if (k === 'ship' && layerOn[k]) pullShips();
   if (k === 'transit' && layerOn[k]) pullTransit();
-  if ((k === 'gempa' || k === 'gunung') && layerOn[k]) { pullDisaster().then(() => { try { drawGlobe(performance.now()); } catch (e) {} }); }
+  if ((k === 'gempa' || k === 'gunung' || k === 'tma') && layerOn[k]) { pullDisaster().then(() => { try { drawGlobe(performance.now()); } catch (e) {} }); }
   if (k === 'cuaca' && layerOn[k]) pullWeather();
   if (k === 'wind') { if (layerOn[k]) { pullWind().then(() => startWindAnim()); } else { stopWindAnim(); } }
   if (k === 'radar') { if (layerOn[k]) { pullRadar(); } else { stopRadarInterval(); clearRadarCache(); radarLayer = null; const ctrl=$('#radar-ctrl'); if(ctrl) ctrl.hidden=true; } }
