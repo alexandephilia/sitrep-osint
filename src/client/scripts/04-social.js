@@ -50,6 +50,30 @@ function skCard(){
     </div>
   </article>`;
 }
+function intelBadgesHtml(p){
+  const it = p && p.intel;
+  if (!it) return '';
+  const b = [];
+  if (it.sourceType === 'official_agency') b.push('<span class="ti-b ti-resmi">RESMI</span>');
+  else if (it.sourceType === 'news_outlet') b.push('<span class="ti-b ti-media">MEDIA</span>');
+  else if (it.sourceType === 'eyewitness') b.push('<span class="ti-b ti-saksi">SAKSI</span>');
+  if (it.newsMatch && it.newsMatch.status === 'confirmed') {
+    const cnt = it.newsMatch.count > 1 ? ` (${esc(it.newsMatch.count)})` : '';
+    const tip = it.newsMatch.title ? ` title="${esc(it.newsMatch.title)}"` : '';
+    b.push(`<span class="ti-b ti-conf"${tip}>TERKONFIRMASI${cnt}</span>`);
+  } else if (it.newsMatch && it.newsMatch.status === 'early_warning') {
+    b.push('<span class="ti-b ti-ew">EARLY WARNING</span>');
+  }
+  if (Array.isArray(it.crossPlatforms) && it.crossPlatforms.length >= 2) {
+    b.push('<span class="ti-b ti-xplat">X+TH</span>');
+  }
+  if (it.dupCount > 1) {
+    const handles = Array.isArray(it.foldedHandles) && it.foldedHandles.length
+      ? ` title="${esc(it.foldedHandles.map(h => '@' + h).join(', '))}"` : '';
+    b.push(`<span class="ti-b ti-dup"${handles}>+${esc(it.dupCount - 1)} serupa</span>`);
+  }
+  return b.length ? `<div class="tw-intel">${b.join('')}</div>` : '';
+}
 function tweetCard(p){
   const key = p.url || p.text || '';
   if (xFresh.has(key)) return skCard();
@@ -65,6 +89,7 @@ function tweetCard(p){
         ${p.url ? `<a class="tw-o" href="${escUrl(p.url)}" target="_blank" rel="noopener noreferrer" title="Buka di X">${ic('out')}</a>` : ''}
       </div>
       <div class="tw-t tw-assess">${esc(assessmentLabel(p))}</div>
+      ${intelBadgesHtml(p)}
       <div class="tw-txt">${linkify(p.text || '') || '<span style="color:#555">tautan</span>'}</div>
       ${(p.urls || []).slice(0, 2).map(u => {
         let host = ''; try { host = new URL(u).hostname.replace(/^www\./, ''); } catch (e) {}
@@ -159,7 +184,7 @@ function qchipsHtml(queries, trending, active, me, other){
     const bdrSubdued = hexToRgba(col, 0.22);
     const glow = hexToRgba(col, 0.45);
 
-    return `<button class="qc qc-panel${hotCls}" type="button" data-q="${esc(q)}" aria-pressed="${q === active}" style="z-index:${z};--cat-c:${col};--cat-bg:${bgSubdued};--cat-bdr:${bdrSubdued};--cat-glow:${glow};" title="Rank ${rankStr} · ${srcTag} · X: ${nx} · Threads: ${nt}">` +
+    return `<button class="qc qc-panel${hotCls}" type="button" data-q="${esc(q)}" aria-pressed="${q === active}" style="z-index:${z};--cat-c:${col};--cat-bg:${bgSubdued};--cat-bdr:${bdrSubdued};--cat-glow:${glow};" title="Rank ${esc(rankStr)} · ${srcTag} · X: ${nx} · Threads: ${nt}">` +
       `<div class="qc-panel-inner">` +
         `<div class="qp-head">` +
           `<span class="qp-idx">${rankStr}</span>` +
@@ -317,6 +342,7 @@ function threadCard(p){
       </div>
       ${p.is_reply && p.reply_to_username ? `<div class="th-rp">${ic('reply')}balasan untuk @${esc(deEmoji(p.reply_to_username))}</div>` : ''}
       <div class="tw-t tw-assess">${esc(assessmentLabel(p))}</div>
+      ${intelBadgesHtml(p)}
       <div class="th-txt">${linkifyThreads(p.text || '')}</div>
       ${link ? `<a class="th-link" href="${escUrl(link)}" target="_blank" rel="noopener noreferrer">${ic('out')}${esc(host || 'tautan')}</a>` : ''}
       <div class="th-a">

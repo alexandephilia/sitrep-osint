@@ -71,8 +71,6 @@ const SOC_LANG_OK = new Set(['ind', 'zlm', 'eng', 'und', 'sun', 'min', 'jav', 'm
 const SOC_FOREIGN_WORDS_RE = /\b(?:tenho|jogar|jugar|voltar|estoy|avec|pour|dans|nicht|quoi|merci|obrigado|vuelta|habra|habrá|dado|povo|assusta|infidelite|infidélité|nouveau|nouvelle|variant\s+du|is\s+het|gaat\s+het|hebben\s+we|het\s+kabinet|uit\s+het|staat\s+op\s+vallen|gevallen|klappen|gestapt|nog\s+niet|nog\s+een|vvd|d66|pvv|tweede\s+kamer|niet\s+gevallen|zijn\s+er|waarom|wanneer|misschien|eigenlijk|gewoon|altijd|nooit|iemand|niemand|echt\s+niet|por\s+que|porque|pero|como\s+estas|tambien|también|mucho|todos|tiene|tienen|hacer|puede|pueden|cuando|donde|dónde|quien|quién|estos|estas|nosotros|ustedes|ellos|ellas|muito|voce|você|nao|não|entao|então|tambem|também|ainda|agora|sempre|nunca|ninguem|ninguém|alguem|alguém|c'est|qu'est|est-ce|sont|mais|plus|tout|tous|faire|peut|comme|cette|votre|notre|leurs|aussi|meme|même|jamais|toujours|personne|quelqu'un|aber|oder|wenn|weil|kein|keine|haben|werden|wurde|können|müssen|sagen|machen|dieser|diese|dieses|immer|wieder|heute|gestern|morgen|ang\s+mga|mga\s+tao|naman|talaga|bakit|paano|ganito|ganyan|kasi|para\s+sa|hindi\s+ko|wala\s+na|meron)\b/i;
 const SOC_FOREIGN_DIACRITIC_RE = /[¿¡ñÑçÇßãõÃÕåøæÅØÆłńśźżŁŃŚŹŻčřšžČŘŠŽğışĞİŞ]|[áéíóúàèìòùâêîôûäöüëïÁÉÍÓÚÀÈÌÒÙÂÊÎÔÛÄÖÜËÏ]/;
 const SOC_ID_UNAMBIGUOUS_RE = /\b(?:yang|yg|untuk|utk|dengan|dgn|sudah|udah|udh|belum|blm|tidak|bukan|ga|gak|nggak|engga|kagak|gue|gw|gua|aku|kami|kita|warga|orang|org|rumah|rmh|jalan|jln|banget|bgt|sih|dong|deh|kok|jir|anjir|njir|bjir|wkwk\w*|jujurly|kalo|kalau|karena|krn|tapi|tp|terus|trs|jadi|jd|masih|msh|lagi|lg|baru|mau|pengen|bisa|bikin|pakai|pake|kemarin|besok)\b/i;
-const SOC_ID_AMBIGUOUS_RE = /\b(?:dan|di|ke|dari|ini|itu|atau|ada|sama|sm|buat|cuma|cm|tadi|barusan|hari|pagi|siang|sore|malam|jam|lo|lu|lah|kan|kah|tuh|nih)\b/i;
-const SOC_ID_MARKER_RE = /\b(?:yang|yg|dan|di|ke|dari|ini|itu|untuk|dengan|atau|sudah|udah|udh|belum|blm|tidak|bukan|ga|gak|nggak|engga|kagak|gue|gw|gua|aku|lo|lu|kami|kita|warga|orang|org|rumah|rmh|jalan|jln|banget|bgt|sih|dong|deh|kok|lah|kan|kah|tuh|nih|jir|anjir|njir|bjir|wkwk|jujurly|kalo|kalau|karena|krn|tapi|tp|terus|trs|jadi|jd|masih|msh|lagi|lg|baru|mau|pengen|bisa|ada|sama|sm|buat|bikin|pakai|pake|cuma|cm|tadi|barusan|kemarin|besok|hari|pagi|siang|sore|malam|jam)\b/i;
 function socForeignLang(t) {
   const s = String(t || '').replace(/https?:\/\/\S+/g, ' ').replace(/@[\w]+/g, ' ').trim();
   const idUnambiguousMatches = s.match(new RegExp(SOC_ID_UNAMBIGUOUS_RE.source, 'gi')) || [];
@@ -91,6 +89,12 @@ function socForeignLang(t) {
 const SOC_FOREIGN_RE = /\b(amerika|united states|\busa\b|americans?|american|british|canadian|australian|japanese|chinese|korean|french|german|russian|indian|ukrainian|israeli|palestinian|malaysian|singaporean|filipino|vietnamese|brazilian|mexican|european|texas|california|new york|brasil|brazil|filipina|thailand|malaysia|korea|jepang|japan|tiongkok|china|inggris|britain|prancis|perancis|paris|france|jerman|germany|australia|india|pakistan|iran|israel|palestina|palestine|ukraina|ukraine|rusia|russia|gaza|turki|turkey|meksiko|mexico|kanada|canada|vietnam|chile|argentina|spanyol|spain|portugal|italia|italy|belanda|netherlands|den haag|s-gravenhage|tweede kamer|eerste kamer|vvd|cda|d66|pvv|fvd|nsc|gl-pvda|groenlinks|pvda|nederland|nederlands|holland|amsterdam|rotterdam|utrecht|eindhoven|groningen|kabinet rutte|kabinet schoof|dick schoof|geert wilders|swiss|swedia|sweden|norwegia|norway|denmark|yunani|greece|eropa|europe|nepal|london|oyo|osun|nigeria|afrika|trump|poland|polandia|polonia|krakow|warsaw|warszawa|lublin|czechia|ceko|prague|praha|austria|vienna|wina|finland|finlandia|helsinki|singapura|singapore|hong kong|taipei|tokyo|seoul|beijing|manila|bangkok|hanoi|kualalumpur|kathmandu|moskwa|moscow|berlin|rome|roma|madrid|amsterdam|brussels|zurich|stockholm|oslo|copenhagen|dublin|budapest|bucharest|sofia|belgrade|zagreb|vilnius|riga|tallinn|minsk|kiev|kyiv|istanbul|ankara|tehran|baghdad|beirut|riyadh|cairo|tunis|algiers|rabat|tripoli|khartoum|nairobi|kampala|kigali|lusaka|harare|pretoria|mogadishu|bamako|dakar|abuja|lagos|accra|kinshasa|sao paulo|rio de janeiro|brasilia|buenos aires|bogota|caracas|la paz|asuncion|montevideo|kingston|havana|santo domingo|paramaribo|managua|tegucigalpa|san salvador|san jose|guatemala city|mexico city|sucre|suriah|syria|irak|iraq|mesir|egypt|libya|libia|maroko|morocco|aljazair|algeria|tunisia|sudan|ethiopia|kenya|ghana|myanmar|kamboja|cambodia|laos|srilanka|sri lanka|bangladesh|lebanon|yordania|jordan|yaman|yemen|oman|qatar|uea|hungaria|hungary|rumania|romania|bulgaria|serbia|kroasia|croatia|slowakia|slovakia|slovenia|belgia|belgium|irlandia|ireland|estonia|latvia|lithuania|belarus|mongolia|maladewa|maldives|timor leste|selandia baru|new zealand|kuba|cuba|jamaika|jamaica|haiti|nikaragua|kosta rika|costa rica|kolombia|colombia|venezuela|bolivia|ekuador|ecuador|peru|paraguay|uruguay|congo|rwanda|uganda|tanzania|zambia|zimbabwe|mozambique|angola|namibia|botswana|lesotho|madagascar|mauritius|somalia|eritrea|djibouti|afghanistan|bhutan|brunei|albania|armenia|azerbaijan|cyprus|iceland|kosovo|luxembourg|malta|moldova|montenegro|san marino|vatikan|vatican|monako|monaco|georgia|jordan|panama|senegal|cameroon|gambia|guinea|sierra leone|liberia|mauritania|burkina faso|shah alam|selangor|bukit jelutong|subang jaya|petaling jaya|putrajaya|klang|penang|johor bahru|british columbia|tahsis|democrats|republicans|lebuhraya|plusline|llmtrafik|korang|macam ni|banjir tak|banjir ke|kesiannya|memandu|tanpa halangan banjir|terowong smart|m'sia|msia|sejuk beku|bekalan makanan|berbaki|penyokong|rombak kabinet|bubarkan parlimen|bubar parlimen|parlimen|timbalan perdana menteri|pakatan harapan|perikatan nasional|barisan nasional|umno|menteri besar|ketua menteri|dewan rakyat|dewan negara|kerajaan perpaduan|kerajaan madani|malaysia madani|varian baharu|baharu|dikesan|sejauh mana bahayanya|siakap keli|thesiakapkeli|banjir kilat|jabatan bomba|polis diraja|kawasan terjejas|hospital kerajaan|kementerian kesihatan)\b/i;
 const SOC_LOCAL_RE = /(indonesia|\bwni\b|jakarta|jabar|jateng|jatim|jawa|sumatera|sumatra|kalimantan|sulawesi|papua|bali\b|aceh|riau|banten|bekasi|bogor|depok|tangerang|bandung|surabaya|medan|makassar|semarang|yogya|bpbd|bnpb|bmkg|polres|polda|polsek|kodim|damkar|pemkot|pemkab|kabupaten|provinsi|prabowo|gibran|\bdpr\b|dprd|kapolri|polri)/i;
 
+const SOC_WATCH_X = [
+  'infobmkg', 'bnpb_indonesia', 'basarnas', 'pvmbg_', 'damkardki',
+  'tmcpoldametro', 'bssn_ri', 'pln_123', 'kemenkesri', 'divhumas_polri',
+  'elshinta', 'suarasurabayamedia',
+];
+
 const SOC_TOPICS = [
   {
     id: 'demo',
@@ -108,7 +112,7 @@ const SOC_TOPICS = [
     local: true,
     pos: /(kebakaran|terbakar|kobaran api|si jago merah|dilalap api|ludes dilalap|\bdamkar\b)/i,
     neg: /(kebakaran (hutan|lahan)|karhutla|kebakaran (harga|promo|diskon|obral|sale|murah|gila|meriah|jagoan|gaib|mangling|total)|(?:ihsg|saham|portofolio|porto|market|bursa|kripto|crypto)\s+kebakaran|kebakaran\s+\+?\d|harga (kebakaran|panas|terbakar)|(terbakar|kebakaran)[^.\n]{0,20}(nasi|roti|ayam|makanan|kuliner|resep|memasak|cooking|wajan|panci|steak|bakso|mie\b)|kebakaran\s+jenggot|tersulut\s+api\s+(?:amarah|cemburu|emosi|dendam)|terbakar\s+(?:api\s+)?(?:amarah|cemburu|emosi|semangat|rindu|api\s+asmara)|(?:membakar|sulut)\s+(?:semangat|jiwa|emosi|amarah|nyali|dada|panggung|duit|uang)|bakar\s+(?:duit|uang|kalori|lemak)|strategi\s+film|kolaborasi\s+dengan\s+damkar)/i,
-    x: ['(kebakaran OR "si jago merah" OR "ludes terbakar" OR damkar) -filter:replies'],
+    x: ['((kebakaran OR "si jago merah" OR "ludes terbakar" OR damkar) (warga OR gedung OR rumah OR ruko OR pasar OR pabrik OR gudang OR evakuasi OR padam)) -jenggot -harga -promo -saham -ihsg -filter:replies'],
     th: ['kebakaran hari ini', 'kebakaran', 'damkar', 'terbakar', 'kobaran api', 'dilalap api', '#kebakaran'],
   },
   {
@@ -128,7 +132,7 @@ const SOC_TOPICS = [
     strong: /(?:banjir\s+bandang|banjir\s+rob|tanggul\b[^.!?\n]{0,25}\bjebol|tanah\s+longsor|longsoran\s+tanah|air\s+bah|sungai\s+meluap|banjir\s+merendam|ketinggian\s+air|genangan\s+air|banjir\s+(?:melanda|merendam|parah|kembali|menerjang|mengepung|menggenangi|tinggi|luap)|kebanjiran\s+parah|terendam\s+banjir|(?:air(?:\s+(?:hujan|kali|sungai|selokan|got))?)\s+(?:sudah\s+|udah\s+|mulai\s+|lagi\s+)?masuk\s+(?:ke\s+)?(?:rumah|kamar|teras|kosan|kontrakan|ruko|warga)|(?:air|banjir)\s+(?:sudah\s+|udah\s+|mulai\s+)?se(?:mata\s+kaki|betis|lutut|pinggang|dada))/i,
     ctx: /(?:hujan|deras|air|sungai|tanggul|kali|drainase|pemukiman|rumah|warga|mengungsi|evakuasi|ketinggian|meter|sentimeter|\bcm\b|terendam|merendam|luapan|bpbd|bnpb|damkar|pompa|waduk|bendungan|pesisir|pasang|melanda|parah|kembali|menerjang|mengepung|menggenangi|masuk\s+rumah|berita|dulu|sering|nggak\s+sih|tidak\s+sih|genangan)/i,
     neg: /(?:dibanjiri|membanjiri)|(?:banjir|kebanjiran)\s+(?:serangan|siber|cyber|orderan|hadiah|promo|diskon|bonus|cuan|kritik|hujatan|komentar|aduan|laporan|pujian|ucapan|impor|produk|pemudik|turis|wisatawan|penonton|pelamar|pendaftar|peserta|air mata|gol|darah|konten|content|update|jadwal|kerjaan|tugas)|(?:rumah|tanah|ruko|kavling|cluster|hunian|perumahan|residence|villa|apartemen|kost|kontrakan|sewa|dijual|over\s*kredit)[^.!?\n]{0,40}\b(?:bebas|anti|aman|tanpa)\s+banjir|\blongsor\s+(?:suara|kursi|dukungan|koalisi)\b/i,
-    x: ['(banjir OR longsor OR "air meluap" OR "tanggul jebol" OR "banjir bandang" OR "air bah") -filter:replies'],
+    x: ['((banjir OR "banjir bandang" OR "tanggul jebol" OR "air meluap" OR "tanah longsor") (warga OR rumah OR jalan OR tol OR evakuasi OR mengungsi OR terendam OR bpbd OR bnpb)) -bebas -anti -dijual -kavling -filter:replies'],
     th: ['banjir hari ini', 'banjir', 'banjir bandang', 'longsor', 'tanggul jebol', 'air meluap', '#banjir'],
   },
   {
@@ -156,7 +160,7 @@ const SOC_TOPICS = [
     local: true,
     pos: /(kecelakaan|tabrakan|tabrak lari|kapal (tenggelam|karam)|pesawat jatuh|bus terguling|truk terguling|kereta anjlok|ledakan)/i,
     neg: /(ledakan (penduduk|jumlah|kasus|order|orders|promo|penjualan|chat|emoji|tawa|tangis|debat|lagu|musik|harga|bonus|like|komentar|followers?|data|traffic|trafik|inflasi|daya beli|pengangguran|utang|kemiskinan|emosi|amarah|kemarahan|protes|cuan|popularitas)|meledak\s+(?:di\s+pasaran|kasusnya|tawanya|tangisnya)|(?:harga|tarif|penduduk|kasus|order)\b[^.\n]{0,25}(?:meledak|ledakan)|tabrakan (pendapat|argumen|prinsip|debat|pemikiran|jadwal|acara|event|konser|libur|ujian|meeting|praktik|praktikum|kepentingan)|(?:ihsg|saham|rupiah|kurs|harga|suara)\s+(?:ambruk|anjlok|runtuh)|(jadwal|acara|event|konser|libur|ujian|meeting|praktik)[^.\n]{0,15}tabrakan|kecelakaan (cinta|asmara)|(?:ngedrama|drama|pura[- ]?pura|alasan|bohong|settingan)\s+(?:kecelakaan|tabrakan)|(?:kecelakaan|tabrakan)\s+(?:boongan|bohong[- ]bohongan|palsu|drama|settingan)|(?<=(?:kecelakaan|tabrakan|tertabrak|tertabrakan|tabrak lari)[^.\n]{0,200})(?:grand\s*prix|grandprix|formula\s*1|\bf1\b|kualifikasi|qualifying|sprint\s+race|pole\s+position|podium|parc\s*ferme|grid\s+(?:start|position)|start\s+grid|safety\s*car|safetycar|red\s+flag|pit\s+(?:stop|lane)|push-?lap|out-?lap|drs\s*zone|ers\s*zone|\bdrs\b|\bers\b|oversteer|understeer|lock-?up|downforce|aerodinamis|steering\s+wheel|cockpit|\bsirkuit\b|scuderia|red\s+bull(?:\s+racing)?|mercedes-amg|aston\s+martin|alpine\s+f1|haas\s+f1|racing\s+bulls|sauber|cadillac\s+f1|\bmclaren\b|balap\s+(?:motor|mobil|formula|f1|grup))|(?:grand\s*prix|grandprix|formula\s*1|\bf1\b|kualifikasi|qualifying|sprint\s+race|pole\s+position|podium|parc\s*ferme|grid\s+(?:start|position)|start\s+grid|safety\s*car|safetycar|red\s+flag|pit\s+(?:stop|lane)|push-?lap|out-?lap|drs\s*zone|ers\s*zone|\bdrs\b|\bers\b|oversteer|understeer|lock-?up|downforce|aerodinamis|steering\s+wheel|cockpit|\bsirkuit\b|scuderia|red\s+bull(?:\s+racing)?|mercedes-amg|aston\s+martin|alpine\s+f1|haas\s+f1|racing\s+bulls|sauber|cadillac\s+f1|\bmclaren\b|balap\s+(?:motor|mobil|formula|f1|grup))(?=[^.\n]{0,200}(?:kecelakaan|tabrakan|tertabrak|tertabrakan|tabrak lari)))/i,
-    x: ['(kecelakaan OR "tabrak lari" OR "bus terguling" OR "kapal tenggelam" OR "truk terguling" OR "kereta anjlok" OR "pesawat jatuh" OR "kapal karam" OR tabrakan OR ledakan) -filter:replies'],
+    x: ['((kecelakaan OR "tabrak lari" OR "bus terguling" OR "kapal tenggelam" OR "truk terguling" OR "kereta anjlok" OR "pesawat jatuh" OR ledakan) (tol OR jalan OR korban OR polisi OR penumpang OR tewas OR luka OR evakuasi)) -f1 -motogp -balap -filter:replies'],
     th: ['kecelakaan hari ini', 'kecelakaan', 'kecelakaan lalu lintas', 'truk terguling', 'tabrakan', 'bus terguling', 'kereta anjlok', 'kapal tenggelam'],
   },
   {
@@ -226,7 +230,7 @@ const SOC_TOPICS = [
     pos: /(pemilu|pilkada|pilpres|\bkpu\b|bawaslu|quick count|real count|coblos|surat suara|pilwalkot)/i,
     strong: /(pemilu|pilkada|pilpres|pilwalkot|pilgub|pilbup|quick count|real count|coblos|surat suara|pemungutan suara|kotak suara)/i,
     ctx: /(pemilu|pilkada|pilpres|pemilihan|pemungutan|suara|kursi|partai|caleg|capil|capres|cawapres|paslon|dpr|dprd|kpud|kotak|coblos|golput|tahapan|penghitungan|pasangan|pasangan calon|pilgub|pilbup|pilgici)/i,
-    x: ['(pemilu OR pilkada OR pilpres OR KPU OR Bawaslu) -filter:replies'],
+    x: ['(pemilu OR pilkada OR pilpres OR KPU OR Bawaslu) (indonesia OR dpr OR bupati OR gubernur OR kotak OR coblos) -filter:replies'],
     th: ['pemilu', 'pilkada', 'pilpres', '#pilkada'],
   },
   {
@@ -234,7 +238,7 @@ const SOC_TOPICS = [
     local: true,
     pos: /(partai politik|caleg|capil|daftar caleg|\bdpr\b|\bdprd\b|parlemen|fraksi|koalisi|oposisi|\bkabinet\b(?=[^.\n]{0,35}\b(?:merah\s*putih|indonesia|pemerintah|menteri|presiden|prabowo|jokowi|gibran|reshuffle|rombak|susunan|formasi|sidang|rapat|bayangan|koalisi)\b)|\b(?:merah\s*putih|indonesia|pemerintah|menteri|presiden|prabowo|jokowi|gibran|reshuffle|rombak|susunan|formasi|sidang|rapat|bayangan|koalisi)\b[^.\n]{0,35}\bkabinet\b|(?:reshuffle|rombak|susunan|formasi)[^.\n]{0,20}kabinet|kabinet[^.\n]{0,20}(?:reshuffle|rombak|diumumkan|merah\s*putih)|\bmenteri\b|wakil (presiden|menteri)|\bistana\b|senayan|menko|kadin|\bgubernur\b|\bbupati\b|wali kota|\bpilkada\b|\bpilgub\b|\bpilbup\b|\bpilgici\b|\bkpud\b|impeachment|majelis kehormatan|sidang mk|prabowo|apbn|rapbn|danantara|gibran|\bkomdigi\b|\bkominfo\b|anggaran\s+(?:komdigi|kominfo|kementerian|menteri)[^.\n]{0,30}\btriliun\b|takedown\s+konten(?:\s+kritis)?|\b(?:indonesia['’]?s?|indonesian)\s+(?:politics|government|president|vice[- ]?president|minister|cabinet|parliament|election|democracy|court|military|police|unrest|regime|oligarchy)\b|\bresignation\s+of\s+(?:indonesia['’]?s\s+)?(?:president|vice[- ]?president|minister)\b|\bvice[- ]?president\b)/i,
     neg: /(film|sinema|bioskop|trailer|teaser|poster|nonton|netflix|zombie|sinetron|sinetrik|hakase|kpop|k-pop|bias[^.\n]{0,10}\bdpr\b|fans?[^.\n]{0,10}\bdpr\b|\bdpr\b[^.\n]{0,120}(?:cream|artic|live|ian|rem|regime|squad|concert|fan|fans|fandom|stan|bias|music|song|songs|track|album|albums|stage|tour|mv|comeback|lyrics|vibrating)|(?:cream|artic|live|ian|rem|regime|album|song|concert|tour|comeback|fandom|kpop|k-pop)[^.\n]{0,120}\bdpr\b|dpr\s+(?:ian|live|cream|artic|rem|regime|squad|gang|crew|member)\b|dream\s+perfect\s+regime)/i,
-    x: ['(pemilu OR pilkada OR pilpres OR "partai politik" OR caleg OR "DPR RI" OR "gedung DPR" OR "kabinet merah putih" OR "kabinet Prabowo" OR "reshuffle kabinet" OR menteri) -filter:replies'],
+    x: ['("DPR RI" OR "gedung DPR" OR "kabinet merah putih" OR "kabinet Prabowo" OR "reshuffle kabinet" OR pilkada OR pemilu OR MK) -kpop -fandom -nct -filter:replies'],
     th: ['pemilu', 'pilkada', 'pilpres', 'DPR RI', 'kabinet merah putih', 'reshuffle kabinet'],
   },
   {
@@ -243,7 +247,7 @@ const SOC_TOPICS = [
     pos: /(\bperang\b|\bkonflik\b|\binvasi\b|aneksasi|pendudukan|gencatan senjata|ultimatum|kudeta|pemberontakan|separatis|genosida|blokade|embargo|sandera|pembajakan|pertempuran|darurat militer|darurat sipil|mobilisasi|milisi|paramiliter|peluru kendali|\brudal\b|\bdrone\b|\bdron\b|serangan udara|serangan rudal|\bbom\b|granat|artileri|\btni\b|\btentara\b|militer|perjanjian damai|perundingan damai)/i,
     strong: /(?:gencatan\s+senjata|invasi|kudeta|perang\s+(?:saudara|terbuka|berkecamuk|pecah)|darurat\s+militer|operasi\s+militer|serangan\s+(?:udara|rudal|artileri)|pertempuran\s+(?:sengit|bersenjata)|kkb\s+papua|separatis)/i,
     ctx: /(?:senjata|korban|tewas|pasukan|militer|\btni\b|\bpolri\b|\bkkb\b|\bopm\b|separatis|perbatasan|zona\s+perang|invasi|rudal|peluru|tembak|ledakan|\bbom\b|kudeta|gencatan|pemberontak|artileri|angkatan\s+(?:bersenjata|darat|laut|udara)|pertahanan)/i,
-    neg: /(?:upacara\s+(?:peringatan|tabur\s+bunga|hari\s+pahlawan|hut\s+tni)|tabur\s+bunga|hari\s+pahlawan|ziarah\s+nasional|perang\s+(?:antar\s+)?(?:fandom|fans?|warganet|netizen|otaku|kpop|bocil|klub|suporter|game|gamers?|cuitan)|museum\s+militer|drone\s+(?:fpv|rakitan|mainan|kamera|balap|foto|pertanian)|balap\s+drone|serangan\s+(?:jantung|stroke)|perang\s+(?:tarif|dagang|harga|diskon|promo|bintang|opini|narasi|argumen|wacana|tagar|buzzer|medsos|urat\s+syaraf|dingin|kata[- ]kata)|saling\s+serang\s+(?:opini|argumen|narasi|cuitan|komentar)|adu\s+jotos\s+(?:anggota\s+(?:dpr|dprd|dewan|parlemen)|politisi)|perang harga|perang (saudara|dagang|harga|dunia ketiga|polusi|sampah|hati|jiwa|batin|pendapat|online|dunia maya|netizen|gosip)|konflik (batin|psikologis|rumah tangga|hukum|personal)|bom (wacana|waktu|tank|mobil|rakit|dekat|saraf)|\bthe bom\b|\bbom(?:'s)?\s+(?:to|of|for|in|on|at|by|from|with|weather|station|bureau|meteorology|forecast|warning|australia|says?|said|announc\w*|expect\w*|predict\w*|replaces?|wants?|urges?|calls?|issues?|extends?|report\w*|confirm\w*)\b|film|sinema|bioskop|trailer|teaser|poster|nonton|netflix|zombie|sinetron|sinetrik|dirgahayu|kami (akan |sedang )?melaksanakan|wajib hijrah|jauhi yang kafir|khalifahah)/i,
+    neg: /(?:upacara\s+(?:peringatan|tabur\s+bunga|hari\s+pahlawan|hut\s+tni)|tabur\s+bunga|hari\s+pahlawan|ziarah\s+nasional|perang\s+(?:antar\s+)?(?:fandom|fans?|warganet|netizen|otaku|kpop|bocil|klub|suporter|game|gamers?|cuitan)|museum\s+militer|drone\s+(?:fpv|rakitan|mainan|kamera|balap|foto|pertanian)|balap\s+drone|serangan\s+(?:jantung|stroke)|perang\s+(?:tarif|dagang|harga|diskon|promo|bintang|opini|narasi|argumen|wacana|tagar|buzzer|medsos|urat\s+syaraf|dingin|kata[- ]kata)|saling\s+serang\s+(?:opini|argumen|narasi|cuitan|komentar)|adu\s+jotos\s+(?:anggota\s+(?:dpr|dprd|dewan|parlemen)|politisi)|perang harga|perang (dagang|harga|dunia ketiga|polusi|sampah|hati|jiwa|batin|pendapat|online|dunia maya|netizen|gosip)|konflik (batin|psikologis|rumah tangga|hukum|personal)|bom (wacana|waktu|tank|mobil|rakit|dekat|saraf)|\bthe bom\b|\bbom(?:'s)?\s+(?:to|of|for|in|on|at|by|from|with|weather|station|bureau|meteorology|forecast|warning|australia|says?|said|announc\w*|expect\w*|predict\w*|replaces?|wants?|urges?|calls?|issues?|extends?|report\w*|confirm\w*)\b|film|sinema|bioskop|trailer|teaser|poster|nonton|netflix|zombie|sinetron|sinetrik|dirgahayu|kami (akan |sedang )?melaksanakan|wajib hijrah|jauhi yang kafir|khalifahah)/i,
     x: ['(perang OR "gencatan senjata" OR ultimatum OR invasi OR aneksasi OR kudeta OR "perjanjian damai" OR "darurat militer") -filter:replies'],
     th: ['perang', 'konflik', 'gencatan senjata', 'invasi', 'kudeta', 'serangan udara', 'militer', 'tentara', 'TNI', 'rudal', 'drone', 'pertempuran', 'sandera', 'pembajakan', 'ultimatum', 'aneksasi', 'mobilisasi', 'darurat militer', 'perundingan damai'],
   },
@@ -270,8 +274,8 @@ const SOC_TOPICS = [
     local: true,
     pos: /(serangan jantung|gagal jantung|henti jantung|stroke|demam berdarah|\bdbd\b|\bdhf\b|covid|korona|influenza|\bflu\b|mpox|cacar monyet|campak|morbili|cacar air|tangan kaki mulut|hfmd|leptospirosis|tifus|thypoid|kolera|rabies|gila anjing|anthrax|difteri|polio|meningitis|meningokokus|ensefalitis|chikungunya|cikungunya|zika|filariasis|kaki gajah|hepatitis|\bhiv\b|\baids\b|kusta|lepra|\bispa\b|pneumonia|bronkopneumonia|bronkitis|hmpv|human metapneumovirus|\brsv\b|\bmers\b|ebola|marburg|lassa|west nile|h5n1|avian influenza|\btbc\b|tuberkulosis|\btb\b|diare|disentri|scabies|kudis|keracunan|intoksikasi|rotavirus|flu burung|h1n1|malaria|wabah|kejadian luar biasa|gagal ginjal|stunting|vaksin|imunisasi|puskesmas|kemenkes|rumah sakit|obat palsu|gizi buruk|miras oplosan|alkohol oplosan|oplosan maut|keracunan mbg|korban mbg|sppg|mual|muntah|makanan basi|bakteri pangan|e\.?\s*coli|salmonella)/i,
     neg: /(film|sinema|bioskop|trailer|teaser|poster|nonton|netflix|zombie|mayat hidup|hantu|sekuel|layar lebar|sinetron|sinetrik|hollywood|dead by daylight|main\s+dbd|play\s+dbd|dbd[^.\n]{0,50}(?:match|rank|chapter|killer|survivor|lag|server|mobile|skin|update|repair|macro|rivals|phasmo|twitch|stream|queue|gaming|lobby|game|main|play|take on|grinding|leveling|crashed|tome|grabs?|pick\s*ups?|crawled|dcing|hooked|gen|pallets?)|(?:game|gaming|crashed|tome|grabs?|pick\s*ups?|crawled|dcing|hooked|gen|pallets?)[^.\n]{0,50}\bdbd\b|deadbydaylight|dead[- ]by[- ]daylight|\b(?:el|la|del|al)\s+dbd\b|\bwe\s+(?:exit|advance|progress|through|win|drew|lost|booked|qualified)\b[^.\n]{0,50}\b(?:cup|final|match|game|tie|round|knockout|semi|qf|sf|league)\b|\b(?:man|player|goal|motm)\s+of\s+the\s+match\b|\bsafe trip home\b|\b(?:full[- ]?time|ft)\s*(?:result|score|whistle|report)\b|\btbc\b[^.\n]{0,40}(lineup|squad|bench|starting|kick.?off|match|game|vs\b|injur|suspend)|\(tbc\)|racun\s+(?:tiktok|shopee|ig|belanja|skincare|ootd|cinta|asmara|dunia)|teracuni|keracunan\s+(?:cinta|asmara)|wabah\s+(?:judi|judol|korupsi|kemiskinan|hoaks|kebohongan|kebencian|intoleransi|k-?pop|drakor|tiktok|cinta|rindu))/i,
-    x: ['("demam berdarah" OR DBD OR COVID OR influenza OR campak OR "tangan kaki mulut" OR leptospirosis OR rabies OR kolera OR mpox OR polio OR "gagal ginjal" OR "serangan jantung" OR KLB OR wabah OR imunisasi OR vaksin OR keracunan OR "keracunan massal" OR "keracunan makanan" OR "keracunan MBG" OR "miras oplosan") -filter:replies',
-      '("TBC paru" OR tuberkulosis OR (TBC (pasien OR puskesmas OR kemenkes OR paru))) -filter:replies'],
+    x: ['("demam berdarah" OR DBD OR "tangan kaki mulut" OR leptospirosis OR "keracunan massal" OR "keracunan makanan" OR "keracunan MBG" OR "miras oplosan" OR (wabah (puskesmas OR kemenkes OR rsud OR sekolah OR warga))) -game -filmfestival -drakor -filter:replies',
+      '("TBC paru" OR tuberkulosis OR (campak (anak OR vaksin OR puskesmas OR kemenkes)) OR ("gagal ginjal" (anak OR kemenkes OR rumah sakit))) -filter:replies'],
     th: ['demam berdarah', 'serangan jantung', 'stroke', 'wabah', 'TBC', 'influenza', 'keracunan massal', 'keracunan makanan', 'keracunan MBG', 'miras oplosan', 'gagal ginjal', 'vaksin', 'imunisasi', 'DBD', 'covid', 'korona', 'tifus', 'stunting', 'malaria', 'diare', 'campak', 'kolera', 'rabies', 'tuberkulosis', 'pneumonia', 'tangan kaki mulut', 'leptospirosis'],
   },
   {
@@ -338,7 +342,7 @@ const SOC_TOPICS = [
     local: true,
     pos: /(rkuhap|rkuhp|\bkuhp\b|\bkuhap\b|tipikor|korupsi|gratifikasi|suap|penyuapan|pengadilan|putusan (pengadilan|hakim)|kasasi|\bdiversi\b|kejaksaan|upacara hukuman mati|eksekusi (hukuman|mati)|rehabilitasi narkotika)/i,
     neg: /(film|sinema|sinetron|sinetrik|trailer|nonton|netflix)/i,
-    x: ['(RKUHAP OR RKUHP OR KUHP OR KUHAP OR tipikor OR korupsi OR KPK OR kejaksaan OR "putusan pengadilan") -filter:replies'],
+    x: ['(RKUHAP OR RKUHP OR tipikor OR korupsi OR KPK OR kejaksaan OR "putusan pengadilan") -film -drakor -filter:replies'],
     th: ['RKUHAP', 'tipikor', 'korupsi', 'KPK', 'RKUHP', 'KUHP', 'KUHAP', 'pengadilan', 'kasasi', 'suap', 'kejaksaan'],
   },
   {
@@ -431,6 +435,7 @@ function explainPost(text, extra, context) {
 }
 
 const escRe = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const SOC_BOILERPLATE_RE = /\b(?:bmkg\s+disclaimer|disclaimer|prakirawan|pemutakhiran|episentrum|magnitudo|kedalaman|kedlmn|tenggara|barat\s+laut|barat\s+daya|timur\s+laut|timur\s+daya|kab|kec|wib|wita|wit|mmi|info\s+gempa|gempa\s+magnitudo|tidak\s+berpotensi)\b/i;
 const SOC_ADHOC_GENERIC = new Set(('rumah warga orang anak pria wanita ibu bapak mobil motor jalan tanah lahan gedung kantor desa kota hari bulan tahun waktu tempat kerja loker jasa harga biaya uang pasar toko produk barang sekolah kampus kuliah teman keluarga makan minum').split(' '));
 function socAdhoc(phrases) {
   return (phrases || [])
@@ -439,17 +444,17 @@ function socAdhoc(phrases) {
       if (ph.length < 3) return false;
       const low = ph.toLowerCase();
       if (SOC_ADHOC_GENERIC.has(low) && !ph.includes(' ')) return false;
-
+      if (SOC_BOILERPLATE_RE.test(low) || SOC_NOISE_RE.test(low)) return false;
       if (ASSESS.isGenericLocationPhrase(low)) return false;
       return true;
     })
-    .slice(0, 2)
+    .slice(0, 4)
     .map(ph => ({
       id: ph.toLowerCase(),
       adhoc: true,
       local: false,
       pos: new RegExp('\\b' + escRe(ph).replace(/\s+/g, '\\s+') + '\\b', 'i'),
-      x: ['"' + ph + '" -dijual -kpr -rumah -sewa -loker -filter:replies'],
+      x: ['"' + ph + '" -dijual -kpr -rumah -sewa -loker -promo -giveaway -drakor -kpop -filter:replies'],
       th: [ph],
     }));
 }
@@ -510,15 +515,32 @@ function socHot(posts, now = Date.now()) {
   for (const p of posts) {
     const age = now - p.ts;
     if (!Number.isFinite(p.ts) || p.ts <= 0 || age < 0 || age > B || !['x', 'th'].includes(p.platform)) continue;
+    const hasAssess = !!(p.assessment && typeof p.assessment === 'object');
+    if (hasAssess && p.assessment.feedEligible === false) continue;
+    let w = 1;
+    if (hasAssess) {
+      const a = p.assessment;
+      const isCtx = a.feedLane === 'situational_context' || a.reportType === 'situational_context';
+      const sigW = a.signalEligible === true ? 1.5 : (isCtx ? 0.5 : 1.0);
+      const rawProvW = a.provenance && (Number.isFinite(a.provenance.authorityWeight) ? a.provenance.authorityWeight : a.provenance.weight);
+      const provW = Number.isFinite(rawProvW) ? Math.min(1.5, Math.max(0.6, rawProvW)) : 1.0;
+      w = sigW * provW;
+      if (a.reportType === 'reported' && !a.signalEligible) w *= 0.85;
+    }
     const author = String(p.user || '').toLowerCase().replace(/^@/, '');
     for (const t of new Set(p.topics || [])) {
-      const e = st[t] || (st[t] = { x: 0, th: 0, rx: new Set(), rt: new Set(), buckets: new Map() });
+      const e = st[t] || (st[t] = { x: 0, th: 0, rx: new Map(), rt: new Map(), buckets: new Map(), hasWeighted: false });
       e[p.platform]++;
+      if (hasAssess) e.hasWeighted = true;
       if (!author) continue;
-      if (age < W) (p.platform === 'x' ? e.rx : e.rt).add(author);
-      else {
-        const bucket = Math.floor(age / W), users = e.buckets.get(bucket) || new Set();
-        users.add(p.platform + ':' + author); e.buckets.set(bucket, users);
+      if (age < W) {
+        const m = p.platform === 'x' ? e.rx : e.rt;
+        m.set(author, Math.max(m.get(author) || 0, w));
+      } else {
+        const bucket = Math.floor(age / W), users = e.buckets.get(bucket) || new Map();
+        const k = p.platform + ':' + author;
+        users.set(k, Math.max(users.get(k) || 0, w));
+        e.buckets.set(bucket, users);
       }
     }
   }
@@ -526,10 +548,16 @@ function socHot(posts, now = Date.now()) {
   for (const [t, e] of Object.entries(st)) {
     stats[t] = { x: e.x, th: e.th };
     const users = e.rx.size + e.rt.size;
-    const baseRate = [...e.buckets.values()].reduce((n, s) => n + s.size, 0) / (windows - 1);
     const both = e.rx.size > 0 && e.rt.size > 0;
     if (users < 3) continue;
-    const score = users / (1 + baseRate);
+    let wRecent = 0;
+    for (const v of e.rx.values()) wRecent += v;
+    for (const v of e.rt.values()) wRecent += v;
+    let wBase = 0;
+    for (const m of e.buckets.values()) for (const v of m.values()) wBase += v;
+    const baseRate = wBase / (windows - 1);
+    const crossMult = e.hasWeighted && both ? 1.15 : 1.0;
+    const score = (wRecent * crossMult) / (1 + baseRate);
     hot.push({ id: t, users, both, score: +score.toFixed(2), coverage: 'sampled', unit: 'platform_accounts' });
   }
   hot.sort((a, b) => b.score - a.score);
@@ -540,7 +568,7 @@ const SOC_TSTOP = new Set(('yang dan di ke dari untuk pada dengan adalah ini itu
 const socAuthor = p => String((p && (p.user || p.handle || p.username)) || '').toLowerCase().replace(/^@/, '');
 const socInWin = (p, now, windowMs) => {
   const ts = p && p.ts, age = now - ts;
-  return Number.isFinite(ts) && ts > 0 && age > 0 && age <= windowMs;
+  return Number.isFinite(ts) && ts > 0 && age >= 0 && age <= windowMs;
 };
 const socClean = t => String(t || '').replace(/https?:\/\/\S+/g, ' ').replace(/@[\w]+/g, ' ');
 const SOC_PHRASE_RE = /[A-Z][A-Za-z'&]{2,}(?:\s+(?:[A-Z][A-Za-z'&]{2,}|[A-Z]{2,8})){0,3}/g;
@@ -558,10 +586,12 @@ function socPhraseScan(posts, { now = Date.now(), windowMs = 3 * 3600e3, minUser
     if (multi && words.length < 2) return false;
     if (words.some(w => w.length < 3 || SOC_TSTOP.has(w))) return false;
     if (SOC_FOREIGN_RE.test(id)) return false;
+    if (SOC_BOILERPLATE_RE.test(id)) return false;
     if (ASSESS.isGenericLocationPhrase(id)) return false;
     if (excl) for (const t of excl) {
-      const tl = String(t).toLowerCase();
-      if (id === tl || id.includes(tl) || tl.includes(id)) return false;
+      const tl = String(t).toLowerCase().trim();
+      if (!tl) continue;
+      if (id === tl || (' ' + id + ' ').includes(' ' + tl + ' ')) return false;
     }
     return true;
   };
@@ -587,7 +617,7 @@ function socPhraseScan(posts, { now = Date.now(), windowMs = 3 * 3600e3, minUser
       if (ok(id, false) && !found.has(id)) found.set(id, id);
     }
     if (SOC_INC_ANCHOR_RE.test(text) && !SOC_JUNK_AFFECTIVE.test(text)) {
-      const cleanW = text.replace(/([\p{L}])\1{2,}/gu, '$1$1').replace(/[^\p{L}\p{N} ]+/gu, ' ').trim().split(/\s+/);
+      const cleanW = text.replace(/([\p{L}])\1{2,}/gu, '$1').replace(/[^\p{L}\p{N} ]+/gu, ' ').trim().split(/\s+/);
       for (let i = 0; i < cleanW.length; i++) {
         const w = cleanW[i].toLowerCase();
         if (SOC_INC_WORDS.has(w)) {
@@ -613,11 +643,20 @@ function socPhraseScan(posts, { now = Date.now(), windowMs = 3 * 3600e3, minUser
       e.n++;
     }
   }
-  return [...scores.entries()]
+  const candidates = [...scores.entries()]
     .filter(([, e]) => e.users.size >= minUsers)
-    .sort((a, b) => (b[1].users.size - a[1].users.size) || (b[1].n - a[1].n))
+    .map(([id, e]) => ({ ph: e.ph, id, users: e.users.size, n: e.n, wc: id.split(' ').length }));
+  const kept = candidates.filter(a => !candidates.some(b =>
+    b.id !== a.id &&
+    b.wc > a.wc &&
+    (' ' + b.id + ' ').includes(' ' + a.id + ' ') &&
+    b.users >= a.users &&
+    b.n >= a.n
+  ));
+  return kept
+    .sort((a, b) => (b.users - a.users) || (b.n - a.n) || (b.wc - a.wc))
     .slice(0, max)
-    .map(([id, e]) => ({ ph: e.ph, id, users: e.users.size, n: e.n }));
+    .map(({ ph, id, users, n }) => ({ ph, id, users, n }));
 }
 
 const SOC_KW_RE = /[a-z][a-z'-]{3,}/g;
@@ -679,6 +718,11 @@ module.exports = {
   classifySourceProvenance: CLUSTER.classifySourceProvenance,
   isNearDuplicate: CLUSTER.isNearDuplicate,
   deduplicatePosts: CLUSTER.deduplicatePosts,
+  collapseSocialFeed: CLUSTER.collapseSocialFeed,
+  matchPostToNews: CLUSTER.matchPostToNews,
+  eventSpecificTokens: CLUSTER.eventSpecificTokens,
+  SOC_WATCH_X,
+  SOC_BOILERPLATE_RE,
   isGenericLocationPhrase: ASSESS.isGenericLocationPhrase,
   normalizeIndonesian: ASSESS.normalizeIndonesian,
   INTENTS: ASSESS.INTENTS,

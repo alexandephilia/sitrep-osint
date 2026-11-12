@@ -673,3 +673,172 @@ Hoezo democratie?`,
     assert.equal(HISTORY.tag(post, [], now), true, `Expected HISTORY.tag to keep Jaksel/local post "${item.text}"`);
   }
 });
+
+test('collapseSocialFeed deduplicates cross-platform reposts, folds micro-quakes, and fuses verified news context', () => {
+  const now = Date.now();
+  const baseQuakeText = 'Info Gempa Mag:3.1, 13-Nov-26 04:10:00 WIB, Lok:7.12 LS,106.45 BT (35 km Tenggara Kab Sukabumi), Kedlmn:10 Km #BMKG Disclaimer: informasi mengutamakan kecepatan';
+  const posts = [
+    {
+      handle: '@reposter_x',
+      platform: 'x',
+      ts: now - 5 * 60e3,
+      text: 'Banjir merendam Jl Kemang Raya Jakarta Selatan setinggi 60 cm pagi ini, warga evakuasi',
+      topics: ['banjir'],
+      assessment: {
+        ...SOC.socAssess('Banjir merendam Jl Kemang Raya Jakarta Selatan setinggi 60 cm pagi ini, warga evakuasi'),
+        provenance: CLUSTER.classifySourceProvenance({ handle: '@reposter_x' }),
+      },
+    },
+    {
+      handle: '@BNPB_Indonesia',
+      platform: 'x',
+      ts: now - 15 * 60e3,
+      text: 'BNPB melaporkan banjir merendam Jl Kemang Raya Jakarta Selatan setinggi 60 cm pagi ini, tim evakuasi warga',
+      topics: ['banjir'],
+      assessment: {
+        ...SOC.socAssess('BNPB melaporkan banjir merendam Jl Kemang Raya Jakarta Selatan setinggi 60 cm pagi ini, tim evakuasi warga'),
+        provenance: CLUSTER.classifySourceProvenance({ handle: '@BNPB_Indonesia' }),
+      },
+    },
+    {
+      username: 'saksi_kemang',
+      platform: 'th',
+      ts: now - 10 * 60e3,
+      text: 'Banjir di Jl Kemang Raya Jakarta Selatan makin tinggi 60 cm pagi ini, air masuk rumah warga',
+      topics: ['banjir'],
+      assessment: {
+        ...SOC.socAssess('Banjir di Jl Kemang Raya Jakarta Selatan makin tinggi 60 cm pagi ini, air masuk rumah warga'),
+        provenance: CLUSTER.classifySourceProvenance({ username: 'saksi_kemang' }),
+      },
+    },
+    {
+      handle: '@infoBMKG',
+      platform: 'x',
+      ts: now - 20 * 60e3,
+      text: baseQuakeText,
+      topics: ['gempa'],
+      assessment: SOC.socAssess(baseQuakeText),
+    },
+    {
+      handle: '@infoBMKG',
+      platform: 'x',
+      ts: now - 25 * 60e3,
+      text: 'Info Gempa Mag:3.4, 13-Nov-26 04:05:00 WIB, Lok:7.20 LS,106.50 BT (40 km Tenggara Kab Garut), Kedlmn:12 Km #BMKG Disclaimer: informasi mengutamakan kecepatan',
+      topics: ['gempa'],
+      assessment: SOC.socAssess('Info Gempa Mag:3.4, 13-Nov-26 04:05:00 WIB, Lok:7.20 LS,106.50 BT (40 km Tenggara Kab Garut), Kedlmn:12 Km #BMKG'),
+    },
+    {
+      handle: '@infoBMKG',
+      platform: 'x',
+      ts: now - 30 * 60e3,
+      text: 'Gempa Magnitudo 5.2 dirasakan kuat di Bandung Selatan warga berhamburan keluar rumah',
+      topics: ['gempa'],
+      assessment: SOC.socAssess('Gempa Magnitudo 5.2 dirasakan kuat di Bandung Selatan warga berhamburan keluar rumah'),
+    },
+    {
+      handle: '@warga_saksi',
+      platform: 'x',
+      ts: now - 2 * 60e3,
+      text: 'Kebakaran hebat gudang di Bekasi Timur barusan, asap hitam membubung dan damkar meluncur',
+      topics: ['kebakaran'],
+      assessment: SOC.socAssess('Kebakaran hebat gudang di Bekasi Timur barusan, asap hitam membubung dan damkar meluncur'),
+    },
+  ];
+
+  const newsEvents = [
+    {
+      ts: now - 10 * 60e3,
+      loc: 'jakarta selatan',
+      kabCode: '31.74',
+      cat: 'flood',
+      topic: 'banjir',
+      count: 3,
+      title: 'Banjir Merendam Jalan Kemang Raya Jakarta Selatan Pagi Ini',
+      url: 'https://news.example/banjir-kemang',
+      tokens: CLUSTER.eventSpecificTokens('Banjir Merendam Jalan Kemang Raya Jakarta Selatan Pagi Ini', 'jakarta selatan'),
+    },
+  ];
+
+  const out = CLUSTER.collapseSocialFeed(posts, { now, newsEvents });
+  assert.ok(out.length < posts.length, 'Duplicates and micro-quakes should fold into fewer representative cards');
+
+  const banjirCard = out.find(p => (p.topics || []).includes('banjir'));
+  assert.ok(banjirCard, 'Expected representative banjir card');
+  assert.equal(String(banjirCard.handle).toLowerCase(), '@bnpb_indonesia', 'Official agency must win representative slot over reposter');
+  assert.ok(banjirCard.intel.dupCount >= 2, 'Near-duplicate variants should fold into dupCount');
+  assert.ok(banjirCard.intel.crossPlatforms.includes('x') && banjirCard.intel.crossPlatforms.includes('th'), 'Cross-platform claim from Threads + X should be tracked');
+  assert.equal(banjirCard.intel.newsMatch && banjirCard.intel.newsMatch.status, 'confirmed', 'Banjir Kemang should fuse with matching news cluster');
+
+  const feltQuake = out.find(p => /5\.2/.test(p.text));
+  assert.ok(feltQuake, 'Felt >= Mag 4.0 quake must never be folded into micro-quake digest');
+  const microQuakes = out.filter(p => /Mag:3\.[14]/.test(p.text));
+  assert.equal(microQuakes.length, 1, 'Two sub-4.0 non-felt BMKG quakes within 2h must collapse into one digest item');
+
+  const earlyWarn = out.find(p => /Bekasi Timur/i.test(p.text));
+  assert.ok(earlyWarn, 'Breaking eyewitness fire post should remain');
+  assert.equal(earlyWarn.intel.newsMatch && earlyWarn.intel.newsMatch.status, 'early_warning', 'Unconfirmed breaking eyewitness report should carry early_warning tag');
+});
+
+test('collapseSocialFeed QC guards: major felt quake never folds into micro-quake & cross-city/category news never false-confirm', () => {
+  const now = Date.now();
+  const qMicro = {
+    handle: '@infoBMKG',
+    platform: 'x',
+    ts: now - 5 * 60e3,
+    text: 'Info Gempa Mag:3.1, 13-Nov-26 04:10:00 WIB, Lok:7.12 LS,106.45 BT (35 km Tenggara Kab Sukabumi), Kedlmn:10 Km #BMKG',
+    topics: ['gempa'],
+    assessment: SOC.socAssess('Info Gempa Mag:3.1, 13-Nov-26 04:10:00 WIB, Lok:7.12 LS,106.45 BT (35 km Tenggara Kab Sukabumi), Kedlmn:10 Km #BMKG'),
+  };
+  const qMajor = {
+    handle: '@infoBMKG',
+    platform: 'x',
+    ts: now - 10 * 60e3,
+    text: 'Info Gempa Mag:5.8, 13-Nov-26 04:05:00 WIB, Lok:7.15 LS,106.48 BT (32 km Tenggara Kab Sukabumi), Kedlmn:12 Km, Dirasakan III MMI Sukabumi #BMKG',
+    topics: ['gempa'],
+    assessment: SOC.socAssess('Info Gempa Mag:5.8, 13-Nov-26 04:05:00 WIB, Lok:7.15 LS,106.48 BT (32 km Tenggara Kab Sukabumi), Kedlmn:12 Km, Dirasakan III MMI Sukabumi #BMKG'),
+  };
+  const routings = Array.from({ length: 11 }, (_, i) => ({
+    handle: '@infoBMKG',
+    platform: 'x',
+    ts: now - (i + 1) * 60e3,
+    text: `Peringatan dini cuaca wilayah sektor ${i + 1} sejak dini hari`,
+    topics: ['badai'],
+    assessment: { feedEligible: true, signalEligible: false, feedLane: 'situational_context', provenance: CLUSTER.classifySourceProvenance({ handle: '@infoBMKG' }) },
+  }));
+  const bekasiFlood = {
+    handle: '@warga_bekasi',
+    platform: 'x',
+    ts: now - 8 * 60e3,
+    text: 'Banjir puluhan rumah warga terendam hujan deras sejak malam di Bekasi Utara',
+    topics: ['banjir'],
+    assessment: SOC.socAssess('Banjir puluhan rumah warga terendam hujan deras sejak malam di Bekasi Utara'),
+  };
+  const newsEvents = [
+    {
+      ts: now - 6 * 60e3,
+      loc: 'surabaya',
+      cat: 'flood',
+      topic: 'banjir',
+      count: 4,
+      title: 'Banjir Merendam Puluhan Rumah Warga Surabaya Sejak Malam Hujan Deras',
+      url: 'https://news.example/banjir-surabaya',
+      tokens: CLUSTER.eventSpecificTokens('Banjir Merendam Puluhan Rumah Warga Surabaya Sejak Malam Hujan Deras', 'surabaya'),
+    },
+    {
+      ts: now - 6 * 60e3,
+      loc: 'bekasi',
+      cat: 'fire',
+      topic: 'kebakaran',
+      count: 2,
+      title: 'Kebakaran Pabrik di Bekasi Utara Sejak Malam Puluhan Warga Dievakuasi',
+      url: 'https://news.example/kebakaran-bekasi',
+      tokens: CLUSTER.eventSpecificTokens('Kebakaran Pabrik di Bekasi Utara Sejak Malam Puluhan Warga Dievakuasi', 'bekasi'),
+    },
+  ];
+
+  const out = CLUSTER.collapseSocialFeed([qMicro, ...routings, qMajor, bekasiFlood], { now, newsEvents });
+  assert.ok(out.some(p => /5\.8/.test(p.text)), 'Major Mag 5.8 felt quake must NEVER be swallowed by Mag 3.1 micro-quake or routine weather cap');
+  const bf = out.find(p => p.handle === '@warga_bekasi');
+  assert.ok(bf, 'Bekasi flood eyewitness post should remain');
+  assert.notEqual(bf.intel.newsMatch && bf.intel.newsMatch.status, 'confirmed', 'Surabaya flood or Bekasi fire news must NEVER falsely confirm Bekasi flood post');
+});

@@ -485,7 +485,7 @@ function createNewsService({
             }
             const sig = feedSig(outItems);
             const prevSig = feedSigMap.get(id);
-            if (prevSig && prevSig !== sig) invalidateDerivedFromNews();
+            if ((!prevSig && outItems.length) || (prevSig && prevSig !== sig)) invalidateDerivedFromNews();
             feedSigMap.set(id, sig);
             const stale = !fresh.length || !!(newest && now - newest > 3 * 3600e3);
             recordFeedHealth(id, true, '', outItems.length);

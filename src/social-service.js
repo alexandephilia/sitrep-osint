@@ -32,6 +32,8 @@ function createSocialService({
   incNewsHeatRev,
 }) {
   const xHist = new Map(), tHist = new Map();
+  const histRevMap = new WeakMap();
+  const bumpHistRev = map => histRevMap.set(map, (histRevMap.get(map) || 0) + 1);
   const histKey = HISTORY.keyOf, histTs = HISTORY.tsOf;
   const HIST_MAX = { x: 1500, th: 1200 }, HIST_AGE = 48 * 3600e3;
   let ADHOC = [];
@@ -141,6 +143,7 @@ function createSocialService({
     }
     map.clear();
     for (const p of kept) map.set(histKey(p), p);
+    bumpHistRev(map);
     histMarkDirty(file, map, max);
   }
   function histLoad(file, map) {
@@ -346,7 +349,6 @@ function createSocialService({
   const TSTOP = new Set(('yang dan di ke dari untuk pada dengan adalah ini itu ada tidak akan juga telah sudah bisa lebih sangat para dia kami kita mereka sebuah seorang suatu saat ketika setelah sebelum hingga oleh karena maka jika hari minggu senin selasa rabu kamis jumat sabtu minggu januari februari maret april mei juni juli agustus september oktober november desember breaking news terbaru update foto video live hasil wib wit daring online pemerintah menteri presiden indonesia daerah warga polisi damkar bpbd dishub pasar korban evakuasi massa jumlah ribu juta ratusan ribuan jutaan miliar triliun total resmi viral heboh terduga diduga kini paling orang persen masyarakat pihak oknum pelaku tersangka ibu bapak kali pemkot polda polres kejaksaan kemensos kemenkeu kemendagri').split(' '));
   const TBLK = new Set(('detik cnn tempo liputan6 republika tribun cnbc antara jawapos okezone kumparan suara merdeka sindonews jpnn tvri inews media news kompas viva metrotvnews rmol infopublik jabarprov korankaltim tvone merahputih poskota beritasatu gridoto wowkeren bola bolaoverza mediaindonesia faktualnews berita foto video gallery wawancara investigasi khusus daerah nasional internasional ekonomi hiburan selebriti olahraga dishub cumplik').split(' '));
   const GEO_INC_RE = new RegExp(CATS.filter(c => c.geo).map(c => c.re.source).join('|'), 'i');
-  const NEWS_KW_RE = /[a-z][a-z'-]{3,}/g;
   const NEWS_KW_STOP = new Set(('dalam atas bawah antara belum saja hanya lagi harus masih namun tetapi nanti kemarin lusa dekat jauh setiap semua banyak sedikit sedang pernah bukan yaitu yakni bila agar supaya tersebut kaum kaumnya atau rumah warga orang anak pria wanita ibu bapak mobil motor gedung kantor tanah lahan desa kota jalan hari bulan tahun waktu tempat kerja loker jasa harga biaya uang pasar toko produk barang sekolah kampus kuliah teman keluarga makan minum hidup mati kabar cerita kisah acara kegiatan program situasi kondisi proses sistem bentuk bagian nomor nama sosok').split(' '));
 
   function collectNews24h(srcs, now = Date.now()) {
@@ -380,6 +382,80 @@ function createSocialService({
   }
   const CLICKBAIT_STOP = new Set(('viral geger heboh kronologi ungkap fakta alasan profil biodata bikin begini ternyata detik deretan daftar nasib update terbaru buka suara tegas soroti reaksi sorot imbas kondisi potret tampang pengakuan beberkan sederet simak catat kenapa mengapa bagaimana mencekam terungkap penasaran histeris menangis tangis').split(' '));
 
+  function cachedNewsSources() {
+    const out = [];
+    for (const [id] of NEWS) {
+      const c = cache.get('n:' + id);
+      if (c && c.v && c.v.ok && Array.isArray(c.v.items) && c.v.items.length) out.push(c.v);
+    }
+    return out;
+  }
+
+  function buildNewsEventsIndex(srcs, now = Date.now()) {
+    const all24 = collectNews24h(srcs, now);
+    const byKey = new Map();
+    let seenItems = 0;
+    for (const it of all24) {
+      if (seenItems >= 2500) break;
+      const title = String(it.title || '').trim();
+      if (!title) continue;
+      const norm = breakNorm(title);
+      if (!norm || norm.length < 10) continue;
+      seenItems++;
+      const pub = String(it.pub || it.src || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const desc = String(it.desc || '').slice(0, 180);
+      const tps = SOC.socTopics(title, ADHOC);
+      const actM = title.match(GEO_INC_RE);
+      const action = actM ? actM[0].toLowerCase().trim() : '';
+      let loc = '', kabCode = '';
+      try {
+        const g = GEO.locate(title);
+        if (g && g.name) {
+          loc = g.name.toLowerCase().trim();
+          kabCode = String(g.kabCode || '').trim();
+        }
+      } catch (_) {}
+      const catObj = CATS.find(c => c.re && c.re.test(title));
+      const cat = catObj ? String(catObj.id || '').toLowerCase() : (tps[0] || '');
+      const inc = !!(GEO_INC_RE.test(title) || GEO_INC_RE.test(desc) || tps.length > 0);
+      const clusterKey = (action && loc) ? `ev|${action}|${loc}` : norm;
+      let ev = byKey.get(clusterKey);
+      if (!ev) {
+        const toks = typeof SOC.eventSpecificTokens === 'function'
+          ? SOC.eventSpecificTokens(title + ' ' + desc, loc)
+          : new Set();
+        ev = {
+          title,
+          url: it.link || it.url || '',
+          desc,
+          ts: it.ts || now,
+          pubs: new Set(),
+          count: 0,
+          loc,
+          kabCode,
+          cat,
+          topic: tps[0] || '',
+          action,
+          inc,
+          tokens: toks,
+        };
+        byKey.set(clusterKey, ev);
+      } else {
+        if ((it.ts || 0) > ev.ts) {
+          ev.ts = it.ts;
+          ev.title = title;
+          if (it.link || it.url) ev.url = it.link || it.url;
+        }
+        if (typeof SOC.eventSpecificTokens === 'function') {
+          for (const tk of SOC.eventSpecificTokens(title, loc)) ev.tokens.add(tk);
+        }
+      }
+      if (pub) ev.pubs.add(pub);
+      ev.count = Math.max(ev.count + 1, ev.pubs.size || 1);
+    }
+    return [...byKey.values()].sort((a, b) => (b.pubs.size - a.pubs.size) || (b.ts - a.ts)).slice(0, 300);
+  }
+
   const trendingQueries = () => memo('trending', 10 * 60e3, async () => {
     try {
       const now = Date.now(), srcs = await newsSourcesOrDisk();
@@ -407,7 +483,8 @@ function createSocialService({
           seen.add(ph);
           const words = ph.split(' ');
           if (words.some(w => w.length < 3 || TSTOP.has(w) || TBLK.has(w) || NEWS_KW_STOP.has(w) || CLICKBAIT_STOP.has(w))) return;
-          if (CLICKBAIT_STOP.has(words[0]) || CLICKBAIT_STOP.has(words[words.length - 1])) return;
+          if (SOC.SOC_BOILERPLATE_RE && SOC.SOC_BOILERPLATE_RE.test(ph)) return;
+          if (SOC.isGenericLocationPhrase && SOC.isGenericLocationPhrase(ph)) return;
           if (SOC.socTopics(ph).length > 0) return;
           const e = score.get(ph) || [0, 0];
           e[0]++; e[1] += inc; score.set(ph, e);
@@ -429,14 +506,14 @@ function createSocialService({
       for (const [ph, [n, ctx]] of [...score.entries()].sort((a, b) => {
         const pubsA = (pubMap.get(a[0]) && pubMap.get(a[0]).size) || 1;
         const pubsB = (pubMap.get(b[0]) && pubMap.get(b[0]).size) || 1;
-        const scoreA = (a[1][0] + pubsA * 1.5 + 2 * a[1][1]);
-        const scoreB = (b[1][0] + pubsB * 1.5 + 2 * b[1][1]);
+        const scoreA = (a[1][0] + pubsA * 2 + 2.5 * a[1][1]);
+        const scoreB = (b[1][0] + pubsB * 2 + 2.5 * b[1][1]);
         return scoreB - scoreA;
       })) {
+        const pubsN = (pubMap.get(ph) && pubMap.get(ph).size) || 0;
         const single = !ph.includes(' ');
         const need = single ? 5 : 3;
-        if (n < need) continue;
-        if (single && ctx < 2) continue;
+        if (n < need || pubsN < 2 || ctx < 2) continue;
         out.push(ph);
         if (out.length >= 8) break;
       }
@@ -459,8 +536,8 @@ function createSocialService({
   const tagX = (p, extra, meta = {}) => HISTORY.tag(p, extra || ADHOC, Date.now(), { platform: 'x', recordDiagnostics: true, ...meta }) && SOC.socKeepX(p);
   const tagTh = (p, extra, meta = {}) => HISTORY.tag(p, extra || ADHOC, Date.now(), { platform: 'threads', recordDiagnostics: true, ...meta }) && SOC.socKeepTh(p);
   const socPosts = () => [
-    ...[...xHist.values()].map(p => ({ topics: p.topics, platform: 'x', user: p.handle, ts: histTs(p) })),
-    ...[...tHist.values()].map(p => ({ topics: p.topics, platform: 'th', user: p.username, ts: histTs(p) }))];
+    ...[...xHist.values()].map(p => ({ topics: p.topics, platform: 'x', user: histUser(p) || p.user, ts: histTs(p), assessment: p.assessment })),
+    ...[...tHist.values()].map(p => ({ topics: p.topics, platform: 'th', user: histUser(p) || p.user, ts: histTs(p), assessment: p.assessment }))];
 
   const richPosts = () => memo('richposts', 60000, async () => [
     ...[...xHist.values()].map(p => ({ text: p.text, ts: histTs(p), topics: p.topics, platform: 'x', user: histUser(p) })),
@@ -494,40 +571,31 @@ function createSocialService({
 
   const newsKeywords = () => memo('newskw', 600000, async () => {
     try {
-      const srcs = await news(), now = Date.now(), pairs = new Map(); let n = 0;
-      for (const s of srcs) {
-        if (!s.ok) continue;
-        for (const it of s.items) {
-          if (!Number.isFinite(it.ts) || it.ts <= 0 || it.ts > now || now - it.ts > 24 * 3600e3) continue;
-          const title = String(it.title || '');
-          if (!GEO_INC_RE.test(title)) continue;
-          n++;
-          const actMatch = title.match(GEO_INC_RE);
-          const action = actMatch ? actMatch[0].toLowerCase().trim() : '';
-          if (!action || action.length < 3 || TSTOP.has(action) || NEWS_KW_STOP.has(action)) continue;
-          let locName = '';
-          try {
-            const loc = GEO.locate(title);
-            if (loc && loc.name) locName = loc.name.toLowerCase().trim();
-          } catch (_) {}
-          if (!locName) {
-            const capMatch = title.match(/[A-Z][A-Za-z'-]{3,}(?:\s+[A-Z][A-Za-z'-]{3,})?/g);
-            if (capMatch) {
-              for (const cm of capMatch) {
-                const cml = cm.toLowerCase().trim();
-                if (!TSTOP.has(cml) && !TBLK.has(cml) && !NEWS_KW_STOP.has(cml) && !SOC.SOC_FOREIGN_RE.test(cml) && cml !== action) {
-                  locName = cml;
-                  break;
-                }
-              }
+      const srcs = await newsSourcesOrDisk(), now = Date.now(), pairs = new Map();
+      const events = buildNewsEventsIndex(srcs, now);
+      if (!events.length) return [];
+      for (const ev of events) {
+        if (!ev.action || ev.action.length < 3 || TSTOP.has(ev.action) || NEWS_KW_STOP.has(ev.action)) continue;
+        let locName = ev.loc || '';
+        if (!locName) {
+          const capMatch = ev.title.match(/[A-Z][A-Za-z'-]{3,}(?:\s+[A-Z][A-Za-z'-]{3,})?/g);
+          if (capMatch) {
+            for (const cm of capMatch) {
+              const cml = cm.toLowerCase().replace(/\s+/g, ' ').trim();
+              const cw = cml.split(' ');
+              if (cw.some(w => TSTOP.has(w) || TBLK.has(w) || NEWS_KW_STOP.has(w) || CLICKBAIT_STOP.has(w))) continue;
+              if (SOC.SOC_BOILERPLATE_RE && SOC.SOC_BOILERPLATE_RE.test(cml)) continue;
+              if (SOC.SOC_FOREIGN_RE.test(cml) || SOC.socTopics(cml).length > 0 || cml.includes(ev.action)) continue;
+              locName = cml;
+              break;
             }
           }
-          if (!locName || locName === action) continue;
-          const compound = `${action} ${locName}`.trim();
-          pairs.set(compound, (pairs.get(compound) || 0) + 1);
         }
+        if (!locName || locName === ev.action) continue;
+        const compound = `${ev.action} ${locName}`.trim();
+        const w = Math.max(1, ev.pubs.size || 1);
+        pairs.set(compound, (pairs.get(compound) || 0) + w);
       }
-      if (!n) return [];
       return [...pairs.entries()]
         .filter(([, df]) => df >= 2)
         .sort((a, b) => b[1] - a[1])
@@ -597,6 +665,17 @@ function createSocialService({
       .filter(q => volOf(q) > 0)
       .sort((a, b) => volOf(b) - volOf(a));
     const queries = [...new Set([...trendIds, ...activeQueries])];
+    let emerging = memoVal('socphrase');
+    if ((!emerging || !emerging.length) && typeof SOC.socPhraseScan === 'function' && (xHist.size || tHist.size)) {
+      const now = Date.now();
+      const exclude = new Set(SOC.SOC_TOPICS.map(t => t.id).concat(ADHOC.map(a => a.id)));
+      const posts = [
+        ...[...xHist.values()].map(p => ({ text: p.text, ts: histTs(p), topics: p.topics, platform: 'x', user: histUser(p) })),
+        ...[...tHist.values()].map(p => ({ text: p.text, ts: histTs(p), topics: p.topics, platform: 'th', user: histUser(p) })),
+      ];
+      emerging = SOC.socPhraseScan(posts, { now, windowMs: 6 * 3600e3, minUsers: 2, exclude, max: 6 }) || [];
+      cache.set('socphrase', { at: now, v: emerging });
+    }
     return {
       queries,
       trending: trendIds,
@@ -604,7 +683,9 @@ function createSocialService({
       hot,
       stats,
       trends,
-      newsTrending: memoVal('newsheat')
+      newsTrending: memoVal('newsheat'),
+      emerging: (emerging || []).slice(0, 5),
+      newsKeywords: memoVal('newskw').slice(0, 5),
     };
   };
 
@@ -716,6 +797,12 @@ function createSocialService({
     const synth = synthQueries('x', ADHOC, await xTrends(), new Set(all.map(e => e.q)),
       await socialPhrases(), await socKw(), await newsKeywords());
     all.push(...synth);
+    const watchList = Array.isArray(SOC.SOC_WATCH_X) ? SOC.SOC_WATCH_X : [];
+    const watchBatch = watchList.length ? watchList.filter((_, idx) => (idx % 2) === (xTick % 2)) : [];
+    const watchTag = 'watch:' + (xTick % 2);
+    if (watchBatch.length) {
+      all.push({ t: watchTag, q: '(' + watchBatch.map(h => 'from:' + h).join(' OR ') + ') -filter:replies' });
+    }
     const byTopic = new Map();
     for (const e of all) { const a = byTopic.get(e.t); if (a) a.push(e); else byTopic.set(e.t, [e]); }
 
@@ -723,20 +810,21 @@ function createSocialService({
     const newsHotIds = (newsHotTop || []).map(x => typeof x === 'string' ? x : (x && x.id)).filter(Boolean);
 
     const synthSet = new Set(synth.map(e => e.t));
-    const forcedOrd = hotTop.concat(newsHotIds, ADHOC.map(a => a.id), synth.map(e => e.t));
+    const forcedOrd = hotTop.concat(watchBatch.length ? [watchTag] : [], ADHOC.map(a => a.id), newsHotIds, synth.map(e => e.t));
     const forced = new Set(forcedOrd);
     const chosen = new Set();
     if (first) { for (const t of byTopic.keys()) chosen.add(t); }
     else {
       const N = 14, SYNTH_MAX = 4, pri = t => ((now - (xSeen.get(t) || 0)) / 60000) * (1 + Math.min(heat(t), 60) / 15) * yieldAdj(xYield, t);
       const rest = [...byTopic.keys()].filter(t => !forced.has(t)).sort((a, b) => pri(b) - pri(a));
+      const restReserve = Math.min(3, rest.length);
       let used = 0, synthUsed = 0;
 
       for (const t of forcedOrd) {
         if (chosen.has(t) || !byTopic.has(t)) continue;
         const n = byTopic.get(t).length;
         if (synthSet.has(t) && synthUsed + n > SYNTH_MAX) continue;
-        if (used + n > N) continue;
+        if (used + n > N - restReserve) continue;
         chosen.add(t); used += n;
         if (synthSet.has(t)) synthUsed += n;
       }
@@ -753,7 +841,7 @@ function createSocialService({
     let page2 = [];
     let rawN = 0, dropTs = 0, dropTag = 0, dropSample = null, newest = 0;
     const ingest = (e, list) => {
-      const disc = String(e.t || '').startsWith('adhoc') || String(e.t || '').includes(':') ? 'adhoc' : 'permanent';
+      const disc = String(e.t || '').startsWith('watch:') ? 'watch' : (String(e.t || '').startsWith('adhoc') || String(e.t || '').includes(':') ? 'adhoc' : 'permanent');
       SOC.diagnostics.recordRetrieved('x', disc, (list || []).length);
       for (const p of list) {
         rawN++; if (p.ts > newest) newest = p.ts;
@@ -1058,40 +1146,47 @@ function createSocialService({
   let socialMetaFp = '', socialMetaVal = null;
   function socialResponse(result, map, keep) {
     const now = Date.now();
-    let mx = 0;
+    histRetag(map, keep);
+    let mx = 0, otherMx = 0;
     for (const p of map.values()) { const t = HISTORY.tsOf(p); if (t > mx) mx = t; }
-    const fp = SOC.CLASSIFIER_VERSION + '|' + map.size + '|' + mx + '|' + adhocSig() + '|' + Math.floor(now / 3600e3);
+    const otherMap = map === xHist ? tHist : xHist;
+    for (const p of otherMap.values()) { const t = HISTORY.tsOf(p); if (t > otherMx) otherMx = t; }
+    const plat = map === xHist ? 'x' : 'th';
+    const otherPlat = map === xHist ? 'th' : 'x';
+    const newsRev = getNewsRev();
+    const fp = SOC.CLASSIFIER_VERSION + '|' + map.size + '|' + mx + '|' + (histRevMap.get(map) || 0) +
+      '|' + otherMap.size + '|' + otherMx + '|' + (histRevMap.get(otherMap) || 0) +
+      '|' + newsRev + '|' + adhocSig() + '|' + Math.floor(now / 3600e3);
     let c = socialRespCache.get(map);
     if (!c || c.fp !== fp) {
-      histRetag(map, keep);
-      const authorHourly = Object.create(null);
-      const authorTotal = Object.create(null);
-      c = { fp, posts: HISTORY.snapshot(map, now).posts.filter(p => {
-        const u = String(p.handle || p.username || p.user || '').toLowerCase().replace(/^@/, '');
-        if (!u) return true;
-        if (u === 'infobmkg' || u === 'bnpb_indonesia') return true;
-        const isSig = !!(p.assessment && p.assessment.signalEligible);
-        const ts = histTs(p) || now;
-        const hourBucket = Math.floor(ts / 3600e3);
-        const hKey = `${u}|${hourBucket}`;
-        const maxPerHour = isSig ? 3 : 2;
-        const maxTotal = isSig ? 6 : 4;
-        const currentH = authorHourly[hKey] || 0;
-        const currentTot = authorTotal[u] || 0;
-        if (currentH >= maxPerHour || currentTot >= maxTotal) return false;
-        authorHourly[hKey] = currentH + 1;
-        authorTotal[u] = currentTot + 1;
-        return true;
-      }).map(p => (p && p.assessment) ? { ...p, assessment: projectAssessment(p.assessment) } : p) };
+      const snapPosts = HISTORY.snapshot(map, now).posts.map(p => ({ ...p, platform: p.platform || plat, ts: histTs(p) || now }));
+      const siblingPosts = [];
+      for (const p of otherMap.values()) {
+        if (!p || !p.text) continue;
+        const pts = histTs(p) || now;
+        if (now - pts <= 24 * 3600e3) siblingPosts.push({ ...p, platform: p.platform || otherPlat, ts: pts });
+      }
+      const newsEvents = buildNewsEventsIndex(cachedNewsSources(), now);
+      const collapsed = typeof SOC.collapseSocialFeed === 'function'
+        ? SOC.collapseSocialFeed(snapPosts, {
+            now,
+            corroborationPool: snapPosts.concat(siblingPosts),
+            newsEvents,
+          })
+        : snapPosts;
+      c = {
+        fp,
+        posts: collapsed.map(p => (p && p.assessment) ? { ...p, assessment: projectAssessment(p.assessment) } : p),
+      };
       socialRespCache.set(map, c);
     }
 
     const newsHeatRev = getNewsHeatRev(), NEWS_REV = getNewsRev();
-    const mfp = xHist.size + '|' + tHist.size + '|' + newsHeatRev + '|' + NEWS_REV + '|' + adhocSig() + '|' + Math.floor(now / 120e3);
+    const mfp = xHist.size + '|' + tHist.size + '|' + (histRevMap.get(xHist) || 0) + '|' + (histRevMap.get(tHist) || 0) + '|' + newsHeatRev + '|' + NEWS_REV + '|' + adhocSig() + '|' + Math.floor(now / 120e3);
     if (socialMetaFp !== mfp) { socialMetaVal = socMeta(); socialMetaFp = mfp; }
     socialSnapshotAt = Math.max(now, socialSnapshotAt + 1);
     const diagSnap = SOC.diagnostics.snapshot();
-    return { ...result, ok: true, snapshot: true, classifierVersion: SOC.CLASSIFIER_VERSION,
+    return { ...result, snapshot: true, classifierVersion: SOC.CLASSIFIER_VERSION,
       snapshotAt: socialSnapshotAt, posts: c.posts, at: now, coverage: 'sampled',
       diagnostics: {
         retrieved: diagSnap.retrieved,
