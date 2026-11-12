@@ -381,7 +381,7 @@ const FREE_OF_DISASTER_RE = /\b(?:bebas|anti|aman|tanpa|jauh dari)\s+(?:banjir|k
 const CORRECTION_RE = /\bbukan\s+([^,;.\n]+?)\s*,\s*(?:tapi|tetapi|melainkan|cuma|hanya)\s+([^.!?\n]+)/i;
 
 const DENIAL_ANY_RE = /\b(?:hoaks?|kabar palsu|berita palsu|false claim|misinformation|disinformasi|isu hoax|video lama|foto lama|dibantah)\b/i;
-const HISTORICAL_RE = /\b(?:dulu|jaman dulu|zaman dulu|tempo dulu|sejarah|mengenang|kilas balik|nostalgia|ingat waktu|tahun lalu|bulan lalu|pekan lalu|minggu lalu|last year|last month|last week|historical|anniversary|orde baru|orba|soeharto|suharto|perang dunia|world war|penjajahan|kolonial|beberapa tahun silam|(?:jaman|zaman|waktu|pas|saat|era|awal)\s+(?:covid(?:-?19)?|pandemi|lockdown|korona|corona)|(?:2019|2020|2021|2022)\b[^.!?\n]{0,40}\b(?:covid|pandemi|lockdown))\b/i;
+const HISTORICAL_RE = /\b(?:dulu|jaman dulu|zaman dulu|tempo dulu|sejarah|mengenang|kilas balik|nostalgia|ingat waktu|tahun lalu|bulan lalu|pekan lalu|minggu lalu|last year|last month|last week|historical|anniversary|orde baru|orba|soeharto|suharto|perang dunia|world war|penjajahan|kolonial|beberapa tahun silam|(?:jaman|zaman|waktu|pas|saat|era|awal|masa|suasana|situasi|musim|periode|ketika|selama)\s+(?:covid(?:-?19)?|pandemi|lockdown|korona|corona)|(?:2019|2020|2021|2022)\b[^.!?\n]{0,40}\b(?:covid|pandemi|lockdown))\b/i;
 const HISTORICAL_YEAR_RE = /\b(?:tahun|pada|sejak|era)\s+((?:19|20)\d{2})\b/i;
 
 function isHistoricalClause(text, year = new Date().getFullYear()) {
@@ -404,6 +404,8 @@ const CONDITIONAL_RE = /\b(?:andaikan|seandainya|bagaimana jika|misalkan|kalau n
 const SATIRE_IRONY_RE = /\b(?:bebas banjir,?\s*katanya|mantap,\s*(?:jakarta|kota|negara)[^.!?\n]{0,40}(?:tenggelam|banjir|macet|rusak)\s+lagi|prestasi\s+(?:banjir|macet)|selamat menikmati\s+(?:banjir|macet)|macetnya bikin [^.!?\n]{0,20}mati berdiri)\b/i;
 const EDUCATION_RE = /\b(?:apa itu|pengertian|tutorial|cara (?:mencegah|mengatasi|menghapus|menghindari|menyelamatkan)|tips|edukasi|simulasi|latihan|mitigasi|kesiapsiagaan|tas bencana|go[- ]?bag|sosialisasi|webinar|seminar|workshop|rakor|what is|how to|exercise|simulation)\b/i;
 const CEREMONY_RE = /\b(?:upacara\s+(?:peringatan|tabur bunga|hari|bendera|hut|penghormatan)|tabur bunga|hari pahlawan|dirgahayu|hut\s+(?:tni|ri|bhayangkara)|ziarah\s+(?:nasional|makam)|penghargaan|apresiasi|kunjungan kerja|kunker|launching|peresmian|resmikan|museum\s+militer|lomba|parade|wisuda|silaturahmi)\b/i;
+const RELIGIOUS_FATWA_STRONG_RE = /\b(?:dihukumi|hukum(?:nya)?\s+(?:islam|syariat|syara['’]?|fiqih|fikih|halal|haram|wajib|sunnah|makruh|mubah|bid['’]?ah|kafir|murtad|munafik|syirik)|masuk\s+(?:neraka|surga)|ahli\s+(?:neraka|surga)|siksa\s+(?:kubur|neraka)|azab\s+(?:allah|kubur)|dosa\s+besar|ampunan\s+dosa|fatwa|mufti|fiqih|fikih|hadits|hadis|ayat\s+al[- ]?qur['’]?an|tafsir|ceramah|kajian\s+(?:islam|sunnah|salaf|ustadz)|khutbah|khotbah|pahala\s+(?:puasa|salat|sholat|shalat|ibadah))\b/i;
+const RELIGIOUS_PRACTICE_ALL_RE = /\b(?:salat|sholat|shalat)(?:\s+(?:jumat|jum['’]?at|wajib|sunnah|sunah|fardhu|subuh|dzuhur|ashar|maghrib|isya|tarawih|ied|idul|qadha|jama|qashar|berjamaah|tahajud|dhuha))?\b|\b(?:munafik|murtad|kafir|syirik|bid['’]?ah|wudhu|tayammum|rakaat|makmum|muadzin|puasa\s+(?:ramadhan|sunnah|qadha|senin\s+kamis)|zakat\s+(?:fitrah|mal)|umrah|manasik)\b/gi;
 
 const OFFICIAL_AGENCY_RE = /\b(?:bmkg|bnpb|bpbd|pvmbg|basarnas|bssn|kemenkes|kemkes|polri|polda|polres|polsek|tmc\s*polda|damkar|pln|kpu|bawaslu|komdigi|kominfo|pemprov|pemkot|pemkab|knkt|kpk|dishub)\b/i;
 const OFFICIAL_WARNING_RE = /\b(?:peringatan\s+(?:dini|cuaca|tsunami|banjir|longsor|erupsi|gelombang|angin|bmkg)|(?:keluarkan|mengeluarkan|rilis|merilis|terbitkan|menerbitkan)\s+peringatan|warning|early warning|(?:naikkan|tingkatkan|tetapkan)\s+status[^.!?\n]{0,35}\b(?:awas|siaga|waspada)|status\s+(?:awas|siaga)|diminta\s+(?:untuk\s+)?evakuasi|waspada\s+(?:tsunami|banjir|longsor|cuaca|erupsi|gelombang|angin|hujan)|potensi\s+(?:hujan\s+(?:ekstrem|lebat)|banjir|tsunami|angin\s+kencang|gelombang\s+tinggi)|hujan\s+ekstrem|siaga\s+[123]|siapkan\s+pengamanan|menyiapkan\s+pengamanan|(?:di)?siagakan|(?:di)?kerahkan|antisipasi\s+(?:demo|unjuk rasa|aksi|banjir))\b/i;
@@ -1050,6 +1052,7 @@ function analyzePost(rawText, options = {}) {
         anyQuestion: false,
         anyHearsay: false,
         anyEducational: false,
+        anyReligious: false,
         anyCommercial: false,
         anyAd: false,
         anyVent: false,
@@ -1089,6 +1092,7 @@ function analyzePost(rawText, options = {}) {
   let anyHearsay = false;
   let anySatire = false;
   let anyEducational = false;
+  let anyReligious = false;
   let anyCommercial = false;
   let anyAd = false;
   let anyVent = false;
@@ -1146,6 +1150,9 @@ function analyzePost(rawText, options = {}) {
     const strongListingDeal = /\b(?:over\s*kredit|for\s*sale|for\s*rent|open\s*rent|looking\s*to\s*rent|\bwts\b|\bwtb\b|\bwtt\b|loker|lowongan\s+kerja|kirim\s+cv|kpr|dp\s*(?:0|nol)|cicilan|booking\s*fee|nego|siap\s+huni|lt\s*\d+|lb\s*\d+|shm|hgb|tahun\s+pembelian|transmisi|stnk|\bkm\s*:?\s*\d|showroom|ready\s*stock|open\s*order|pre[- ]?order|jastip|war\s+tiket|sewa\s+(?:raket|kamera|iphone|samsung|kost|kosan|kontrakan|apartemen|ruko|armybomb|army\s*bomb|lightstick)|rekomendasi\s+(?:kost|kosan|kontrakan|cafe|kafe|kuliner|makanan|cakes?|salon|dokter|klinik|tempat|bengkel|laundry|hotel|villa)|recommendation)\b/i.test(rawC);
     const hasCyberIncidentCue = /\b(?:database|data\s+pasien|kebocoran\s+data|data\s+breach|diretas|dibobol|hacker|ransomware|malware)\b/i.test(t);
     const hasPhysicalDisasterCue = /\b(?:kebakaran|terbakar|banjir\s+merendam|banjir\s+bandang|gempa|erupsi|longsor\s+menutup|puting\s+beliung|kecelakaan|tabrakan|tertembak|pembunuhan)\b/i.test(t);
+    const hasSafetyEmergencyCue = hasPhysicalDisasterCue || hasCyberIncidentCue || /\b(?:evakuasi|mengungsi|dilarikan\s+ke\s+rs|ditangkap|diamankan\s+polisi|tewas|meninggal\s+dunia|luka[- ]luka|korban\s+jiwa)\b/i.test(t);
+    const religiousPracticeCount = new Set([...t.matchAll(RELIGIOUS_PRACTICE_ALL_RE)].map(m => m[0].toLowerCase())).size;
+    const isReligious = !hasSafetyEmergencyCue && (RELIGIOUS_FATWA_STRONG_RE.test(t) || RELIGIOUS_FATWA_STRONG_RE.test(rawC) || religiousPracticeCount >= 2);
     const isAd = ADVERTISEMENT_RE.test(rawC) || ADVERTISEMENT_RE.test(t);
     const isVent = PERSONAL_VENT_RE.test(rawC) || PERSONAL_VENT_RE.test(t);
     const isOpinion = OPINION_PRAISE_RE.test(rawC) || OPINION_PRAISE_RE.test(t);
@@ -1170,7 +1177,7 @@ function analyzePost(rawText, options = {}) {
     const evalClause = { ...c, normGeo: activeTextForEvent };
     const clauseEvents = [];
     const effectiveCommercial = isCommercial && !hasCyberIncidentCue && (strongListingDeal || !hasPhysicalDisasterCue);
-    const skipForEvents = isEdu || isCeremony || effectiveCommercial || isAd || isVent || isSpam || isSatire || isCond;
+    const skipForEvents = isEdu || isCeremony || isReligious || effectiveCommercial || isAd || isVent || isSpam || isSatire || isCond;
 
     if (!skipForEvents) {
       for (const frame of EVENT_FRAMES) {
@@ -1208,7 +1215,7 @@ function analyzePost(rawText, options = {}) {
       isWarning,
       hasHazardCue: hasHazardCue && !isDenial,
       hasHazardQuestion,
-      isNonEventChatter: isDenial || isCommercial || isAd || isVent || isOpinion || isSpam || isEdu || clauseMetaphors.length > 0,
+      isNonEventChatter: isDenial || isCommercial || isAd || isVent || isOpinion || isSpam || isEdu || isReligious || clauseMetaphors.length > 0,
     });
 
     if (geo.scope === 'foreign') anyForeign = true;
@@ -1223,6 +1230,7 @@ function analyzePost(rawText, options = {}) {
     anyHearsay = anyHearsay || isHearsay;
     anySatire = anySatire || isSatire;
     anyEducational = anyEducational || isEdu;
+    anyReligious = anyReligious || isReligious;
     anyCommercial = anyCommercial || effectiveCommercial;
     anyAd = anyAd || isAd;
     anyVent = anyVent || isVent;
@@ -1236,7 +1244,7 @@ function analyzePost(rawText, options = {}) {
       geo,
       events: clauseEvents,
       flags: {
-        isDenial, isHist, isQuest, isHearsay, isCond, isEdu, isCeremony,
+        isDenial, isHist, isQuest, isHearsay, isCond, isEdu, isCeremony, isReligious,
         isOfficialAgency, isWarning, isOfficialUpdate, isEyewitness,
         isCommercial, isAd, isVent, isOpinion, isSpam, isReader, isSatire, isCommentaryMeta,
         hasHazardCue, hasSituationalSupplyCue, hasHazardQuestion, hasEventEvidence,
@@ -1410,6 +1418,9 @@ function analyzePost(rawText, options = {}) {
   if (anyMetaphor && !hasActionableEvent) {
     scores.unrelated += 0.80;
   }
+  if (anyReligious && !hasActionableEvent) {
+    scores.unrelated = Math.max(scores.unrelated, 0.92);
+  }
 
   if (Math.max(...Object.values(scores)) < 0.45) {
     const hasSupplyCue = clauseResults.some(c => c.flags.hasSituationalSupplyCue);
@@ -1475,6 +1486,7 @@ function analyzePost(rawText, options = {}) {
       anyHearsay,
       anySatire,
       anyEducational,
+      anyReligious,
       anyCommercial,
       anyAd,
       anyVent,

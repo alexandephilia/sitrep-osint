@@ -3,7 +3,7 @@
 const GEO = require('./geocode');
 const NLP = require('./indonesian-nlp');
 
-const VERSION = '2026-11-12.1';
+const VERSION = '2026-11-13.1';
 
 const CATEGORY = {
   demo: 'demo',
@@ -51,7 +51,7 @@ const DENIED = /\b(tidak|tak|nggak|gak|ga|kagak|kaga|bukan|belum|no|not|never)\s
 const DENIED_ANY = /\b(?:hoaks?|kabar palsu|false claim|misinformation|disinformasi|berita palsu|isu hoax)\b/i;
 const EDUCATION = /\b(apa itu|pengertian|tutorial|cara (?:mencegah|mengatasi|menghapus|menghindari)|tips|edukasi|simulasi|latihan|mitigasi|kesiapsiagaan|tas bencana|go[- ]?bag|potensi|risiko|rawan|prediksi|diprediksi|andaikan|seandainya|bagaimana jika|what is|how to|exercise|simulation)\b/i;
 const AID = /\b(salurkan|menyalurkan|penyaluran|donasi|rekonstruksi|rehabilitasi|kirim bantuan|pusdalops|rakor|seminar|webinar)\b/i;
-const HISTORICAL = /\b(dulu|jaman dulu|zaman dulu|tempo dulu|sejarah|mengenang|kilas balik|tahun lalu|bulan lalu|pekan lalu|kemarin|last (?:year|month|week)|historical|anniversary|orde baru|orba|soeharto|suharto|perang dunia|world war|penjajahan|kolonial|(?:jaman|zaman|waktu|pas|saat|era|awal)\s+(?:covid(?:-?19)?|pandemi|lockdown|korona|corona)|(?:2019|2020|2021|2022)\b[^.!?\n]{0,40}\b(?:covid|pandemi|lockdown))\b/i;
+const HISTORICAL = /\b(dulu|jaman dulu|zaman dulu|tempo dulu|sejarah|mengenang|kilas balik|tahun lalu|bulan lalu|pekan lalu|kemarin|last (?:year|month|week)|historical|anniversary|orde baru|orba|soeharto|suharto|perang dunia|world war|penjajahan|kolonial|(?:jaman|zaman|waktu|pas|saat|era|awal|masa|suasana|situasi|musim|periode|ketika|selama)\s+(?:covid(?:-?19)?|pandemi|lockdown|korona|corona)|(?:2019|2020|2021|2022)\b[^.!?\n]{0,40}\b(?:covid|pandemi|lockdown))\b/i;
 const HISTORICAL_YEAR = /\b(?:tahun|pada|sejak|era)\s+((?:19|20)\d{2})\b/i;
 
 function isHistorical(span, year = new Date().getFullYear()) {
@@ -231,7 +231,12 @@ function assess(text, registry, options = {}) {
   const adFlag = nlp.intent === 'advertisement';
   const ventFlag = nlp.intent === 'personal_vent';
   const pureOpinionFlag = nlp.intent === 'opinion' && !nlp.flags.hasActionableEvent && !nlp.flags.anyOfficialWarning;
-  const hardNonIncident = spamFlag || adFlag || ventFlag || pureOpinionFlag || (listingFlag && !nlp.flags.hasActionableEvent);
+  const religiousFlag = !!nlp.flags.anyReligious && !nlp.flags.hasActionableEvent;
+  const hardNonIncident = spamFlag || adFlag || ventFlag || pureOpinionFlag || religiousFlag || (listingFlag && !nlp.flags.hasActionableEvent);
+  if (religiousFlag) {
+    reasons.add('religious_discourse');
+    rejectedReasons.add(NLP.REJECT_REASONS.NO_CONCRETE_EVENT);
+  }
 
   const docHist = /\b(?:baca(?:in)?|belajar|buku|artikel|kisah|cerita)\s+sejarah\b/i.test(raw);
   const anyForeignClause = nlp.flags.anyForeign;
@@ -476,6 +481,15 @@ function assess(text, registry, options = {}) {
   const hasIndonesianGrounding = !isForeignLanguage && (scope === 'Indonesia' || ID_PROSE_RE.test(proseClean) || LOCAL_ORG.test(proseClean) || LOCAL_MACRO.test(proseClean));
   const isUnanchoredForeign = isForeignLanguage || (!hasIndonesianGrounding && (scope === 'foreign' || FOREIGN_NON_ID_SCRIPT_OR_WORD_RE.test(proseClean) || proseClean.trim().length > 0));
 
+  const hasSituationalGrounding = scope === 'Indonesia'
+    || nlp.extractedEvents.some(e => e.strong)
+    || nlp.flags.anyOfficialWarning
+    || nlp.flags.anyOfficialUpdate
+    || findings.some(f => f.scope === 'Indonesia' || f.target)
+    || NLP.LOCAL_ORG_RE.test(raw)
+    || NLP.LOCAL_MACRO_RE.test(raw)
+    || /\b(?:rupiah|ihsg|dpr(?:\s+ri)?|mpr|wapres|prabowo|gibran|danantara|pertamina|ojk|bpom|\bkai\b|\bmbg\b|mati\s+lampu|mati\s+listrik|listrik\s+padam|padam\s+listrik|pemadaman\s+listrik)\b/i.test(raw);
+
   let feedLane = NLP.FEED_LANES.REJECTED;
   if (isUnanchoredForeign) {
     feedLane = NLP.FEED_LANES.REJECTED;
@@ -490,6 +504,7 @@ function assess(text, registry, options = {}) {
     !['historical', 'educational', 'denial_or_debunk', 'unrelated', 'unknown'].includes(nlp.intent) &&
     scope !== 'foreign' &&
     hasIndonesianGrounding &&
+    hasSituationalGrounding &&
     (hasPermanentTopic || hasCrisisContext) &&
     (hasSituationalIntent || nonAdhocFindings.some(f => f.feedOnly && f.scope === 'Indonesia'))
   ) {

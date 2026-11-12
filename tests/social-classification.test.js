@@ -620,6 +620,11 @@ Hoezo democratie?`,
     'beneran banjir konten plsssss',
     'IHSG Kebakaran +0,21%',
     'Kangen suasana jaman covid dulu jalanan sepi banget',
+    'Apakah Meninggalkan Salat Jumat 3 Kali dalam Suasana Covid-19 Dihukumi Munafik dan Masuk Neraka?',
+    'Hukum meninggalkan sholat 3 kali jadi munafik saat suasana pandemi covid',
+    'Apakah vaksin covid aman untuk ibu hamil?',
+    'Kenapa harga beras mahal?',
+    'Ada yang tau kenapa bbm langka?',
   ];
 
   for (const text of foreignAndNoise) {
@@ -649,6 +654,14 @@ Hoezo democratie?`,
     },
     {
       text: 'Katanya di Bekasi tanggul kali ada yang jebol lagi ya barusan?',
+      expectFeed: true,
+    },
+    {
+      text: 'Jakarta banjir nggak sih?',
+      expectFeed: true,
+    },
+    {
+      text: 'Kebakaran ruko di Bandung saat jemaah salat jumat, damkar evakuasi warga',
       expectFeed: true,
     },
   ];
