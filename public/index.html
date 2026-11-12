@@ -7415,7 +7415,7 @@ const vid = c => c.querySelector('video');
 const mkVid = c => { let v = vid(c); if (!v) { v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'none'; c.querySelector('.frame').appendChild(v); } return v; };
 const isDirectSnapFeed = (url, c) => {
   const s = String(url || (c && c.s) || '');
-  return /(^|\.)dpuprkotang\.info/i.test(s) || /(^|\.)dsdajakarta\.id/i.test(s) || /SourceEndpoint\.video/i.test(s);
+  return /(^|\.)dsdajakarta\.id/i.test(s) || /SourceEndpoint\.video/i.test(s);
 };
 function snapUrl(cam, viaProxy){
   if (cam && cam.snap) {
@@ -7558,7 +7558,7 @@ function startCell(cell){
           startCell(cell);
         } else kill(cell);
       }
-    }, 4000);
+    }, 8000);
     v.onerror = () => {
       clearTimeout(p.mp4Timer);
       v.onerror = null;
@@ -8170,7 +8170,7 @@ camGrid.addEventListener('keydown', e => {
   e.preventDefault();
   const c = camList[+cell.dataset.i]; openLightbox(camStream(c), c.n, c.c, c.e, camSteps(c), cell);
 });
-let glbHls = null, glbSteps = [], glbStep = 0, glbErr = 0, glbEmbed = '', glbSnapUrl = '', glbSnapProxy = false, glbSnapTimer = 0, lbTrigger = null, glbUrl = '';
+let glbHls = null, glbSteps = [], glbStep = 0, glbErr = 0, glbEmbed = '', glbSnapUrl = '', glbSnapProxy = false, glbSnapTimer = 0, glbMp4Timer = 0, lbTrigger = null, glbUrl = '';
 function glbSetSnapSrc(){
   const sim = $('#glb-snap');
   if (!sim || !glbSnapUrl) return;
@@ -8185,11 +8185,35 @@ function glbSetSnapSrc(){
 }
 function glbFallbackEmbed(){
   const v = $('#glb-video'), ifr = $('#glb-frame'), sim = $('#glb-snap');
+  if (glbEmbed && ifr && !isDirectSnapFeed(glbUrl)) {
+    if (v) v.style.display = 'none';
+    if (sim) { sim.style.display = 'none'; sim.removeAttribute('src'); }
+    if (glbSnapTimer) { clearInterval(glbSnapTimer); glbSnapTimer = 0; }
+    ifr.src = glbEmbed; ifr.style.display = 'block';
+    if (glbUrl) {
+      camBad.delete(camKey(glbUrl));
+      camReport(glbUrl, true);
+    }
+    if (lbTrigger) {
+      const p = P.get(lbTrigger);
+      if (p) {
+        if (p.retry) { clearTimeout(p.retry); p.retry = null; }
+        p.dead = false; p.bad = false;
+        badge(lbTrigger, 'live', 'Live');
+        orderCams();
+        upd();
+      }
+    }
+    return true;
+  }
   if (glbSnapUrl && sim) {
     if (v) v.style.display = 'none';
-    if (ifr) ifr.style.display = 'none';
+    if (ifr) { ifr.removeAttribute('src'); ifr.style.display = 'none'; }
     sim.style.display = 'block';
     glbSetSnapSrc();
+    if (!glbSnapTimer && !isDirectSnapFeed(glbSnapUrl)) {
+      glbSnapTimer = setInterval(glbSetSnapSrc, 15000);
+    }
     if (glbUrl) {
       camBad.delete(camKey(glbUrl));
       camReport(glbUrl, true);
@@ -8206,33 +8230,18 @@ function glbFallbackEmbed(){
     }
     return true;
   }
-  if (!glbEmbed || !ifr) return false;
-  if (v) v.style.display = 'none';
-  ifr.src = glbEmbed; ifr.style.display = 'block';
-  if (glbUrl) {
-    camBad.delete(camKey(glbUrl));
-    camReport(glbUrl, true);
-  }
-  if (lbTrigger) {
-    const p = P.get(lbTrigger);
-    if (p) {
-      if (p.retry) { clearTimeout(p.retry); p.retry = null; }
-      p.dead = false; p.bad = false;
-      badge(lbTrigger, 'live', 'Embed Live');
-      orderCams();
-      upd();
-    }
-  }
-  return true;
+  return false;
 }
 function glbPlay(){
   const v = $('#glb-video'), ifr = $('#glb-frame'), sim = $('#glb-snap');
+  if (glbMp4Timer) { clearTimeout(glbMp4Timer); glbMp4Timer = 0; }
   if (glbHls) { try { glbHls.destroy(); } catch (e) {} glbHls = null; }
   try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
   if (ifr) { ifr.removeAttribute('src'); ifr.style.display = 'none'; }
   if (v) {
     v.style.display = 'block';
     v.onplaying = () => {
+      if (glbMp4Timer) { clearTimeout(glbMp4Timer); glbMp4Timer = 0; }
       if (sim) sim.style.display = 'none';
       if (glbSnapTimer) { clearInterval(glbSnapTimer); glbSnapTimer = 0; }
       if (glbUrl) {
@@ -8255,11 +8264,18 @@ function glbPlay(){
   if (!url || isDirectSnapFeed(url)) { glbFallbackEmbed(); return; }
   if (/\.mp4($|\?)/i.test(url)) {
     v.src = url;
-    v.onerror = () => {
-      v.onerror = null;
+    const failMp4 = () => {
+      if (glbMp4Timer) { clearTimeout(glbMp4Timer); glbMp4Timer = 0; }
+      v.onerror = v.onloadeddata = null;
+      try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
       if (++glbStep < glbSteps.length) glbPlay();
       else glbFallbackEmbed();
     };
+    v.onloadeddata = () => {
+      if (glbMp4Timer) { clearTimeout(glbMp4Timer); glbMp4Timer = 0; }
+    };
+    v.onerror = failMp4;
+    glbMp4Timer = setTimeout(failMp4, 8000);
     v.play().catch(() => {});
     return;
   }
@@ -8342,10 +8358,11 @@ function closeLightbox(){
   $('#lightbox').hidden = true; document.body.style.overflow = '';
   glbEmbed = ''; glbSnapUrl = ''; glbSnapProxy = false;
   if (glbSnapTimer) { clearInterval(glbSnapTimer); glbSnapTimer = 0; }
+  if (glbMp4Timer) { clearTimeout(glbMp4Timer); glbMp4Timer = 0; }
   const sim = $('#glb-snap'); if (sim) { sim.onerror = null; sim.removeAttribute('src'); sim.style.display = 'none'; }
   const ifr = $('#glb-frame'); if (ifr) { ifr.removeAttribute('src'); ifr.style.display = 'none'; }
   if (glbHls) { try { glbHls.destroy(); } catch (e) {} glbHls = null; }
-  const v = $('#glb-video'); if (v) { v.onplaying = null; v.onerror = null; v.style.display = 'block'; try { v.pause(); } catch (e) {} v.removeAttribute('src'); try { v.load(); } catch (e) {} }
+  const v = $('#glb-video'); if (v) { v.onplaying = null; v.onloadeddata = null; v.onerror = null; v.style.display = 'block'; try { v.pause(); } catch (e) {} v.removeAttribute('src'); try { v.load(); } catch (e) {} }
 
   camGrid.querySelectorAll('video').forEach(cv => {
     if (cv._lbPaused) {

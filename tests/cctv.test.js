@@ -563,6 +563,10 @@ test('cctv client pump re-entrancy lock and snapMode loop prevention', () => {
   assert.ok(!/if\s*\(c\s*&&\s*isDirectSnapFeed[^\}]*pump\(\);/.test(cctvSrc), 'startCell direct snap branch must never call pump() synchronously');
   assert.ok(cctvSrc.includes('(p.h || p.snapMode) && p.loaded && !p.stopped'), 'pump must account for p.snapMode playing state');
   assert.ok(cctvSrc.includes('if (!p.vis || ((p.h || p.snapMode) && !(p.stopped && !p.loaded))) continue;'), 'pump candidates filter must not repeatedly queue loaded snapMode feeds');
+  const snapFnMatch = cctvSrc.match(/const isDirectSnapFeed = [\s\S]*?\n\};/);
+  assert.ok(snapFnMatch && !snapFnMatch[0].includes('dpuprkotang'), 'isDirectSnapFeed must not blacklist dpuprkotang.info MP4 streams from video playback');
+  assert.ok(cctvSrc.includes('glbMp4Timer = setTimeout(failMp4, 8000)'), 'lightbox MP4 playback must arm timeout fallback');
+  assert.ok(cctvSrc.includes('if (glbEmbed && ifr && !isDirectSnapFeed(glbUrl))'), 'glbFallbackEmbed must prioritize live embed player over static snapshot');
 });
 
 test('gateway & safeFetch: retries transient ECONNRESET/TLS socket drops once before surfacing 502', async () => {
