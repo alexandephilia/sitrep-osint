@@ -989,6 +989,33 @@ test('Leaflet Peta Insiden & Globe render zoom-responsive, collision-culled, non
   assert.ok(cleared >= 2);
 });
 
+test('Leaflet progressive map context: World_Transportation + World_Boundaries_and_Places, refTiles pane, and GEO.queryMapLabels zoom hierarchy', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const GEO = require('../src/geocode');
+  const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+
+  assert.ok(html.includes('Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}'), 'Leaflet must overlay Esri World_Transportation for street networks and road names');
+  assert.ok(html.includes('Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'), 'Leaflet must overlay Esri World_Boundaries_and_Places for city/place labels');
+  assert.ok(html.includes("map.createPane('refTiles')") && html.includes('.leaflet-refTiles-pane{'), 'reference tiles must sit in a dedicated pane immune to base tile brightness dimming');
+  assert.ok(html.includes('function scheduleGeoContextLabels()') && html.includes("'/api/geo/labels?bbox='"), 'Leaflet must query /api/geo/labels dynamically on zoom/pan');
+
+  const provs = GEO.queryMapLabels({ s: -11, w: 95, n: 6, e: 141, z: 5, limit: 60 });
+  assert.ok(provs.length >= 25 && provs.every(it => it.kind === 'prov'), 'z<=6 must surface Indonesian province labels');
+
+  const kabs = GEO.queryMapLabels({ s: -7.5, w: 105.5, n: -5.8, e: 108.5, z: 8, limit: 80 });
+  assert.ok(kabs.some(it => it.kind === 'kota' || it.kind === 'kab'), 'z=7..8 must surface kabupaten/kota labels');
+
+  const kecs = GEO.queryMapLabels({ s: -6.30, w: 106.75, n: -6.10, e: 106.92, z: 11, limit: 120 });
+  assert.ok(kecs.some(it => it.kind === 'kec') && kecs.some(it => it.kind === 'poi'), 'z=9..12 must surface kecamatan and POI labels');
+
+  const jkt = GEO.queryMapLabels({ s: -6.22, w: 106.79, n: -6.15, e: 106.86, z: 15, limit: 160 });
+  assert.ok(jkt.some(it => it.name === 'Monas' && it.kind === 'poi'), 'z>=13 Central Jakarta query must include Monas POI');
+  assert.ok(jkt.some(it => it.kind === 'kec' && /^Kec\.\s+/.test(it.name)), 'z>=13 query must include Kec. administrative labels');
+  assert.ok(jkt.some(it => it.kind === 'kelurahan' && /^Kel\.\s+/.test(it.name)), 'z>=13 Central Jakarta query must include Kel. labels');
+  assert.deepEqual(GEO.queryMapLabels({ s: 10, w: 100, n: -5, e: 110, z: 12 }), [], 'invalid inverted bbox must return empty array');
+});
+
 test('Social sources (Instagram Reels, TikTok, Facebook, Threads, X) are blocked from Newswire without false-positiving news about Instagram', async () => {
   const fs = require('fs');
   const path = require('path');

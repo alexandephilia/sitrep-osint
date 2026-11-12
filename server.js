@@ -1334,6 +1334,20 @@ const SITREP_SERVER = http.createServer(async (req, res) => {
       if (sendCached('nodes', 86400e3, 200, 'public, max-age=86400')) return;
       return json({ ok: true, items: buildIncidentNodes(Date.now()), places: GEO.NODES.length }, 200, 'nodes', 86400e3, 'public, max-age=86400');
     }
+    if (u.pathname === '/api/geo/labels') {
+      const rawParts = String(u.searchParams.get('bbox') || '').split(',').map(s => s.trim());
+      const rawBbox = rawParts.map(Number);
+      const z = Math.max(4, Math.min(18, Math.round(Number(u.searchParams.get('z')) || 5)));
+      if (rawParts.length !== 4 || !rawParts.every(Boolean) || !rawBbox.every(Number.isFinite)) {
+        return json({ ok: false, err: 'bbox invalid' }, 400);
+      }
+      const [s, w, n, e] = rawBbox;
+      if (s > n || w > e || s < -90 || n > 90 || w < -180 || e > 180) {
+        return json({ ok: false, err: 'bbox out of range' }, 400);
+      }
+      const items = GEO.queryMapLabels({ s, w, n, e, z, limit: Number(u.searchParams.get('limit')) || 160 });
+      return json({ ok: true, z, items }, 200, '', 0, pubCC(300, 900, 60));
+    }
     if (u.pathname === '/api/incidents') {
       const incCC = pubCC(15, 45, 5);
       if (u.searchParams.get('fresh')) {

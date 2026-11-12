@@ -47,6 +47,8 @@
 .leaflet-overlay-pane canvas.leaflet-layer,
 .leaflet-overlay-pane canvas.velocity-overlay{pointer-events:none}
 #map .leaflet-tile-pane{filter:grayscale(.25) contrast(1.04) brightness(.78)}
+#map .leaflet-refTiles-pane{filter:contrast(1.16) brightness(1.12) drop-shadow(0 1px 2px rgba(0,0,0,.88));pointer-events:none}
+#map .leaflet-provBounds-pane{pointer-events:none}
 #map .leaflet-heatmap-layer{opacity:.92!important;filter:saturate(1.35) brightness(1.08)}
 #map .leaflet-bar a{
   background:#1f1f1f!important;color:#f4f4f4!important;border-color:#333!important;border-radius:0!important;
@@ -253,6 +255,17 @@ button.mp-src{background:none;border-top:0;border-left:0;border-right:0;cursor:p
   font:600 8px/1 var(--mono);color:#d4d4d4;white-space:nowrap;
   pointer-events:none;user-select:none;
 }
+.geo-lbl{
+  display:inline-flex;align-items:center;gap:3px;height:13px;padding:0 4px;box-sizing:border-box;
+  background:rgba(8,10,14,.68);border:1px solid rgba(255,255,255,.08);border-radius:1px;
+  font:500 8px/1 var(--mono);color:#c6d0dc;white-space:nowrap;
+  text-shadow:0 1px 2px rgba(0,0,0,.95);pointer-events:none;user-select:none;
+}
+.geo-lbl-prov{font-weight:700;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:#e2e8f0;background:rgba(12,16,24,.78);border-color:rgba(148,184,218,.22)}
+.geo-lbl-kota,.geo-lbl-kab{font-weight:600;color:#dce4ee;background:rgba(10,13,20,.74)}
+.geo-lbl-kec{color:#8ad8ff;background:rgba(6,14,22,.72);border-color:rgba(0,229,255,.16)}
+.geo-lbl-kelurahan,.geo-lbl-desa{font-size:7.5px;color:#b8c4d0;background:rgba(8,10,14,.62);border-color:rgba(255,255,255,.05)}
+.geo-lbl-poi,.geo-lbl-gunung{font-weight:600;color:#ffd166;background:rgba(20,16,8,.76);border-color:rgba(255,209,102,.24)}
 
 .mk-gempa,.mk-gunung{position:relative;width:100%;height:100%;overflow:visible;transform:scale(var(--gs,1));transform-origin:50% 50%}
 .mk-rip{

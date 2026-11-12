@@ -16,6 +16,7 @@ const ttIcon = (inc, sz = 20) => L.divIcon({ className: 'mk-tt-ic', iconSize: [s
 const ttPtSize = () => { const s = Math.pow(1.3, (map ? map.getZoom() : 10) - 10); return Math.max(22, Math.min(48, Math.round(26 * s))); };
 const ttLnSize = () => { const s = Math.pow(1.3, (map ? map.getZoom() : 10) - 10); return Math.max(17, Math.min(36, Math.round(20 * s))); };
 let map = null, heat = null, pinLayer = null, regLabelLayer = null, camLayer = null, mapReady = false, mapOpen = false, mapBusy = false, mapData = [], esriRefLayer = null, esriDarkBaseLayer = null, esriSatBaseLayer = null;
+let esriTransRefLayer = null, esriPlacesRefLayer = null, geoCtxLayer = null, provBoundLayer = null, lastRegPlacedBoxes = [];
 let ttFlowLayer = null, ttIncTileLayer = null, ttIncDataLayer = null, routeLayer = null, measureLayer = null;
 let flightLayer = null, shipLayer = null, transitLayer = null;
 let gempaLayer = null, gunungLayer = null, tmaLayer = null, wxLayer = null, radarLayer = null, radarBmkgLayer = null, peringatanLayer = null, warnRenderer = null;
@@ -163,10 +164,8 @@ function syncLayers(){
   const cred = document.querySelector('.map-f .cred');
   if (cred) cred.textContent = '© Esri · TomTom · BMKG · PVMBG' + (layerOn.sentinel2 && s2Ok ? ' · Contains modified Copernicus Sentinel data' : '');
 
-  if (esriRefLayer) {
-    if (layerOn.ttflow && map.hasLayer(esriRefLayer)) map.removeLayer(esriRefLayer);
-    if (!layerOn.ttflow && !map.hasLayer(esriRefLayer)) map.addLayer(esriRefLayer);
-  }
+  if (esriRefLayer && !map.hasLayer(esriRefLayer)) map.addLayer(esriRefLayer);
+  if (esriTransRefLayer) esriTransRefLayer.setOpacity(layerOn.ttflow ? .52 : .88);
   if (regLabelLayer) {
     const showReg = !!(layerOn.pins || layerOn.heat);
     if (showReg && !map.hasLayer(regLabelLayer)) {
@@ -174,6 +173,8 @@ function syncLayers(){
       paintMapRegLabels();
     } else if (!showReg && map.hasLayer(regLabelLayer)) {
       map.removeLayer(regLabelLayer);
+      lastRegPlacedBoxes = [];
+      scheduleGeoContextLabels();
     }
   }
 }
@@ -579,9 +580,70 @@ function regTextWidth(txt){
   }
   return _regMeasureCtx ? _regMeasureCtx.measureText(txt).width : txt.length * 5.2;
 }
+let geoCtxTimer = 0, geoCtxSeq = 0;
+const geoCtxCache = new Map();
+function scheduleGeoContextLabels(){
+  clearTimeout(geoCtxTimer);
+  geoCtxTimer = setTimeout(paintGeoContextLabels, 120);
+}
+async function paintGeoContextLabels(){
+  if (!mapReady || !map || !geoCtxLayer || !mapOpen || API == null) return;
+  const sz = map.getSize();
+  if (!sz || sz.x < 40 || sz.y < 40) return;
+  const z = Math.round(map.getZoom());
+  const b = map.getBounds();
+  const padLat = Math.max(0.01, (b.getNorth() - b.getSouth()) * 0.08);
+  const padLon = Math.max(0.01, (b.getEast() - b.getWest()) * 0.08);
+  const s = b.getSouth() - padLat, w = b.getWest() - padLon;
+  const n = b.getNorth() + padLat, e = b.getEast() + padLon;
+  const cKey = z + ':' + s.toFixed(2) + ',' + w.toFixed(2) + ',' + n.toFixed(2) + ',' + e.toFixed(2);
+  const seq = ++geoCtxSeq;
+  let items = geoCtxCache.get(cKey);
+  if (!items) {
+    try {
+      const res = await getJson(API + '/api/geo/labels?bbox=' + [s, w, n, e].map(v => v.toFixed(4)).join(',') + '&z=' + z + '&limit=160', 8000);
+      if (seq !== geoCtxSeq || !mapOpen || !geoCtxLayer) return;
+      items = (res && res.ok && Array.isArray(res.items)) ? res.items : [];
+      if (geoCtxCache.size >= 60) geoCtxCache.delete(geoCtxCache.keys().next().value);
+      geoCtxCache.set(cKey, items);
+    } catch (err) {
+      return;
+    }
+  }
+  if (seq !== geoCtxSeq || !mapOpen || !geoCtxLayer) return;
+  const nowZoom = Math.round(map.getZoom());
+  const maxCtx = nowZoom <= 5 ? 18 : nowZoom <= 7 ? 36 : nowZoom <= 9 ? 55 : nowZoom <= 12 ? 80 : 110;
+  const occupied = (lastRegPlacedBoxes || []).map(p => ({ x: p.x, y: p.y, w: p.w, h: p.h }));
+  geoCtxLayer.clearLayers();
+  let placedCtx = 0;
+  for (const it of items) {
+    if (placedCtx >= maxCtx) break;
+    const pt = map.latLngToContainerPoint([it.la, it.lo]);
+    if (!isFinite(pt.x) || !isFinite(pt.y)) continue;
+    const bw = Math.ceil(regTextWidth(it.name)) + 10, bh = 13;
+    const bx = Math.round(pt.x - bw / 2), by = Math.round(pt.y - bh / 2);
+    if (bx < 4 || bx + bw > sz.x - 4 || by < 4 || by + bh > sz.y - 4) continue;
+    const clash = occupied.some(p => p.x < bx + bw + 3 && p.x + p.w + 3 > bx && p.y < by + bh + 3 && p.y + p.h + 3 > by);
+    if (clash) continue;
+    occupied.push({ x: bx, y: by, w: bw, h: bh });
+    placedCtx++;
+    const ic = L.divIcon({
+      className: 'reg-lbl-ic',
+      iconSize: [bw, bh],
+      iconAnchor: [Math.round(bw / 2), 6],
+      html: `<div class="geo-lbl geo-lbl-${esc(it.kind)}">${esc(it.name)}</div>`
+    });
+    geoCtxLayer.addLayer(L.marker([it.la, it.lo], { pane: 'regLabels', interactive: false, keyboard: false, icon: ic }));
+  }
+}
 function paintMapRegLabels(){
   if (!mapReady || !map || !regLabelLayer) return;
-  if (!mapOpen || !(layerOn.pins || layerOn.heat)) { regLabelLayer.clearLayers(); return; }
+  if (!mapOpen || !(layerOn.pins || layerOn.heat)) {
+    regLabelLayer.clearLayers();
+    if (typeof lastRegPlacedBoxes !== 'undefined') lastRegPlacedBoxes = [];
+    if (typeof scheduleGeoContextLabels === 'function') scheduleGeoContextLabels();
+    return;
+  }
   const sz = map.getSize();
   if (!sz || sz.x < 40 || sz.y < 40) return;
   const groups = new Map();
@@ -598,7 +660,7 @@ function paintMapRegLabels(){
     .map(g => ({ name: g.name, la: g.la / g.c, lo: g.lo / g.c, c: g.c }))
     .sort((a, b) => b.c - a.c || (a.name < b.name ? -1 : 1));
   const z = map.getZoom();
-  const maxLab = z <= 4 ? 6 : z <= 5 ? 14 : z <= 6 ? 28 : z <= 7 ? 45 : z <= 8 ? 65 : z <= 9 ? 80 : Math.max(10, Math.round(80 / (1 << Math.min(4, z - 9))));
+  const maxLab = z <= 4 ? 6 : z <= 5 ? 14 : z <= 6 ? 28 : z <= 7 ? 45 : z <= 8 ? 65 : 80;
   const placed = [];
   regLabelLayer.clearLayers();
   for (const lab of labels) {
@@ -622,6 +684,8 @@ function paintMapRegLabels(){
     });
     regLabelLayer.addLayer(L.marker([lab.la, lab.lo], { pane: 'regLabels', interactive: false, keyboard: false, icon: ic }));
   }
+  if (typeof lastRegPlacedBoxes !== 'undefined') lastRegPlacedBoxes = placed;
+  if (typeof scheduleGeoContextLabels === 'function') scheduleGeoContextLabels();
 }
 function ttFlowPopup(lat, lon){
   if (API == null) return '<div class="mp-m">TomTom butuh API server.</div>';
@@ -804,10 +868,20 @@ function ensureMap(){
   esriSatBaseLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxNativeZoom: 17, maxZoom: 18, zIndex: 10, className: 'sat-base-pane'
   });
+  const provPane = map.createPane('provBounds');
+  provPane.style.zIndex = 360;
+  provPane.style.pointerEvents = 'none';
+  const refPane = map.createPane('refTiles');
+  refPane.style.zIndex = 380;
+  refPane.style.pointerEvents = 'none';
   (layerOn['basemap-sat'] ? esriSatBaseLayer : esriDarkBaseLayer).addTo(map);
-  esriRefLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
-    maxNativeZoom: 16, maxZoom: 18, opacity: .9, zIndex: 180
-  }).addTo(map);
+  esriTransRefLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', {
+    pane: 'refTiles', minZoom: 7, maxNativeZoom: 18, maxZoom: 18, opacity: .88, zIndex: 180
+  });
+  esriPlacesRefLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+    pane: 'refTiles', maxNativeZoom: 18, maxZoom: 18, opacity: .94, zIndex: 185
+  });
+  esriRefLayer = L.layerGroup([esriTransRefLayer, esriPlacesRefLayer]).addTo(map);
   sentinel2Layer = L.tileLayer(s2TileUrl(), {
     tileSize: 256, minZoom: 6, maxZoom: 18, minNativeZoom: 6, maxNativeZoom: 12,
     zIndex: 150, opacity: .95, bounds: L.latLngBounds([-11.5, 94.5], [6.5, 141.5])
@@ -824,6 +898,18 @@ function ensureMap(){
   regPane.style.pointerEvents = 'none';
   pinLayer = L.layerGroup();
   regLabelLayer = L.layerGroup();
+  geoCtxLayer = L.layerGroup().addTo(map);
+  (typeof globeProv !== 'undefined' && globeProv
+    ? Promise.resolve(globeProv)
+    : fetch('/idn-prov.geo.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
+  ).then(gj => {
+    if (!gj || !map || provBoundLayer) return;
+    provBoundLayer = L.geoJSON(gj, {
+      pane: 'provBounds',
+      interactive: false,
+      style: { color: 'rgba(138, 216, 255, 0.22)', weight: 1, fill: false, interactive: false }
+    }).addTo(map);
+  });
   camLayer = L.layerGroup();
   tmaLayer = L.layerGroup();
   ttIncDataLayer = L.layerGroup();

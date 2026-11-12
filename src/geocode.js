@@ -347,6 +347,7 @@ for (const [code, entry] of Object.entries(FIX.kec || {})) {
 const bigProvNameByCode = new Map(BIG.provinces.map(([code, name]) => [code, name]));
 const villageIdx = new Map();
 const kecVillagePts = new Map();
+const VILLAGE_GRID = new Map();
 let villageMaxWords = 1, ambiguousVillageNames = 0;
 for (const [code, rawName, sourceType, la, lo, status] of BIG.places) {
   const vFix = FIX.village && FIX.village[code];
@@ -364,6 +365,10 @@ for (const [code, rawName, sourceType, la, lo, status] of BIG.places) {
     prec: type, coordinateSource: vFix ? 'BIG village coord fix' : 'BIG administrative polygon centroid', boundaryStatus: status };
   if (!kecVillagePts.has(kecCode)) kecVillagePts.set(kecCode, []);
   kecVillagePts.get(kecCode).push([vLa, vLo]);
+  const gk = Math.floor(vLa * 2) + ',' + Math.floor(vLo * 2);
+  let bucket = VILLAGE_GRID.get(gk);
+  if (!bucket) { bucket = []; VILLAGE_GRID.set(gk, bucket); }
+  bucket.push({ id: 'vil:' + code, name: (type === 'kelurahan' ? 'Kel. ' : 'Desa ') + rawName, la: Number(vLa.toFixed(5)), lo: Number(vLo.toFixed(5)), kind: type, prio: type === 'kelurahan' ? 2.2 : 2 });
   const key = norm(rawName);
   if (!key) throw new Error('BIG village has empty normalized name: ' + code);
   villageMaxWords = Math.max(villageMaxWords, key.split(' ').length);
@@ -383,6 +388,53 @@ for (const [kCode, pts] of kecVillagePts) {
   bigKecCoords.set(kCode, best);
 }
 for (const [kCode, entry] of Object.entries(FIX.kec || {})) bigKecCoords.set(kCode, [entry[0], entry[1]]);
+
+const MAP_PROV = G.prov.map(p => ({
+  id: 'prov:' + p.code,
+  name: p.name.replace('Daerah Khusus Ibukota ', '').replace('Daerah Istimewa ', 'DI '),
+  la: p.la,
+  lo: p.lo,
+  kind: 'prov',
+  prio: 5
+}));
+const MAP_KAB = G.kab.map(k => ({
+  id: 'kab:' + k.code,
+  name: (k.kota ? 'Kota ' : 'Kab. ') + (LABEL_FIX[k.name] || k.name).replace(/^(?:Kab\.\s+|Kabupaten\s+|Kota\s+)/i, ''),
+  la: k.la,
+  lo: k.lo,
+  kind: k.kota ? 'kota' : 'kab',
+  prio: k.kota ? 4.2 : 4
+}));
+const MAP_KEC = [];
+for (const [code, row] of bigKecByCode) {
+  const pt = bigKecCoords.get(code);
+  if (!pt) continue;
+  MAP_KEC.push({
+    id: 'kec:' + code,
+    name: 'Kec. ' + row.name,
+    la: Number(pt[0].toFixed(5)),
+    lo: Number(pt[1].toFixed(5)),
+    kind: 'kec',
+    prio: 3
+  });
+}
+const MAP_POI = [];
+{
+  const seenPoi = new Set();
+  for (const item of POI) {
+    const e = item && item.e;
+    if (!e || !e.id || seenPoi.has(e.id) || typeof e.la !== 'number' || typeof e.lo !== 'number') continue;
+    seenPoi.add(e.id);
+    MAP_POI.push({
+      id: 'poi:' + e.id,
+      name: e.name,
+      la: e.la,
+      lo: e.lo,
+      kind: e.id[0] === 'V' ? 'gunung' : 'poi',
+      prio: 3.5
+    });
+  }
+}
 
 const villageLabels = new Set();
 for (const [key, rows] of villageIdx) {
@@ -600,8 +652,41 @@ function locate(title) {
     ...(e.code ? { code: e.code, coordinateSource: e.coordinateSource, boundaryStatus: e.boundaryStatus } : {}) };
 }
 
+function queryMapLabels(opts = {}) {
+  const s = Number(opts.s), w = Number(opts.w), n = Number(opts.n), e = Number(opts.e);
+  const z = Math.max(4, Math.min(18, Math.round(Number(opts.z) || 5)));
+  const limit = Math.max(10, Math.min(240, Number(opts.limit) || 140));
+  if (![s, w, n, e].every(Number.isFinite) || s > n || w > e || s < -90 || n > 90 || w < -180 || e > 180) return [];
+  const cLa = (s + n) / 2, cLo = (w + e) / 2;
+  const inBox = it => it.la >= s && it.la <= n && it.lo >= w && it.lo <= e;
+  const dist2 = it => (it.la - cLa) ** 2 + (it.lo - cLo) ** 2;
+  let cands;
+  if (z <= 6) {
+    cands = MAP_PROV.filter(inBox);
+  } else if (z <= 8) {
+    cands = [...MAP_PROV.filter(inBox), ...MAP_KAB.filter(inBox)];
+  } else if (z <= 12) {
+    cands = [...MAP_KAB.filter(inBox), ...MAP_POI.filter(inBox), ...MAP_KEC.filter(inBox)];
+  } else {
+    cands = [...MAP_POI.filter(inBox), ...MAP_KEC.filter(inBox)];
+    const y0 = Math.floor(s * 2), y1 = Math.floor(n * 2);
+    const x0 = Math.floor(w * 2), x1 = Math.floor(e * 2);
+    if ((y1 - y0 + 1) * (x1 - x0 + 1) <= 64) {
+      for (let gy = y0; gy <= y1; gy++) {
+        for (let gx = x0; gx <= x1; gx++) {
+          const bucket = VILLAGE_GRID.get(gy + ',' + gx);
+          if (!bucket) continue;
+          for (const v of bucket) if (inBox(v)) cands.push(v);
+        }
+      }
+    }
+  }
+  cands.sort((a, b) => (b.prio - a.prio) || (dist2(a) - dist2(b)));
+  return cands.slice(0, limit).map(({ id, name, la, lo, kind }) => ({ id, name, la, lo, kind }));
+}
+
 const NODES = G.kab.map(k => kabByCode[k.code]).map(e => ({ name: e.name, la: e.la, lo: e.lo, prov: e.prov }));
 
-module.exports = { locate, NODES, norm, stats: () => ({ keys: idx.size, kab: G.kab.length, prov: G.prov.length, kec: kecIdx.size, poi: POI.length,
+module.exports = { locate, NODES, norm, queryMapLabels, stats: () => ({ keys: idx.size, kab: G.kab.length, prov: G.prov.length, kec: kecIdx.size, poi: POI.length,
   villages: BIG_COUNTS.places, desa: BIG_COUNTS.Desa, kelurahan: BIG_COUNTS.Kelurahan,
   villageNames: villageIdx.size, ambiguousVillageNames }) };
