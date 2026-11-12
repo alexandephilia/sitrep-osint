@@ -376,8 +376,22 @@ function createGateway(d) {
       if (fl.aborted) return { status: 499, noCache: true };
       m.upstream++;
       let g;
-      try { g = await getRaw(url, O.upstreamMs, headersFor(url), hostAllowed, fl.ac.signal); }
-      catch (e) { if (!fl.aborted) m.errors++; return { status: fl.aborted ? 499 : 502, noCache: true }; }
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          g = await getRaw(url, O.upstreamMs, headersFor(url), hostAllowed, fl.ac.signal);
+          break;
+        } catch (e) {
+          const code = e && (e.code || '');
+          const transient = !fl.aborted && !(fl.ac && fl.ac.signal && fl.ac.signal.aborted)
+            && (code === 'ECONNRESET' || code === 'EPIPE' || code === 'ECONNABORTED' || /socket hang up|before secure TLS connection was established/i.test(String((e && e.message) || '')));
+          if (attempt === 0 && transient) {
+            await new Promise(r => setTimeout(r, 100));
+            if (!fl.aborted) continue;
+          }
+          if (!fl.aborted) m.errors++;
+          return { status: fl.aborted ? 499 : 502, noCache: true };
+        }
+      }
       const r = g.r, furl = g.url, ct = r.headers.get('content-type') || '';
       if (!r.ok) { try { r.body && r.body.cancel && await r.body.cancel(); } catch (e) {} return { status: r.status, noCache: true }; }
       const isPl = /mpegurl/i.test(ct) || /\.m3u8(\?|#|$)/i.test(furl);

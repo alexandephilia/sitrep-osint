@@ -564,3 +564,30 @@ test('cctv client pump re-entrancy lock and snapMode loop prevention', () => {
   assert.ok(cctvSrc.includes('(p.h || p.snapMode) && p.loaded && !p.stopped'), 'pump must account for p.snapMode playing state');
   assert.ok(cctvSrc.includes('if (!p.vis || ((p.h || p.snapMode) && !(p.stopped && !p.loaded))) continue;'), 'pump candidates filter must not repeatedly queue loaded snapMode feeds');
 });
+
+test('gateway & safeFetch: retries transient ECONNRESET/TLS socket drops once before surfacing 502', async () => {
+  let gwTries = 0;
+  await withGateway({
+    getRaw: async u => {
+      gwTries++;
+      if (gwTries === 1) {
+        const err = new Error('Client network socket disconnected before secure TLS connection was established');
+        err.code = 'ECONNRESET';
+        throw err;
+      }
+      return {
+        r: {
+          ok: true,
+          status: 200,
+          headers: { get: k => /content-type/i.test(k) ? 'application/vnd.apple.mpegurl' : null },
+          body: new ReadableStream({ start(c) { c.enqueue(Buffer.from('#EXTM3U\n#EXTINF:4,\nseg1.ts\n')); c.close(); } })
+        },
+        url: u
+      };
+    }
+  }, async ({ hit }) => {
+    const res = await hit('https://cam.example/tracks-v1/mono.ts.m3u8');
+    assert.equal(res.status, 200);
+    assert.equal(gwTries, 2);
+  });
+});

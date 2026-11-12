@@ -760,6 +760,12 @@ function createHttpClient(clientOpts = {}) {
     });
   }
 
+  const isTransientNetErr = err => {
+    const code = err && (err.code || '');
+    return code === 'ECONNRESET' || code === 'EPIPE' || code === 'ECONNABORTED'
+      || /socket hang up|before secure TLS connection was established/i.test(String((err && err.message) || ''));
+  };
+
   async function safeFetch(rawUrl, opt = {}, ms = 10000) {
     const redirectMode = opt.redirect || 'follow';
     const maxHops = Number.isInteger(opt.maxRedirects) ? opt.maxRedirects : 6;
@@ -789,26 +795,41 @@ function createHttpClient(clientOpts = {}) {
         delete headers['proxy-authorization'];
       }
 
-      let res;
-      try {
-        res = await singlePinnedRequest(resolved, method, headers, bodyData, null, trustedRoots, opt.signal, deadlineAt, maxBytes);
-      } catch (err) {
-        const msg = String((err && (err.code || err.message)) || '');
-        const hasSecHdr = Boolean(headers.authorization || headers.cookie);
-        if (resolved.url.protocol === 'https:' && allowAia && !hasSecHdr && INCOMPLETE_CHAIN_ERR.test(msg)) {
-          const port = resolved.url.port ? Number(resolved.url.port) : 443;
-          const repairedPems = await repairCertChain(resolved, port, resolved.host, {
-            trustedRoots,
-            resolveFn: opt.resolveFn,
-            ms: Math.max(1000, deadlineAt - Date.now())
-          }).catch(() => null);
-          if (repairedPems && repairedPems.length) {
-            res = await singlePinnedRequest(resolved, method, headers, bodyData, repairedPems, trustedRoots, opt.signal, deadlineAt, maxBytes);
-          } else {
-            throw err;
+      const execReq = async () => {
+        try {
+          return await singlePinnedRequest(resolved, method, headers, bodyData, null, trustedRoots, opt.signal, deadlineAt, maxBytes);
+        } catch (err) {
+          const msg = String((err && (err.code || err.message)) || '');
+          const hasSecHdr = Boolean(headers.authorization || headers.cookie);
+          if (resolved.url.protocol === 'https:' && allowAia && !hasSecHdr && INCOMPLETE_CHAIN_ERR.test(msg)) {
+            const port = resolved.url.port ? Number(resolved.url.port) : 443;
+            const repairedPems = await repairCertChain(resolved, port, resolved.host, {
+              trustedRoots,
+              resolveFn: opt.resolveFn,
+              ms: Math.max(1000, deadlineAt - Date.now())
+            }).catch(() => null);
+            if (repairedPems && repairedPems.length) {
+              return await singlePinnedRequest(resolved, method, headers, bodyData, repairedPems, trustedRoots, opt.signal, deadlineAt, maxBytes);
+            }
           }
-        } else {
           throw err;
+        }
+      };
+
+      let res;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          res = await execReq();
+          break;
+        } catch (err) {
+          const canRetry = attempt === 0
+            && (method === 'GET' || method === 'HEAD')
+            && !(opt.signal && opt.signal.aborted)
+            && (deadlineAt - Date.now() > 1500)
+            && isTransientNetErr(err);
+          if (!canRetry) throw err;
+          await new Promise(r => setTimeout(r, 75));
+          if (opt.signal && opt.signal.aborted) throw err;
         }
       }
 
