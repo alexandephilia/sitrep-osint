@@ -609,15 +609,17 @@ test('adaptive grid priority: camTier, camOrderValue, health-aware pickLiveKeys,
   assert.equal(C.camTier({ snapMode: true, snapOk: true, playing: false }, now), 1);
   assert.equal(C.camTier({ loaded: false, dead: false }, now), 2);
   assert.equal(C.camTier({ playing: false, loaded: true, waitT: now - 4000 }, now), 3);
+  assert.equal(C.camTier({ playing: false, loaded: true, stopped: true, waitT: now - 4000 }, now), 0);
   assert.equal(C.camTier({ loaded: true, rest: 2 }, now), 3);
   assert.equal(C.camTier({ dead: true, snapMode: false }, now), 4);
 
-  const ordLive = C.camOrderValue({ playing: true, loaded: true, idx: 9 }, 9, now);
-  const ordSnap = C.camOrderValue({ snapMode: true, snapOk: true, idx: 3 }, 3, now);
-  const ordQueue = C.camOrderValue({ idx: 2 }, 2, now);
+  const ordLiveHighIdx = C.camOrderValue({ playing: true, loaded: true, idx: 63 }, 63, now);
+  const ordSnapMidIdx = C.camOrderValue({ snapMode: true, snapOk: true, idx: 12 }, 12, now);
+  const ordQueueTopIdx = C.camOrderValue({ idx: 2 }, 2, now);
   const ordBuf = C.camOrderValue({ loaded: true, rest: 2, idx: 0 }, 0, now);
   const ordOff = C.camOrderValue({ dead: true, idx: 1 }, 1, now);
-  assert.ok(ordLive < ordSnap && ordSnap < ordQueue && ordQueue < ordBuf && ordBuf < ordOff);
+  assert.ok(ordQueueTopIdx < ordSnapMidIdx && ordSnapMidIdx < ordLiveHighIdx, 'healthy streams (queue/snap/live) must preserve catalog idx order across tab switches');
+  assert.ok(ordLiveHighIdx < ordBuf && ordBuf < ordOff, 'buffering and offline streams must still demote behind healthy cameras');
 
   const vr = { top: 0, bot: 600, atBottom: false };
   const cands = [

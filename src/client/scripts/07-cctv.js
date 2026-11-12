@@ -123,7 +123,7 @@ function releaseCell(cell){
   cell.classList.remove('is-playing');
   if (p.h && p.h !== 'native') { try { p.h.destroy(); } catch (e) {} }
   const v = vid(cell); if (v) { cleanVid(v); v.remove(); }
-  p.h = null; p.loading = p.loaded = p.playing = p.stopped = false; p.visAt = 0;
+  p.h = null; p.loading = p.loaded = p.playing = p.stopped = false; p.visAt = 0; p.waitT = 0;
   badge(cell, (p.snapMode && p.snapOk) ? 'live' : 'wait', (p.snapMode && p.snapOk) ? 'Live' : 'Antre'); upd();
 }
 function cols(){ return Math.max(1, Math.min(4, Math.round(camGrid.clientWidth / 165))); }
@@ -341,9 +341,10 @@ function startCell(cell){
 }
 function stopCell(cell){
   const p = P.get(cell); if (!p || (!p.h && !p.snapMode) || p.stopped) return;
+  if (p.waitTimer) { clearTimeout(p.waitTimer); p.waitTimer = null; }
   if (p.h && p.h !== 'native') { try { p.h.stopLoad(); } catch (e) {} }
   if (p.h) { try { vid(cell).pause(); } catch (e) {} }
-  p.stopped = true; p.playing = false; p.loading = false; badge(cell, (p.snapMode && p.snapOk) ? 'live' : 'wait', (p.snapMode && p.snapOk) ? 'Live' : 'Jeda'); upd();
+  p.stopped = true; p.playing = false; p.loading = false; p.waitT = 0; badge(cell, (p.snapMode && p.snapOk) ? 'live' : 'wait', (p.snapMode && p.snapOk) ? 'Live' : 'Jeda'); upd();
 }
 
 const camOfCell = cell => { const p = P.get(cell); if (!p) return null;
@@ -497,8 +498,8 @@ function kill(cell){
 }
 function hideCell(cell){
   const p = P.get(cell); if (!p) return;
-  clearTimeout(p.retry); clearTimeout(p.t); clearTimeout(p.rel); clearSnapTimer(p);
-  p.t = 0; p.rel = 0;
+  clearTimeout(p.retry); clearTimeout(p.t); clearTimeout(p.rel); if (p.waitTimer) { clearTimeout(p.waitTimer); p.waitTimer = null; } clearSnapTimer(p);
+  p.t = 0; p.rel = 0; p.waitT = 0;
   if (p.h && p.h !== 'native') { try { p.h.destroy(); } catch (e) {} }
   const v = vid(cell); if (v) cleanVid(v);
   try { vio && vio.unobserve(cell); } catch (e) {}
@@ -542,9 +543,10 @@ function isCellVisible(cell, vr){
 }
 function dropLoadingCell(cell){
   const p = P.get(cell); if (!p || !p.loading || p.loaded) return;
+  if (p.waitTimer) { clearTimeout(p.waitTimer); p.waitTimer = null; }
   if (p.h && p.h !== 'native') { try { p.h.destroy(); } catch (e) {} }
   const v = vid(cell); if (v) cleanVid(v);
-  p.h = null; p.loading = false; p.visAt = 0;
+  p.h = null; p.loading = false; p.visAt = 0; p.waitT = 0;
   badge(cell, (p.snapMode && p.snapOk) ? 'live' : 'wait', (p.snapMode && p.snapOk) ? 'Live' : 'Antre'); upd();
 }
 let inPump = false;
@@ -900,7 +902,8 @@ function renderCams(){
   const keepUrls = new Set(nextList.map(c => c.s));
   for (const [url, { el, p }] of byUrl) {
     if (keepUrls.has(url)) continue;
-    clearTimeout(p.t); clearTimeout(p.retry); clearTimeout(p.rel); clearSnapTimer(p);
+    clearTimeout(p.t); clearTimeout(p.retry); clearTimeout(p.rel); if (p.waitTimer) { clearTimeout(p.waitTimer); p.waitTimer = null; } clearSnapTimer(p);
+    p.waitT = 0;
     if (p.h && p.h !== 'native') { try { p.h.destroy(); } catch (e) {} }
     const v = vid(el); if (v) cleanVid(v);
     try { vio.unobserve(el); } catch (e) {}

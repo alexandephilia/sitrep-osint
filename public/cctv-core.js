@@ -102,7 +102,7 @@
     const ts = now || Date.now();
     const snapLive = !!(p.snapMode && p.snapOk);
     if (p.dead && !snapLive) return 4;
-    const stalled = !!(p.waitT && ts - p.waitT > 3500);
+    const stalled = !!(p.waitT && !p.stopped && ts - p.waitT > 3500);
     if (p.bad || stalled || (p.rest || 0) >= 2 || (p.stl || 0) >= 4) return snapLive ? 1 : 3;
     if (p.playing || (p.loaded && !p.snapMode)) return 0;
     if (snapLive) return 1;
@@ -111,7 +111,9 @@
 
   function camOrderValue(p, baseIdx, now) {
     const idx = p && typeof p.idx === 'number' ? p.idx : (baseIdx | 0);
-    return camTier(p, now) * 100000 + idx;
+    const tier = camTier(p, now);
+    const orderGroup = tier >= 4 ? 2 : (tier === 3 ? 1 : 0);
+    return orderGroup * 100000 + idx;
   }
 
   function quantile(arr, q) {
