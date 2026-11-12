@@ -431,6 +431,9 @@ const METAPHOR_FRAMES = [
   { id: 'metaphor_diamankan_noncrime', re: /\b(?:data|akun|aset|uang|dokumen|file|arsip|berkas|tiket|kursi|juara|poin|kemenangan|medali)\b[^.!?\n]{0,18}\b(?:diamankan)\b/i },
   { id: 'metaphor_bocor_nonincident', re: /\b(?:atap|genteng|ban|ember|pipa\s+air|rahasia|soal\s+ujian|kunci\s+jawaban|skor|bocoran\s+film)\b[^.!?\n]{0,15}\b(?:bocor|kebocoran)\b|\b(?:bocor)\s+(?:halus|alusan)\b/i },
   { id: 'nonincident_sport_entertainment', re: /\b(?:dead\s+by\s+daylight|main\s+dbd|play\s+dbd|jogar\s+dbd|grand\s+prix|formula\s+1|safety\s+car|sinopsis\s+film|review\s+film|trailer\s+film|cdrama|drachin|jdrama|boboiboy|baby\s+gempa|baju\s+gempa|kaos\s+gempa|goyang\s+gempa|joget\s+gempa|sid\s+bukan\s+pahlawan|bermahkotakan\s+duri|emyu|munyuk|bobotoh\s+persib|mantan\s+rp|pacar\s+rl)\b|\b(?:game|gaming|crashed|tome|grabs?|pick\s*ups?|crawled|dcing|perks?|killer|survivor|hooked|gen|pallets?)\b[^.!?\n]{0,80}\bdbd\b|\bdbd\b[^.!?\n]{0,80}\b(?:game|gaming|crashed|tome|grabs?|pick\s*ups?|crawled|dcing|perks?|killer|survivor|hooked|gen|pallets?)\b/i },
+  { id: 'metaphor_bentrok_jadwal', re: /\b(?:bentrok|tabrakan)\s+(?:sama\s+|dengan\s+)?(?:jadwal|agenda|kuliah|matkul|mata\s+kuliah|jam\s+kuliah|kelas|meeting|rapat|acara|praktikum|waktu|ujian|kalender|zoom)\b/i },
+  { id: 'metaphor_revolusi_komersial', re: /\brevolusi\s+(?:skincare|kecantikan|wajah|kulit|glowing|jerawat|industri(?:\s+4\.0)?|mental|teknologi|digital|kebiasaan|gaya\s+hidup|tubuh|diet|perawatan|estetika)\b/i },
+  { id: 'metaphor_affective_mismatch', re: /\b(?:banjir|gempa|tsunami|erupsi|kebakaran|longsor|tanah\s+longsor|ambruk|runtuh|kecelakaan|ledakan|penembakan|wabah|keracunan)\b[^.!?\n]{0,60}\b(?:wkwk+|wkkwk+|wkwkwk+|hahaha+|hehehe+|xixi+|ngakak|kocak|bjir\s+kocak|anjir\s+kocak|giveaway|saldo\s+dana|shopee\s+haul)\b/i },
 ];
 
 const METAPHOR_TOPIC_SCOPE = {
@@ -445,6 +448,9 @@ const METAPHOR_TOPIC_SCOPE = {
   metaphor_siber_or_wabah: new Set(['ransomware', 'serangan siber', 'wabah', 'kesehatan']),
   metaphor_diamankan_noncrime: new Set(['penangkapan', 'kriminal', 'pencurian']),
   metaphor_bocor_nonincident: new Set(['serangan siber', 'ransomware']),
+  metaphor_bentrok_jadwal: new Set(['demo', 'insiden']),
+  metaphor_revolusi_komersial: new Set(['demo', 'politik']),
+  metaphor_affective_mismatch: 'all',
   nonincident_sport_entertainment: 'all',
 };
 
@@ -596,7 +602,7 @@ const EVENT_FRAMES = [
       const t = c.normGeo;
       const hasDemo = /\b(?:unjuk\s+rasa|aksi\s+massa|demonstrasi|demonstran|pengunjuk\s+rasa|(?:ber|men|di)?demo|protes|mogok|kerusuhan|bentrok|pemogokan|long\s+march|women'?s\s+march|hari\s+buruh|may\s+day|[a-z]+\s+memanggil|kampus\s+dikepung|logistik\s+dihalangi|kawan\s+diculik|(?:ga|gak|tidak|kurang)\s+kondusif|menyuarakan\s+keadilan|memperjuangkan\s+kebenaran)\b|\b(?:gelar|menggelar|melakukan)\s+aksi\b|\baksi\s+(?:tolak|menolak|tuntut|menuntut|mahasiswa|buruh|damai|bela|massa|bem)\b|\bmahasiswa\s+(?:turun|bergerak|melawan|dikepung|diculik)\b|\baksi\s+kamisan\b|\bkamisan\b|\brevolusi(?:\s+(?:rakyat|sosial|total))?\b/.test(t);
       if (!hasDemo) return null;
-      if (/\b(?:demo\s+(?:lagu|musik|app|aplikasi|produk|game|masak|cooking|vokal|versi|website)|free\s+demo|live\s+demo|cooking\s+demo|happy\s+labor\s+day)\b/.test(t)) return null;
+      if (/\b(?:demo\s+(?:lagu|musik|app|aplikasi|produk|game|masak|cooking|vokal|versi|website)|free\s+demo|live\s+demo|cooking\s+demo|happy\s+labor\s+day|revolusi\s+(?:skincare|kecantikan|wajah|kulit|glowing|jerawat|industri(?:\s+4\.0)?|mental|teknologi|digital|kebiasaan|gaya\s+hidup|tubuh|diet|perawatan|estetika)|bentrok\s+(?:sama\s+|dengan\s+)?(?:jadwal|agenda|kuliah|matkul|mata\s+kuliah|jam\s+kuliah|kelas|meeting|rapat|acara|praktikum|waktu|ujian|kalender|zoom)|tabrakan\s+(?:jadwal|agenda|kuliah|matkul))\b/i.test(t)) return null;
       const strong = /\b(?:berlangsung|turun\s+ke\s+jalan|turun\s+ke\s+aspal|berkumpul|gelar|menggelar|melakukan\s+aksi|aksi\s+(?:tolak|menolak|tuntut|menuntut)|ricuh|bentrok|tuntut|menuntut|menolak|tolak|orasi|aksi|siapkan\s+pengamanan|menyiapkan\s+pengamanan|siagakan|disiagakan|kerahkan|dikerahkan|antisipasi|kawal\s+demo|amankan\s+demo|pengamanan|tiba\s+di\s+depan|gerbang|blokade|gas\s+air\s+mata|water\s+cannon|barikade|mahasiswa|buruh|ojol|dpr|dprd|istana|patung\s+kuda|polisi|aparat|kampus\s+dikepung|kawan\s+diculik|tidak\s+kondusif|ga\s+kondusif|memanggil|aksi\s+kamisan|kamisan|revolusi)\b/.test(t);
       return { action: 'protesting', strong, type: 'demo' };
     },

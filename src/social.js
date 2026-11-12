@@ -98,7 +98,7 @@ const SOC_TOPICS = [
     pos: /(unjuk rasa|demonstrasi|demonstran|pengunjuk rasa|aksi massa|\b(?:ber|men|di)?demo\b|protes|mogok|kerusuhan|bentrok|pemogokan|women'?s\s+march|international\s+women'?s\s+day|hari\s+buruh|buruh\s+sedunia|labour\s+day|labor\s+day|\borasi\b|\bricuh\b|gas air mata|water cannon|buruh mogok|\bkspi\b|\bfspi\b|aksi buruh|\breformasi\b|turun ke jalan|turun ke aspal|\bmay day\b|long march|barikade|tuntutan mahasiswa|(?:gelar|menggelar|melakukan)\s+aksi|aksi\s+(?:tolak|menolak|tuntut|menuntut|mahasiswa|buruh|damai|bela|bem|rakyat)|(?:gerakan|aliansi|elemen|korps|seruan|peserta|massa)\s+(?:aksi|mahasiswa|buruh)|mahasiswa\s+(?:turun|bergerak|melawan|berdemo|unjuk\s+rasa|orasi|dikepung|diculik|ditangkap)|(?:kampus|gedung|jalan)\s+dikepung|(?:kawan[- ]kawan|mahasiswa|peserta\s+aksi)\s+(?:diduga\s+)?diculik|(?:logistik|bantuan\s+medis)\s+(?:dihalangi|tertahan|dicegat)|(?:jogja|surabaya|surakarta|jakarta|bandung|semarang|gejayan|rakyat)\s+memanggil|(?:ga|gak|tidak|kurang)\s+kondusif|brutalitas\s+aparat|tindakan\s+represif|(?:menyuarakan\s+keadilan|memperjuangkan\s+kebenaran)\b(?=[^.!?\n]{0,80}\b(?:mahasiswa|buruh|rakyat|massa|aparat|polisi|dpr|istana|kampus|jalan|demo|aksi|orasi|represif|tuntutan|kawan)\b)|\b(?:mahasiswa|buruh|rakyat|massa|aparat|polisi|dpr|istana|kampus|jalan|demo|aksi|orasi|represif|tuntutan|kawan)\b[^.!?\n]{0,80}\b(?:menyuarakan\s+keadilan|memperjuangkan\s+kebenaran)|rakyat\s+bersatu(?:\s+tak\s+bisa\s+dikalahkan)?|hidup\s+mahasiswa|hidup\s+rakyat|panjang\s+umur\s+perjuangan|\bnon\s+serviam\b|\baksi\s+kamisan\b|\bkamisan\b|\brevolusi(?:\s+(?:rakyat|sosial|total))?\b)/i,
     strong: /(unjuk rasa|demonstrasi|demonstran|pengunjuk rasa|aksi massa|protes|mogok|kerusuhan|bentrok|pemogokan|women'?s\s+march|international\s+women'?s\s+day|hari\s+buruh|buruh\s+sedunia|labour\s+day|labor\s+day|(?:gelar|menggelar)\s+aksi\s+(?:tolak|menolak|tuntut|menuntut|mahasiswa|buruh|massa|bem)|aksi\s+(?:tolak|menolak|tuntut|menuntut)\s+(?:kebijakan|ruu|uu|kenaikan)|kampus\s+dikepung|mahasiswa\s+dikepung|kawan\s+diculik|peserta\s+aksi\s+diculik|ditembaki\s+gas\s+air\s+mata|brutalitas\s+aparat|(?:jogja|surabaya|surakarta|jakarta|bandung|semarang|gejayan|rakyat)\s+memanggil|\baksi\s+kamisan\b|\bkamisan\b|\brevolusi(?:\s+(?:rakyat|sosial|total))?\b)/i,
     ctx: /(tuntut|tolak|mahasiswa|\bbem\b|buruh|ojol|\bdpr\b|dprd|gedung|polisi|aparat|gas air mata|\baksi\b|\bmassa\b|\borasi\b|turun ke jalan|turun ke aspal|spanduk|\bricuh\b|bentrok|rusuh|ditangkap|diamankan|bubarkan|barikade|molotov|water cannon|kapolda|kapolres|\breformasi\b|pemerintah|istana|patung kuda|\bmarch\b|aksi damai|long march|protes|mogok|kerusuhan|pemogokan|kondusif|mencekam|kampus|logistik|dikepung|diculik|keadilan|kebenaran|perjuangan|melawan|represif|memanggil|\bkamisan\b|\brevolusi\b)/i,
-    neg: /(demo (lagu|musik|reel|reels|app|apps|aplikasi|akun|produk|plane|game|beat|tape|masak|memasak|cooking|vokal|record|rekaman|day|link|version|ui|web|website|bot|trading)|free demo|live demo|cooking demo|demonstrasi (produk|alat|masak|memasak|fitur)|happy\s+(labor|labour|international\s+women'?s)\s+day|selamat\s+(hari buruh|hari perempuan|international women'?s day)|\bdemo\b.{0,20}#(music|musik|beat)|bagi[- ]?bagi\s+(?:gratis|kopi|americano|minuman|makanan|voucher|hadiah))/i,
+    neg: /(demo (lagu|musik|reel|reels|app|apps|aplikasi|akun|produk|plane|game|beat|tape|masak|memasak|cooking|vokal|record|rekaman|day|link|version|ui|web|website|bot|trading)|free demo|live demo|cooking demo|demonstrasi (produk|alat|masak|memasak|fitur)|happy\s+(labor|labour|international\s+women'?s)\s+day|selamat\s+(hari buruh|hari perempuan|international women'?s day)|\bdemo\b.{0,20}#(music|musik|beat)|bagi[- ]?bagi\s+(?:gratis|kopi|americano|minuman|makanan|voucher|hadiah)|bentrok\s+(?:sama\s+|dengan\s+)?(?:jadwal|agenda|kuliah|matkul|mata\s+kuliah|jam\s+kuliah|kelas|meeting|rapat|acara|praktikum|waktu|ujian|kalender|zoom)|tabrakan\s+(?:jadwal|agenda|kuliah|matkul)|revolusi\s+(?:skincare|kecantikan|wajah|kulit|glowing|jerawat|industri(?:\s+4\.0)?|mental|teknologi|digital|kebiasaan|gaya\s+hidup|tubuh|diet|perawatan|estetika))/i,
     x: ['(unjuk rasa OR demonstrasi OR "aksi massa" OR demonstran OR "mahasiswa demo") -filter:replies',
       'demo (mahasiswa OR buruh OR ojol OR DPR OR tuntutan OR ricuh OR polisi OR dikepung) -filter:replies'],
     th: ['demo', 'unjuk rasa', 'aksi massa', 'demo hari ini', 'demo mahasiswa', 'demonstrasi', 'aksi mahasiswa', 'jogja memanggil', 'surabaya memanggil', '#unjukrasa'],
@@ -545,6 +545,9 @@ const socInWin = (p, now, windowMs) => {
 const socClean = t => String(t || '').replace(/https?:\/\/\S+/g, ' ').replace(/@[\w]+/g, ' ');
 const SOC_PHRASE_RE = /[A-Z][A-Za-z'&]{2,}(?:\s+(?:[A-Z][A-Za-z'&]{2,}|[A-Z]{2,8})){0,3}/g;
 const SOC_TAG_RE = /#([\p{L}\p{N}_]+)/gu;
+const SOC_INC_WORDS = new Set(('banjir kebakaran gempa tsunami erupsi longsor ambruk runtuh roboh kecelakaan tabrakan ledakan penembakan bentrok kerusuhan demo terbakar tenggelam hanyut tewas korban evakuasi pengungsi posko tanggul karhutla wabah keracunan peretasan').split(' '));
+const SOC_JUNK_AFFECTIVE = /\b(?:wkwk+|wkkwk+|wkwkwk+|hahaha+|hehehe+|xixi+|ngakak|bjir\s+kocak|anjir\s+kocak|giveaway|saldo\s+dana|racun\s+shopee|shopee\s+haul)\b/i;
+const SOC_INC_ANCHOR_RE = /\b(?:banjir|kebakaran|gempa|tsunami|erupsi|longsor|tanah\s+longsor|ambruk|runtuh|roboh|kecelakaan|tabrakan|ledakan|meledak|penembakan|bentrok|kerusuhan|demo|unjuk\s+rasa|aksi\s+massa|terbakar|tenggelam|hanyut|tewas|korban|evakuasi|pengungsi|posko|tanggul|mati\s+lampu|listrik\s+padam|karhutla|wabah|keracunan|peretasan|serangan\s+siber)\b/i;
 
 function socPhraseScan(posts, { now = Date.now(), windowMs = 3 * 3600e3, minUsers = 3, exclude = null, max = 8 } = {}) {
   const excl = exclude ? new Set(exclude instanceof Set ? [...exclude] : exclude) : null;
@@ -582,6 +585,27 @@ function socPhraseScan(posts, { now = Date.now(), windowMs = 3 * 3600e3, minUser
     for (const m of text.matchAll(SOC_TAG_RE)) {
       const id = m[1].toLowerCase().replace(/_+/g, ' ').trim();
       if (ok(id, false) && !found.has(id)) found.set(id, id);
+    }
+    if (SOC_INC_ANCHOR_RE.test(text) && !SOC_JUNK_AFFECTIVE.test(text)) {
+      const cleanW = text.replace(/([\p{L}])\1{2,}/gu, '$1$1').replace(/[^\p{L}\p{N} ]+/gu, ' ').trim().split(/\s+/);
+      for (let i = 0; i < cleanW.length; i++) {
+        const w = cleanW[i].toLowerCase();
+        if (SOC_INC_WORDS.has(w)) {
+          for (let len = 2; len <= 3; len++) {
+            const start = Math.max(0, i - 1);
+            if (start + len <= cleanW.length) {
+              const ph = cleanW.slice(start, start + len).join(' ');
+              const id = ph.toLowerCase();
+              if (ok(id, true) && !found.has(id)) found.set(id, ph);
+            }
+            if (i + len <= cleanW.length) {
+              const ph = cleanW.slice(i, i + len).join(' ');
+              const id = ph.toLowerCase();
+              if (ok(id, true) && !found.has(id)) found.set(id, ph);
+            }
+          }
+        }
+      }
     }
     for (const [id, ph] of found) {
       const e = scores.get(id) || (scores.set(id, { ph, users: new Set(), n: 0 }), scores.get(id));

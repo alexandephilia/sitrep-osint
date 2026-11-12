@@ -378,33 +378,61 @@ function createSocialService({
     if (newsCacheReady() || !newsHistByFeed.size) return await news().catch(() => []);
     return [...newsHistByFeed.entries()].map(([id, m]) => ({ id, ok: true, items: [...m.values()] }));
   }
+  const CLICKBAIT_STOP = new Set(('viral geger heboh kronologi ungkap fakta alasan profil biodata bikin begini ternyata detik deretan daftar nasib update terbaru buka suara tegas soroti reaksi sorot imbas kondisi potret tampang pengakuan beberkan sederet simak catat kenapa mengapa bagaimana mencekam terungkap penasaran histeris menangis tangis').split(' '));
+
   const trendingQueries = () => memo('trending', 10 * 60e3, async () => {
     try {
       const now = Date.now(), srcs = await newsSourcesOrDisk();
       const all24 = collectNews24h(srcs, now);
-      const titles = [], seenT = new Set();
+      const items = [], seenT = new Set();
       for (const it of all24) {
         const k = String(it.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-        if (k.length > 10 && !seenT.has(k)) { seenT.add(k); titles.push(it.title); }
-        if (titles.length >= 1600) break;
+        if (k.length > 10 && !seenT.has(k)) { seenT.add(k); items.push(it); }
+        if (items.length >= 1600) break;
       }
-      if (titles.length < 40) return [];
+      if (items.length < 40) return [];
       const score = new Map();
-      for (const t of titles) {
-        const inc = GEO_INC_RE.test(t) ? 1 : 0, seen = new Set();
-        for (const m of String(t).matchAll(/[A-Z][A-Za-z'&]{2,}(?:\s+(?:[A-Z][A-Za-z'&]{2,}|[A-Z]{2,8})){0,3}/g)) {
-          const ph = m[0].toLowerCase().replace(/\s+/g, ' ').trim();
-          if (ph.length < 4 || ph.length > 42 || seen.has(ph)) continue;
+      const pubMap = new Map();
+      for (const it of items) {
+        const t = String(it.title || '');
+        const descLead = String(it.desc || '').slice(0, 200);
+        const combined = descLead ? (t + '. ' + descLead) : t;
+        const inc = (GEO_INC_RE.test(t) || GEO_INC_RE.test(descLead)) ? 1 : 0;
+        const pub = String(it.pub || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const seen = new Set();
+
+        const addCandidate = rawPh => {
+          const ph = String(rawPh || '').toLowerCase().replace(/\s+/g, ' ').trim();
+          if (ph.length < 4 || ph.length > 42 || seen.has(ph)) return;
           seen.add(ph);
           const words = ph.split(' ');
-          if (words.some(w => w.length < 3 || TSTOP.has(w) || TBLK.has(w) || NEWS_KW_STOP.has(w))) continue;
-          if (SOC.socTopics(ph).length > 0) continue;
+          if (words.some(w => w.length < 3 || TSTOP.has(w) || TBLK.has(w) || NEWS_KW_STOP.has(w) || CLICKBAIT_STOP.has(w))) return;
+          if (CLICKBAIT_STOP.has(words[0]) || CLICKBAIT_STOP.has(words[words.length - 1])) return;
+          if (SOC.socTopics(ph).length > 0) return;
           const e = score.get(ph) || [0, 0];
           e[0]++; e[1] += inc; score.set(ph, e);
+          if (pub) {
+            const pubs = pubMap.get(ph) || new Set();
+            pubs.add(pub);
+            pubMap.set(ph, pubs);
+          }
+        };
+
+        for (const m of combined.matchAll(/[A-Z][A-Za-z'&]{2,}(?:\s+(?:[A-Z][A-Za-z'&]{2,}|[A-Z]{2,8})){0,3}/g)) {
+          addCandidate(m[0]);
+        }
+        for (const m of combined.matchAll(/(?:kebakaran|banjir|erupsi|gempa|longsor|tanah\s+longsor|kecelakaan|ledakan|bentrok|kerusuhan|demo|unjuk\s+rasa|aksi\s+massa|penembakan|pembunuhan|penangkapan|keracunan|puting\s+beliung|karhutla)\s+(?:di\s+)?([a-z0-9'-]+(?:\s+[a-z0-9'-]+){1,2})/gi)) {
+          addCandidate(m[1]);
         }
       }
       const out = [];
-      for (const [ph, [n, ctx]] of [...score.entries()].sort((a, b) => (b[1][0] + 2 * b[1][1]) - (a[1][0] + 2 * a[1][1]))) {
+      for (const [ph, [n, ctx]] of [...score.entries()].sort((a, b) => {
+        const pubsA = (pubMap.get(a[0]) && pubMap.get(a[0]).size) || 1;
+        const pubsB = (pubMap.get(b[0]) && pubMap.get(b[0]).size) || 1;
+        const scoreA = (a[1][0] + pubsA * 1.5 + 2 * a[1][1]);
+        const scoreB = (b[1][0] + pubsB * 1.5 + 2 * b[1][1]);
+        return scoreB - scoreA;
+      })) {
         const single = !ph.includes(' ');
         const need = single ? 5 : 3;
         if (n < need) continue;
@@ -534,7 +562,8 @@ function createSocialService({
       const best = Math.max(...vals);
       const hasNews = !!e.scores.news;
       const hasSocial = !!e.scores.social;
-      e.score = +(best + (hasNews && hasSocial ? 4.5 : (e.src.length > 1 ? 3.0 : 0))).toFixed(2);
+      const crossBoost = hasNews && hasSocial ? Math.min(8.0, +(4.0 + Math.log2(volOf(id) + 1)).toFixed(2)) : (e.src.length > 1 ? 3.0 : 0);
+      e.score = +(best + crossBoost).toFixed(2);
       m.set(id, e);
     };
     for (const it of memoVal('newsheat')) {
