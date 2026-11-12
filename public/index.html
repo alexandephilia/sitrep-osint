@@ -130,7 +130,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;border
 a{color:inherit;text-decoration:none;text-underline-offset:2px}
 ::selection{background:var(--accent);color:#fff}
 :focus{outline:none}
-:focus-visible{outline:1px solid rgba(255,255,255,.28);outline-offset:1px}
+:focus-visible{outline:1px solid rgba(255,255,255,.28);outline-offset:-1px}
 .mono{font-family:var(--mono)}
 [hidden]{display:none!important}
 
@@ -1336,10 +1336,11 @@ a{color:inherit;text-decoration:none;text-underline-offset:2px}
 .cb[aria-selected="true"]:hover{background:rgba(255,255,255,.06);color:#fff}
 .cb:focus-visible{outline:1px solid rgba(255,255,255,.3);outline-offset:-1px;z-index:4}
 .camgrid{display:grid;grid-template-columns:repeat(var(--cols,2),minmax(0,1fr));gap:1px;background:var(--border)}
-.cam{position:relative;display:block;width:100%;padding:0;background:#000;text-align:left;cursor:pointer}
+.cam{position:relative;display:block;width:100%;padding:0;background:#000;text-align:left;cursor:pointer;outline:none}
+.cam:focus,.cam:focus-visible{outline:none}
 .cam .frame{position:relative;aspect-ratio:16/9;overflow:hidden;background:#000}
-.cam video{width:100%;height:100%;object-fit:cover;display:block;background:#000}
-.cam .frame img.snap{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:0}
+.cam video{width:100%;height:100%;object-fit:cover;display:block;background:#000;outline:none}
+.cam .frame img.snap{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:0;border:0;outline:none}
 .cam .frame video{position:relative;z-index:1}
 .cam .frame .badge{z-index:2}
 .cam .badge{
@@ -3186,7 +3187,17 @@ function paintCountdown(){
   const btn = $('#btn-refresh');
   if (btn) btn.style.setProperty('--sync-p', Math.max(0, Math.min(100, Math.round((remain / CYCLE) * 100))) + '%');
 }
-setInterval(() => { if (document.hidden) return; remain = Math.max(0, remain - 1); paintCountdown(); if (remain === 0) refreshAll(false); }, 1000);
+setInterval(() => {
+  if (document.hidden) return;
+  if (lastRefreshDone) {
+    const elapsed = Math.floor((Date.now() - lastRefreshDone) / 1000);
+    remain = Math.max(0, CYCLE - elapsed);
+  } else {
+    remain = Math.max(0, remain - 1);
+  }
+  paintCountdown();
+  if (remain === 0 && !busy) refreshAll(false);
+}, 1000);
 paintCountdown();
 
 const CAT_ORDER = ['demo','fire','flood','disaster','insiden','siber','kriminal','kesehatan','ekonomi','politik'];
@@ -7206,9 +7217,14 @@ async function pullBreaking(){
 }
 setInterval(() => {
   if (document.hidden) return;
-  breakRemain = Math.max(0, breakRemain - 1);
+  if (breakAt) {
+    const elapsed = Math.floor((Date.now() - breakAt) / 1000);
+    breakRemain = Math.max(0, BREAK_CYCLE - elapsed);
+  } else {
+    breakRemain = Math.max(0, breakRemain - 1);
+  }
   paintBreak();
-  if (breakRemain === 0) pullBreaking();
+  if (breakRemain === 0 && !breakBusy) pullBreaking();
 }, 1000);
 
 const camStream = c => c.s;
@@ -7326,12 +7342,36 @@ function upd(){
   $('#ccount').textContent = ok + '/' + P.size + ' · ' + live + ' live' + (off ? ' · ' + off + ' off' : '');
   $('#f-cams').textContent = live + '/' + P.size;
 }
+function syncLiveEdge(cell, p, v){
+  if (!v) v = vid(cell);
+  if (!v) return;
+  let target = -1;
+  if (p && p.h && p.h !== 'native') {
+    if (typeof p.h.liveSyncPosition === 'number' && Number.isFinite(p.h.liveSyncPosition) && p.h.liveSyncPosition > 0) {
+      target = p.h.liveSyncPosition;
+    }
+  }
+  if (target < 0 && v.seekable && v.seekable.length > 0) {
+    try {
+      const sEnd = v.seekable.end(v.seekable.length - 1);
+      if (Number.isFinite(sEnd) && sEnd > 0) target = Math.max(0, sEnd - 1.5);
+    } catch (e) {}
+  }
+  if (target > 0) {
+    const drift = Math.abs(v.currentTime - target);
+    const beforeStart = v.seekable && v.seekable.length > 0 && v.currentTime < v.seekable.start(0);
+    if (drift > 3 || beforeStart) {
+      try { v.currentTime = target; } catch (e) {}
+    }
+  }
+}
 function startCell(cell){
   const p = P.get(cell); if (!p || p.dead) return;
   const v = mkVid(cell);
   if (p.h) {
-    if (p.h !== 'native') { try { p.h.startLoad(-1); } catch (e) {} }
+    if (p.h !== 'native') { try { p.h.startLoad(); } catch (e) {} }
     p.stopped = false; p.loading = !p.loaded; p.nerr = p.merr = 0;
+    syncLiveEdge(cell, p, v);
     if (!p.loaded) { p.t0 = Date.now(); badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live Snap' : 'Memuat'); }
     else { dropSnap(cell); if (p.vis) badge(cell, 'live', 'Live'); }
     v.play().catch(() => {}); return;
@@ -7358,19 +7398,30 @@ function startCell(cell){
       .catch(() => { const st = P.get(cell); if (st && !st.dead && !st.h && v.canPlayType('application/vnd.apple.mpegurl')) startCell(cell); else kill(cell); });
     return;
   } else if (window.Hls && Hls.isSupported()) {
-    const h = new Hls(hlsJak({ startLevel:0, capLevelToPlayerSize:true, maxBufferLength:6, maxMaxBufferLength:12,
-      backBufferLength:10, liveBackBufferLength:10,
-      liveSyncDurationCount:2, maxLiveSyncPlaybackRate:1.15,
+    const h = new Hls(hlsJak({ startLevel:0, capLevelToPlayerSize:true, maxBufferLength:8, maxMaxBufferLength:16,
+      backBufferLength:6, liveBackBufferLength:6,
+      liveSyncDurationCount:2, liveMaxLatencyDurationCount:5, liveDurationInfinity:true, maxLiveSyncPlaybackRate:1.15,
       manifestLoadingTimeOut:25000, levelLoadingTimeOut:25000, fragLoadingTimeOut:25000,
-      manifestLoadingMaxRetry:1, levelLoadingMaxRetry:1, fragLoadingMaxRetry:2 }));
+      manifestLoadingMaxRetry:2, levelLoadingMaxRetry:2, fragLoadingMaxRetry:3 }));
     p.h = h; h.loadSource(url); h.attachMedia(v);
     h.on(Hls.Events.FRAG_LOADED, () => { p.t0 = Date.now(); });
     h.on(Hls.Events.MANIFEST_PARSED, () => v.play().catch(() => {}));
     h.on(Hls.Events.ERROR, (ev, d) => {
-      if (!d || !d.fatal) return;
-      if (d.type === Hls.ErrorTypes.NETWORK_ERROR && (p.nerr = (p.nerr || 0) + 1) < 3) h.startLoad();
-      else if (d.type === Hls.ErrorTypes.MEDIA_ERROR && (p.merr = (p.merr || 0) + 1) < 3) h.recoverMediaError();
-      else if ((p.step = (p.step || 0) + 1) < steps.length) {
+      if (!d) return;
+      if (d.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR || d.details === 'bufferStalledError') {
+        syncLiveEdge(cell, p, v);
+        try { h.startLoad(); } catch (e) {}
+        v.play().catch(() => {});
+        return;
+      }
+      if (!d.fatal) return;
+      if (d.type === Hls.ErrorTypes.NETWORK_ERROR && (p.nerr = (p.nerr || 0) + 1) < 3) {
+        syncLiveEdge(cell, p, v);
+        h.startLoad();
+      } else if (d.type === Hls.ErrorTypes.MEDIA_ERROR && (p.merr = (p.merr || 0) + 1) < 3) {
+        h.recoverMediaError();
+        syncLiveEdge(cell, p, v);
+      } else if ((p.step = (p.step || 0) + 1) < steps.length) {
         p.nerr = p.merr = 0; try { h.destroy(); } catch (e) {} p.h = null; startCell(cell);
       } else kill(cell);
     });
@@ -7625,31 +7676,39 @@ const kickCams = () => setTimeout(() => {
   if (camsRenderQueued) renderCams();
   const vr = camVisRect();
   P.forEach((p, c) => {
-
     p.vis = isCellVisible(c, vr);
     try { vio.unobserve(c); vio.observe(c); } catch (e) {}
     if (!p.vis) return;
     const v = vid(c);
-
+    p.stopped = false;
     if (!p.loaded && !p.kickDone) { p.t0 = Date.now(); p.kickDone = true; }
     if (p.loading && Date.now() - p.t0 > 45000) { kill(c); return; }
     if (p.h && p.h !== 'native') {
-
-      try { p.h.startLoad(-1); } catch (e) {}
+      try { p.h.startLoad(); } catch (e) {}
     }
-    if (p.h === 'native' && !p.loaded && v) { try { v.load(); } catch (e) {} }
+    if (p.h === 'native' && v) {
+      if (!p.loaded) { try { v.load(); } catch (e) {} }
+      else { syncLiveEdge(c, p, v); }
+    }
+    syncLiveEdge(c, p, v);
     if (p.loaded && v && v.paused && !v._lbPaused) v.play().catch(() => {});
     if (p.waitT) {
       p.waitT = 0;
-      if (p.h && p.h !== 'native') { try { p.h.stopLoad(); p.h.startLoad(-1); } catch (e) {} }
+      if (p.h && p.h !== 'native') { try { p.h.stopLoad(); p.h.startLoad(); } catch (e) {} }
+      syncLiveEdge(c, p, v);
       if (v && !v._lbPaused) v.play().catch(() => {});
     }
   });
 
   if (tvOn) {
     const tvv = $('#tv-video');
+    if (tvHls) {
+      try { tvHls.startLoad(); } catch (e) {}
+      if (tvv && typeof tvHls.liveSyncPosition === 'number' && tvHls.liveSyncPosition > 0) {
+        try { tvv.currentTime = tvHls.liveSyncPosition; } catch (e) {}
+      }
+    }
     if (tvv && tvv.paused) tvv.play().catch(() => {});
-    if (tvHls) { try { tvHls.startLoad(-1); } catch (e) {} }
     else if ($('#tv-body').dataset.state === 'load' && Date.now() - tvLoadAt > 20000) tvPlay();
   }
   pump();
@@ -7747,15 +7806,18 @@ setInterval(() => {
     if (p.vis && !p.h && (!p.dead || p.snapMode) && !p.loading) { const cc = camOfCell(c); if (camSnapOK || (cc && cc.snap)) { const im = c.querySelector('img.snap'); if (!im || (p.snapAt && Date.now() - p.snapAt > (cc && cc.snap ? 15000 : 60000))) showSnap(c, p); } }
     if (p.loading && Date.now() - p.t0 > 45000) return kill(c);
     const v = vid(c); if (!p.h || !p.loaded || p.stopped || !p.vis || !v || v._lbPaused) return;
-    if (p.waitT && Date.now() - p.waitT > 15000 && p.h !== 'native') {
-      p.waitT = 0; try { p.h.stopLoad(); p.h.startLoad(-1); } catch (e) {} v.play().catch(() => {});
+    if (p.waitT && Date.now() - p.waitT > 10000) {
+      p.waitT = 0; syncLiveEdge(c, p, v);
+      if (p.h !== 'native') { try { p.h.stopLoad(); p.h.startLoad(); } catch (e) {} }
+      v.play().catch(() => {});
     }
     const stuck = v.paused || v.currentTime === p.ct;
     if (stuck) {
       if (++p.stall >= 2) {
         p.stall = 0;
         if ((p.rest = (p.rest || 0) + 1) >= 5) { p.rest = 0; kill(c); return; }
-        if (p.h !== 'native') { try { p.h.stopLoad(); p.h.startLoad(-1); } catch (e) {} }
+        syncLiveEdge(c, p, v);
+        if (p.h !== 'native') { try { p.h.stopLoad(); p.h.startLoad(); } catch (e) {} }
         v.play().catch(() => {});
         if (p.vis) badge(c, 'wait', 'Buffering');
       }
@@ -8040,9 +8102,17 @@ function closeLightbox(){
   if (glbHls) { try { glbHls.destroy(); } catch (e) {} glbHls = null; }
   const v = $('#glb-video'); if (v) { v.onplaying = null; v.onerror = null; v.style.display = 'block'; try { v.pause(); } catch (e) {} v.removeAttribute('src'); try { v.load(); } catch (e) {} }
 
-  camGrid.querySelectorAll('video').forEach(cv => { if (cv._lbPaused) { cv._lbPaused = false; try { cv.play().catch(() => {}); } catch (e) {} } });
+  camGrid.querySelectorAll('video').forEach(cv => {
+    if (cv._lbPaused) {
+      cv._lbPaused = false;
+      const cell = cv.closest('.cam');
+      const p = cell ? P.get(cell) : null;
+      if (p) syncLiveEdge(cell, p, cv);
+      try { cv.play().catch(() => {}); } catch (e) {}
+    }
+  });
   const t = lbTrigger; lbTrigger = null;
-  if (t && t.focus) { try { t.focus({ preventScroll: true }); } catch (e) {} }
+  if (t && t.focus) { try { t.focus({ preventScroll: true, focusVisible: false }); } catch (e) { try { t.focus({ preventScroll: true }); } catch (err) {} } }
   pump();
 }
 $('#glb-close').addEventListener('click', closeLightbox);
@@ -10624,14 +10694,13 @@ async function refreshAll(manual){
   if (syncBtn) syncBtn.dataset.state = 'sync';
   $('#countdown').textContent = 'Tarik…';
   try {
-
-    trackBg(pullX());
-    trackBg(pullThreads());
+    await Promise.all([pullMedia(manual), pullSituation(manual), pullStocks()]);
     trackBg(pullIncidents(manual));
     if (manual) trackBg(pullDisaster());
     trackBg(pullAlive());
     trackBg(pullCctv());
-    await Promise.all([pullMedia(manual), pullSituation(manual), pullStocks()]);
+    trackBg(pullX());
+    trackBg(pullThreads());
     if (manual) {
       P.forEach((p, c) => { if (p.dead) { p.dead = false; p.tries = 0; clearTimeout(p.retry); badge(c, 'wait', 'Antre'); } });
       pump();
@@ -10652,9 +10721,25 @@ async function refreshAll(manual){
 }
 $('#btn-refresh').addEventListener('click', () => refreshAll(true));
 
+let visRefreshTimer = 0;
 document.addEventListener('visibilitychange', () => {
-
-  if (!document.hidden && Date.now() - lastRefreshDone > (CYCLE - 30) * 1000) refreshAll(false);
+  if (document.hidden) return;
+  clearTimeout(visRefreshTimer);
+  const now = Date.now();
+  if (lastRefreshDone && now - lastRefreshDone > 30000) {
+    visRefreshTimer = setTimeout(() => { if (!document.hidden && !busy) refreshAll(false); }, 750);
+  } else if (lastRefreshDone) {
+    const elapsed = Math.floor((now - lastRefreshDone) / 1000);
+    remain = Math.max(0, CYCLE - elapsed);
+    paintCountdown();
+  }
+  if (breakAt && now - breakAt > BREAK_CYCLE * 1000 && !breakBusy) {
+    setTimeout(() => { if (!document.hidden && !breakBusy) pullBreaking(); }, 500);
+  } else if (breakAt) {
+    const bElapsed = Math.floor((now - breakAt) / 1000);
+    breakRemain = Math.max(0, BREAK_CYCLE - bElapsed);
+    paintBreak();
+  }
 });
 
 let rdOn = false, rdCurrent = '', rdTrigger = null, rdDrag = null, rdStack = [], rdCurrentView = null, rdHero = '';
