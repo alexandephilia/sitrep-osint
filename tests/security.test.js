@@ -21,6 +21,13 @@ function listen(srv, host = '127.0.0.1') {
   });
 }
 
+async function freePort() {
+  const srv = http.createServer();
+  const port = await listen(srv);
+  await new Promise(resolve => srv.close(resolve));
+  return port;
+}
+
 function closeServer(srv) {
   return new Promise(resolve => {
     if (!srv) return resolve();
@@ -293,9 +300,9 @@ test('02 TLS stays strictly verified: valid AIA chains succeed while untrusted/s
   }
 });
 
-function startSitrepServer(extraEnv = {}) {
+async function startSitrepServer(extraEnv = {}) {
+  const port = await freePort();
   return new Promise((resolve, reject) => {
-    const port = 29000 + Math.floor(Math.random() * 10000);
     const proc = spawn(process.execPath, [path.join(ROOT_DIR, 'server.js')], {
       env: { ...process.env, PORT: String(port), ...extraEnv },
       stdio: ['ignore', 'pipe', 'pipe']
@@ -494,8 +501,9 @@ test('05 startup guard fails closed (exit 78) on non-loopback local-token bind a
     delete cleanEnv[k];
   }
 
+  const deniedPort = await freePort();
   const denied = await new Promise((resolve, reject) => {
-    const port = 29000 + Math.floor(Math.random() * 10000);
+    const port = deniedPort;
     const child = spawn(process.execPath, [path.join(ROOT_DIR, 'server.js')], {
       cwd: ROOT_DIR,
       env: { ...cleanEnv, PORT: String(port), SITREP_HOST: '0.0.0.0' },
@@ -511,8 +519,9 @@ test('05 startup guard fails closed (exit 78) on non-loopback local-token bind a
 
   const cleanBootEnv = { ...cleanEnv };
   delete cleanBootEnv.SITREP_HOST;
+  const localPort = await freePort();
   const localSrv = await new Promise((resolve, reject) => {
-    const port = 29000 + Math.floor(Math.random() * 10000);
+    const port = localPort;
     const proc = spawn(process.execPath, [path.join(ROOT_DIR, 'server.js')], {
       cwd: ROOT_DIR,
       env: { ...cleanBootEnv, PORT: String(port) },
