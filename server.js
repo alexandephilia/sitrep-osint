@@ -612,13 +612,13 @@ const envPosInt = (name, fallback) => {
   return Number.isFinite(v) && v > 0 ? Math.floor(v) : fallback;
 };
 const GW_OPTIONS = {
-  maxActive: envPosInt('SITREP_HLS_MAX_ACTIVE', isMacGwProfile ? 10 : 48),
-  perHost: envPosInt('SITREP_HLS_PER_HOST', isMacGwProfile ? 3 : 8),
+  maxActive: envPosInt('SITREP_HLS_MAX_ACTIVE', isMacGwProfile ? 24 : 48),
+  perHost: envPosInt('SITREP_HLS_PER_HOST', isMacGwProfile ? 6 : 8),
   maxQueue: envPosInt('SITREP_HLS_MAX_QUEUE', 64),
-  snapActive: envPosInt('SITREP_HLS_SNAP_ACTIVE', 2),
-  snapMaxQueue: envPosInt('SITREP_HLS_SNAP_QUEUE', 16),
-  globalByteRate: envPosInt('SITREP_HLS_GLOBAL_BPS', (isMacGwProfile ? 6 : 45) << 20),
-  globalByteBurst: envPosInt('SITREP_HLS_GLOBAL_BURST', (isMacGwProfile ? 20 : 180) << 20),
+  snapActive: envPosInt('SITREP_HLS_SNAP_ACTIVE', isMacGwProfile ? 6 : 8),
+  snapMaxQueue: envPosInt('SITREP_HLS_SNAP_QUEUE', 64),
+  globalByteRate: envPosInt('SITREP_HLS_GLOBAL_BPS', (isMacGwProfile ? 12 : 45) << 20),
+  globalByteBurst: envPosInt('SITREP_HLS_GLOBAL_BURST', (isMacGwProfile ? 40 : 180) << 20),
   segCacheBytes: envPosInt('SITREP_HLS_CACHE_BYTES', (isMacGwProfile ? 32 : 64) << 20),
 };
 const GW = require('./src/cctv-gateway').createGateway({

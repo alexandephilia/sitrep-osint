@@ -119,7 +119,7 @@ function createGateway(d) {
     isKnownHost = () => true,
   } = d;
   const O = Object.assign({
-    maxActive: 48, perHost: 8, maxQueue: 64, snapActive: 2, snapMaxQueue: 16,
+    maxActive: 48, perHost: 8, maxQueue: 64, snapActive: 8, snapMaxQueue: 64,
     segCacheBytes: 64 << 20, segTtl: 30000, segCacheMax: 16 << 20, segMax: 25 << 20,
     plMin: 500, plMax: 2500,
     reqRate: 40, reqBurst: 200, byteRate: 3 << 20, byteBurst: 120 << 20,
@@ -631,10 +631,13 @@ function createGateway(d) {
       const flight = {
         ac,
         waiters: 0,
-        promise: snapLane.run('snap', async () => {
-          let u = directUrl || rawUrl; try { u = await rewriteUrl(u); } catch (e) {}
+        promise: (directUrl ? lane.run('snap-direct', async () => {
+          let u = directUrl; try { u = await rewriteUrl(u); } catch (e) {}
           return snapshotFor(u, ac.signal);
-        }, ac.signal),
+        }, ac.signal) : snapLane.run('snap', async () => {
+          let u = rawUrl; try { u = await rewriteUrl(u); } catch (e) {}
+          return snapshotFor(u, ac.signal);
+        }, ac.signal)),
       };
       flight.promise.finally(() => snapIn.delete(snapKey)).catch(() => {});
       entry = flight;
@@ -652,10 +655,10 @@ function createGateway(d) {
     } catch (e) {
       req.off('close', onClose);
       if (!e || (e.status !== 503 && e.status !== 499)) {
-        snapFail.set(snapKey, Date.now() + (directUrl ? 15000 : 45000));
+        snapFail.set(snapKey, Date.now() + (directUrl ? 5000 : 15000));
         if (snapFail.size > 2000) snapFail.delete(snapFail.keys().next().value);
       }
-      return deny(res, 503, { 'retry-after': e && e.status === 503 ? '5' : (directUrl ? '15' : '45') });
+      return deny(res, 503, { 'retry-after': e && e.status === 503 ? '3' : (directUrl ? '5' : '15') });
     }
     req.off('close', onClose);
     if (!jpg || res.destroyed || res.writableEnded) return;

@@ -1339,9 +1339,11 @@ a{color:inherit;text-decoration:none;text-underline-offset:2px}
 .cam{position:relative;display:block;width:100%;padding:0;background:#000;text-align:left;cursor:pointer;outline:none}
 .cam:focus,.cam:focus-visible{outline:none}
 .cam .frame{position:relative;aspect-ratio:16/9;overflow:hidden;background:#000}
-.cam video{width:100%;height:100%;object-fit:cover;display:block;background:#000;outline:none}
-.cam .frame img.snap{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:0;border:0;outline:none}
+.cam video{width:100%;height:100%;object-fit:cover;display:block;background:transparent;outline:none;opacity:0;transition:opacity .2s ease-in-out}
+.cam.is-playing video{opacity:1}
+.cam .frame img.snap{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:0;border:0;outline:none;background:#050508}
 .cam .frame video{position:relative;z-index:1}
+.cam.is-offline{display:none !important}
 .cam .frame .badge{z-index:2}
 .cam .badge{
   position:absolute;top:4px;left:4px;z-index:2;padding:2px 5px;
@@ -7261,7 +7263,11 @@ let aliveMap = null, district = 'Semua', camList = [];
 const MAXL = 8, PERHOST = 4, LIVE_CAP = 12, SOFT_MS = 12000, OFF_FREE_MS = 20000;
 let camSnapOK = false;
 
-const HEDGE_MS = 7000, hostMode = new Map(), hostWin = new Map();
+const HEDGE_MS = 2500, hostMode = new Map(), hostWin = new Map();
+hostMode.set('dki-jkt.balitower.co.id:7028', 'proxy');
+hostMode.set('cctv.molecool.id', 'proxy');
+hostMode.set('proxycctv.dsdajakarta.id', 'proxy');
+hostMode.set('pantaucctv.com', 'proxy');
 const proxyIdx = steps => steps.findIndex(u => API != null && u.indexOf(API + '/hls?') === 0);
 const rumQ = [];
 function rumPush(e){ if (rumQ.length < 200) rumQ.push(e); }
@@ -7313,7 +7319,7 @@ function showSnap(cell, p){
   badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live Snap' : (p.loading ? 'Memuat' : 'Snapshot'));
   return true;
 }
-function dropSnap(cell){ const im = cell.querySelector('img.snap'); if (im) im.remove(); const p = P.get(cell); if (p) { p.snapAt = 0; p.snapMode = false; } }
+function dropSnap(cell){ const p = P.get(cell); if (p) { p.snapAt = 0; p.snapMode = false; } }
 
 function cleanVid(v){
   if (!v) return;
@@ -7339,8 +7345,9 @@ function upd(){
     if (p.playing || (snapLive && p.vis)) live++;
     if (p.dead && !p.snapMode) off++;
   });
-  $('#ccount').textContent = ok + '/' + P.size + ' · ' + live + ' live' + (off ? ' · ' + off + ' off' : '');
-  $('#f-cams').textContent = live + '/' + P.size;
+  const visTotal = Math.max(0, P.size - off);
+  $('#ccount').textContent = ok + '/' + visTotal + ' · ' + live + ' live' + (off ? ' · ' + off + ' off' : '');
+  $('#f-cams').textContent = live + '/' + visTotal;
 }
 function syncLiveEdge(cell, p, v){
   if (!v) v = vid(cell);
@@ -7368,6 +7375,7 @@ function syncLiveEdge(cell, p, v){
 function startCell(cell){
   const p = P.get(cell); if (!p || p.dead) return;
   const v = mkVid(cell);
+  cell.classList.remove('is-playing');
   if (p.h) {
     if (p.h !== 'native') { try { p.h.startLoad(); } catch (e) {} }
     p.stopped = false; p.loading = !p.loaded; p.nerr = p.merr = 0;
@@ -7385,10 +7393,28 @@ function startCell(cell){
   const steps = p.steps || (p.steps = camSteps(c));
   if (!p.step && hostMode.get(p.host) === 'proxy') { const pi = proxyIdx(steps); if (pi > 0) p.step = pi; }
   const url = steps[Math.min(p.step || 0, steps.length - 1)];
+  clearTimeout(p.mp4Timer);
   if (/\.mp4($|\?)/i.test(url)) {
     p.h = 'native'; v.src = url;
+    p.mp4Timer = setTimeout(() => {
+      if (p.loading && !p.loaded) {
+        cleanVid(v); p.h = null;
+        if (c && (c.snap || camSnapOK)) {
+          p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
+          showSnap(cell, p); badge(cell, 'live', 'Live Snap'); upd(); pump();
+        } else if ((p.step = (p.step || 0) + 1) < steps.length) {
+          startCell(cell);
+        } else kill(cell);
+      }
+    }, 4000);
     v.onerror = () => {
+      clearTimeout(p.mp4Timer);
       v.onerror = null;
+      if (c && (c.snap || camSnapOK) && !p.loaded) {
+        cleanVid(v); p.h = null; p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
+        showSnap(cell, p); badge(cell, 'live', 'Live Snap'); upd(); pump();
+        return;
+      }
       if ((p.step = (p.step || 0) + 1) < steps.length) { p.h = null; startCell(cell); }
       else kill(cell);
     };
@@ -7409,6 +7435,19 @@ function startCell(cell){
     h.on(Hls.Events.ERROR, (ev, d) => {
       if (!d) return;
       if (d.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR || d.details === 'bufferStalledError') {
+        p.stalls = (p.stalls || 0) + 1;
+        if (p.stalls > 2) {
+          if (c && (c.snap || camSnapOK)) {
+            p.nerr = p.merr = p.stalls = 0; try { h.destroy(); } catch (e) {} p.h = null;
+            p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
+            showSnap(cell, p); badge(cell, 'live', 'Live Snap'); upd(); pump();
+            return;
+          }
+          if ((p.step = (p.step || 0) + 1) < steps.length) {
+            p.nerr = p.merr = p.stalls = 0; try { h.destroy(); } catch (e) {} p.h = null; startCell(cell);
+          } else kill(cell);
+          return;
+        }
         syncLiveEdge(cell, p, v);
         try { h.startLoad(); } catch (e) {}
         v.play().catch(() => {});
@@ -7435,7 +7474,9 @@ function startCell(cell){
     v.play().catch(() => {});
   } else { kill(cell); return; }
   v.onloadeddata = () => {
+    clearTimeout(p.mp4Timer);
     if (p.loaded) return;
+    cell.classList.add('is-playing');
     rumPush({ h: p.host, t: Date.now() - (p.visAt || p.t0), s: p.stl || 0 }); p.stl = 0; p.visAt = 0;
     if (p.hedged) { p.hedged = false; const st = p.steps && p.steps[p.step || 0]; if (st && proxyIdx([st]) === 0) { const n = (hostWin.get(p.host) || 0) + 1; hostWin.set(p.host, n); if (n >= 2) hostMode.set(p.host, 'proxy'); } }
     p.loaded = true; p.loading = false; p.snapMode = false; p.dem = 0; p.nerr = p.merr = p.tries = p.step = p.rest = 0;
@@ -7446,10 +7487,15 @@ function startCell(cell){
     pump(); upd();
   };
   v.onplaying = () => {
-    if (p.stopped || !p.vis) { try { v.pause(); } catch (e) {} p.playing = false; return; }
-    p.playing = true; p.waitT = 0; dropSnap(cell); badge(cell, 'live', 'Live'); upd();
+    clearTimeout(p.mp4Timer);
+    if (p.stopped || !p.vis) { try { v.pause(); } catch (e) {} p.playing = false; cell.classList.remove('is-playing'); return; }
+    p.playing = true; p.waitT = 0; cell.classList.add('is-playing'); dropSnap(cell); badge(cell, 'live', 'Live'); upd();
   };
-  v.onwaiting = () => { p.playing = false; p.waitT = Date.now(); p.stl = (p.stl || 0) + 1; if (p.vis) badge(cell, 'wait', 'Buffering'); };
+  v.onwaiting = () => {
+    p.playing = false; p.waitT = Date.now(); p.stl = (p.stl || 0) + 1;
+    cell.classList.remove('is-playing');
+    if (p.vis) badge(cell, 'wait', 'Buffering');
+  };
 }
 function stopCell(cell){
   const p = P.get(cell); if (!p || !p.h || p.stopped) return;
@@ -7482,8 +7528,10 @@ function orderCams(){
 }
 function kill(cell){
   const p = P.get(cell); if (!p) return;
+  if (p.mp4Timer) { clearTimeout(p.mp4Timer); p.mp4Timer = null; }
   if (p.h && p.h !== 'native') { try { p.h.destroy(); } catch (e) {} }
   const v = vid(cell); if (v) cleanVid(v);
+  cell.classList.remove('is-playing');
   p.h = null; p.loading = p.loaded = p.playing = p.stopped = false;
   rumPush({ h: p.host, f: 1 }); p.hedged = false;
   p.dead = true; p.tries = (p.tries || 0) + 1; p.step = 0; p.rest = 0;
@@ -7496,7 +7544,7 @@ function kill(cell){
     showSnap(cell, p);
     badge(cell, 'live', 'Live Snap');
   } else {
-    p.snapMode = false; p.bad = true; orderCams();
+    p.snapMode = false; p.bad = true;
     if (cam) {
       camReport(cam.s, false);
       const k = camKey(cam.s);
@@ -7504,11 +7552,26 @@ function kill(cell){
         cb.until = Date.now() + Math.min(30000, 3000 * cb.n); camBad.set(k, cb); }
     }
     badge(cell, 'off', 'Offline');
+    if (p.tries >= 2 || (rc && CAMS[rc._i] && CAMS[rc._i].fails >= 2)) {
+      cell.hidden = true;
+      cell.classList.add('is-offline');
+      layout();
+    } else {
+      orderCams();
+    }
   }
   clearTimeout(p.retry);
-  const backoff = p.snapMode ? 30000 : Math.min(300000, 5000 * Math.pow(2, Math.min(p.tries - 1, 6)));
-  p.retry = setTimeout(() => { p.dead = false; if (!p.snapMode) badge(cell, 'wait', 'Antre'); pump(); },
-    backoff * (0.7 + Math.random() * 0.6));
+  const backoff = p.snapMode ? 15000 : Math.min(300000, 10000 * Math.pow(2, Math.min(p.tries - 1, 5)));
+  p.retry = setTimeout(() => {
+    p.dead = false;
+    if (cell.hidden) {
+      cell.hidden = false;
+      cell.classList.remove('is-offline');
+      layout();
+    }
+    if (!p.snapMode) badge(cell, 'wait', 'Antre');
+    pump();
+  }, backoff * (0.8 + Math.random() * 0.4));
   pump(); upd();
 }
 function hideCell(cell){
@@ -7567,6 +7630,10 @@ function pump(){
   const vr = camVisRect();
   const liveCands = [];
   P.forEach((p, c) => {
+    if (c.hidden || c.style.display === 'none' || c.classList.contains('is-offline')) {
+      p.vis = false;
+      return;
+    }
     const rect = c.getBoundingClientRect();
     const fr = c.querySelector('.frame');
     const frameRect = fr ? fr.getBoundingClientRect() : null;
@@ -7834,7 +7901,9 @@ function cellHtml(c, i){
 }
 function layout(){
   const n = cols(); camGrid.style.setProperty('--cols', n);
-  const cells = [...camGrid.children].sort((a, b) => Number(a.style.order || 0) - Number(b.style.order || 0));
+  const cells = [...camGrid.children]
+    .filter(c => !c.hidden && c.style.display !== 'none' && !c.classList.contains('is-offline'))
+    .sort((a, b) => Number(a.style.order || 0) - Number(b.style.order || 0));
   const total = cells.length, r = total % n;
   cells.forEach(c => c.style.gridColumn = '');
   if (!r || total <= n) { if (total && total < n) cells.forEach(c => c.style.gridColumn = 'span ' + Math.floor(n / total)); return; }
@@ -8157,6 +8226,25 @@ async function pullCctv(){
     drawCityBar(); renderCams();
   } catch (e) {}
 }
+setInterval(() => {
+  if (document.hidden) return;
+  const offCells = [...camGrid.querySelectorAll('.cam.is-offline')];
+  if (!offCells.length) return;
+  offCells.slice(0, 3).forEach(cell => {
+    const p = P.get(cell);
+    const c = camOfCell(cell);
+    if (!p || !c) return;
+    const probe = c.snap || (API != null ? tokQ(API + '/api/cctv/snap?u=' + encodeURIComponent(c.s)) : null);
+    if (!probe) return;
+    fetch(probe, { method: 'HEAD', mode: 'no-cors' }).then(() => {
+      cell.hidden = false;
+      cell.classList.remove('is-offline');
+      p.dead = false; p.bad = false; p.tries = 0;
+      badge(cell, 'wait', 'Antre');
+      layout(); upd(); pump();
+    }).catch(() => {});
+  });
+}, 60000);
 
 const KIND_COLOR = { ...CAT_COLOR, node:'#525252' };
 const KIND_LABEL = { demo:'Demo', fire:'Kebakaran', flood:'Banjir', disaster:'Bencana', insiden:'Insiden', node:'Node tetap' };
