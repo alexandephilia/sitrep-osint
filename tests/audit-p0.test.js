@@ -233,7 +233,7 @@ test('public/index.html static invariants: no hostBad ReferenceError, CSS order,
   assert.equal(html.includes('hostBad.delete'), false, 'hostBad ReferenceError must be gone');
   assert.ok(html.includes('camBad.delete(camKey(cc.s))'));
   assert.equal(html.includes('cells.forEach(c => camGrid.appendChild(c))'), false, 'orderCams must not detach active video nodes');
-  assert.ok(html.includes("c.style.order = String((p.bad ? 100000 : 0) + (p.idx || 0))"));
+  assert.ok(html.includes('const nextOrd = String(CctvCore.camOrderValue(p, p.idx || 0, now))'), 'orderCams must reorder via tiered CSS order');
   assert.equal(html.includes('p.tries = Math.max(0, p.tries - 1)'), false, 'kill backoff must not decrement tries');
   assert.ok(html.includes('resolved.origin === location.origin'), '?api= must restrict to same-origin outside localhost');
   assert.ok(html.includes("/api/incidents?' + qs"), 'client should fetch /api/incidents with nodes=0 optimization');
