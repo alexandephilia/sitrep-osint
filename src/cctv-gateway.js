@@ -119,7 +119,7 @@ function createGateway(d) {
     isKnownHost = () => true,
   } = d;
   const O = Object.assign({
-    maxActive: 48, perHost: 8, maxQueue: 64, snapActive: 8, snapMaxQueue: 64,
+    maxActive: 48, perHost: 8, maxQueue: 64, snapActive: 12, snapMaxQueue: 160,
     segCacheBytes: 64 << 20, segTtl: 30000, segCacheMax: 16 << 20, segMax: 25 << 20,
     plMin: 500, plMax: 2500,
     reqRate: 40, reqBurst: 200, byteRate: 3 << 20, byteBurst: 120 << 20,
@@ -605,8 +605,13 @@ function createGateway(d) {
         } catch (e) {}
       }
       const seg = new URL(upstreamOf(lines[lines.length - 1]), cur).href;
-      const s = await getBuffered(seg);
+      let s = await getBuffered(seg);
       let segBuf = (s && (s.buf || s.snapPrefix)) || null;
+      if ((!s || s.status !== 200 || !segBuf) && lines.length >= 2) {
+        const prevSeg = new URL(upstreamOf(lines[lines.length - 2]), cur).href;
+        s = await getBuffered(prevSeg);
+        segBuf = (s && (s.buf || s.snapPrefix)) || null;
+      }
       if (!s || s.status !== 200 || !segBuf) throw new Error('segmen ' + (s ? s.status : 502));
       if (initBuf) segBuf = Buffer.concat([initBuf, segBuf]);
       return jpegFrom(segBuf);
@@ -655,7 +660,8 @@ function createGateway(d) {
       jpg = await entry.promise;
     } catch (e) {
       req.off('close', onClose);
-      if (!e || (e.status !== 503 && e.status !== 499)) {
+      const aborted = entry.ac.signal.aborted || (e && e.name === 'AbortError');
+      if (!aborted && (!e || (e.status !== 503 && e.status !== 499))) {
         snapFail.set(snapKey, Date.now() + (directUrl ? 5000 : 15000));
         if (snapFail.size > 2000) snapFail.delete(snapFail.keys().next().value);
       }

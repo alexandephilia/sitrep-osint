@@ -7413,7 +7413,7 @@ function showSnap(cell, p){
       if (p.snapMode) { badge(cell, 'live', 'Live'); upd(); }
     };
     im.onerror = () => {
-      if (!p.snapProxy && API != null) {
+      if (c.snap && !p.snapProxy && API != null) {
         p.snapProxy = true; p.snapAt = Date.now();
         im.src = snapUrl(c, true);
         return;
