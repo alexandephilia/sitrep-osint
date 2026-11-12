@@ -32,9 +32,21 @@ const ISLAND_OK = ['Kepulauan Seribu'];
 const PROV_CAP = { '11': 'Banda Aceh', '12': 'Medan', '13': 'Padang', '14': 'Pekanbaru', '15': 'Jambi', '16': 'Palembang', '17': 'Bengkulu', '18': 'Bandar Lampung',
   '19': 'Pangkal Pinang', '21': 'Tanjung Pinang', '31': 'Jakarta Pusat', '32': 'Bandung', '33': 'Semarang', '34': 'Yogyakarta', '35': 'Surabaya', '36': 'Serang',
   '51': 'Denpasar', '52': 'Mataram', '53': 'Kupang', '61': 'Pontianak', '62': 'Palangka Raya', '63': 'Banjar Baru', '64': 'Samarinda', '65': 'Bulungan',
-  '71': 'Manado', '72': 'Palu', '73': 'Makassar', '74': 'Kendari', '75': 'Gorontalo', '76': 'Mamuju', '81': 'Ambon', '82': 'Tidore Kepulauan',
+  '71': 'Manado', '72': 'Palu', '73': 'Makassar', '74': 'Kendari', '75': 'Gorontalo', '76': 'Mamuju', '81': 'Ambon', '82': 'Sofifi',
   '91': 'Jayapura', '92': 'Manokwari', '93': 'Merauke', '94': 'Nabire', '95': 'Jayawijaya', '96': 'Sorong' };
-const fixes = { kab: {}, prov: {} }, report = [];
+const PROV_CAP_PINNED = { '82': [0.73288, 127.56228, 'Sofifi'] };
+const KEC_FIXES = {
+  '95.02.33': [-4.37548, 140.00063, 'Pamek'],
+  '95.04.46': [-3.81569, 138.55646, 'Yuko'],
+  '96.01.23': [-0.81222, 132.12352, 'Saengkeduk']
+};
+const VILLAGE_FIXES = {
+  '81.01.01.2021': [-3.25633, 129.09064, 'Nua Nea'],
+  '53.13.06.2021': [-8.19139, 123.76528, 'Normal I'],
+  '19.06.01.2010': [-2.8123, 108.4023, 'Buku Limau']
+};
+const compactKey = s => String(s || '').replace(/^Kota\s+/i, '').replace(/\s+/g, '').toLowerCase();
+const fixes = { kab: {}, prov: {}, kec: KEC_FIXES, village: VILLAGE_FIXES }, report = [];
 for (const k of G.kab) {
   if (onLand(k.lo, k.la) || ISLAND_OK.some(n => k.name.includes(n))) continue;
   const n = nearestLand(k.lo, k.la), inl = n.pt && pushInland(n.pt);
@@ -42,9 +54,31 @@ for (const k of G.kab) {
   else report.push(['kab', k.name, +n.km.toFixed(1), 'PERIKSA MANUAL']);
 }
 for (const p of G.prov) {
-  if (onLand(p.lo, p.la)) continue;
-  const cap = G.kab.find(k => k.prov === p.code && k.name.replace(/^Kota /, '') === PROV_CAP[p.code] && onLand(k.lo, k.la)) || G.kab.find(k => k.prov === p.code && PROV_CAP[p.code] && k.name === PROV_CAP[p.code]);
-  if (cap) { fixes.prov[p.code] = [+cap.la.toFixed(5), +cap.lo.toFixed(5), cap.name]; report.push(['prov', p.name, +nearestLand(p.lo, p.la).km.toFixed(1), 'ke ibukota: ' + cap.name]); }
+  const pinned = PROV_CAP_PINNED[p.code];
+  if (pinned) {
+    let [la, lo, label] = pinned;
+    if (!onLand(lo, la)) {
+      const n = nearestLand(lo, la), inl = n.pt && pushInland(n.pt);
+      if (inl) { la = +inl[1].toFixed(5); lo = +inl[0].toFixed(5); }
+    }
+    fixes.prov[p.code] = [+la.toFixed(5), +lo.toFixed(5), label];
+    report.push(['prov', p.name, +(onLand(p.lo, p.la) ? 0 : nearestLand(p.lo, p.la).km).toFixed(1), 'ke ibukota: ' + label]);
+    continue;
+  }
+  const target = compactKey(PROV_CAP[p.code]);
+  const inProv = G.kab.filter(k => k.prov === p.code && compactKey(k.name) === target);
+  const cap = inProv.find(k => k.kota) || inProv[0];
+  if (cap) {
+    const fixedKab = fixes.kab[cap.code];
+    let la = fixedKab ? fixedKab[0] : cap.la;
+    let lo = fixedKab ? fixedKab[1] : cap.lo;
+    if (!onLand(lo, la)) {
+      const n = nearestLand(lo, la), inl = n.pt && pushInland(n.pt);
+      if (inl) { la = +inl[1].toFixed(5); lo = +inl[0].toFixed(5); }
+    }
+    fixes.prov[p.code] = [+la.toFixed(5), +lo.toFixed(5), cap.name];
+    report.push(['prov', p.name, +(onLand(p.lo, p.la) ? 0 : nearestLand(p.lo, p.la).km).toFixed(1), 'ke ibukota: ' + cap.name]);
+  }
   else report.push(['prov', p.name, 0, 'ibukota tidak ketemu']);
 }
 function run() {

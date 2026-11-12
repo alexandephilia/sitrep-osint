@@ -24,10 +24,6 @@ const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u03
 
   for (const k of kab) if (k.la > 6.2 || k.la < -11.1 || k.lo < 94.9 || k.lo > 141.1) throw new Error('koordinat di luar Indonesia: ' + k.name);
 
-  const acc = {};
-  for (const k of kab) { const a = acc[k.prov] || (acc[k.prov] = { la: 0, lo: 0, n: 0 }); a.la += k.la; a.lo += k.lo; a.n++; }
-  for (const p of Object.values(prov)) { const a = acc[p.code]; if (a) { p.la = +(a.la / a.n).toFixed(4); p.lo = +(a.lo / a.n).toFixed(4); } }
-
   const kec = {};
   for (const line of all.split('\n')) {
     const m = /^\('(\d\d\.\d\d\.\d\d)','((?:[^']|'')*)'\)/.exec(line); if (!m) continue;
@@ -37,7 +33,7 @@ const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u03
   }
   const kecOut = {};
   for (const [n, s] of Object.entries(kec)) kecOut[n] = [...s];
-  const out = { src: 'cahyadsn/wilayah (Kepmendagri 300.2.2-2138/2025)', prov: Object.values(prov), kab, kec: kecOut };
+  const out = { src: 'cahyadsn/wilayah (Kepmendagri 300.2.2-2430/2025)', prov: Object.values(prov), kab, kec: kecOut };
   fs.mkdirSync(path.join(__dirname, '..', 'geo'), { recursive: true });
   fs.writeFileSync(path.join(__dirname, '..', 'geo', 'gazetteer.json'), JSON.stringify(out));
   console.log('prov', out.prov.length, 'kab/kota', kab.length, 'kec', Object.keys(kecOut).length);

@@ -2,6 +2,23 @@
 
 const https = require('https');
 
+const VOLCANO_COORDS = {
+  'Anak Krakatau':[-6.10,105.42],'Merapi':[-7.54,110.44],'Semeru':[-8.11,112.92],'Ibu':[1.49,127.63],
+  'Dukono':[1.69,127.88],'Sangeang Api':[-8.20,119.07],'Bromo':[-7.94,112.95],'Agung':[-8.34,115.51],
+  'Sinabung':[3.17,98.39],'Kerinci':[-1.70,101.26],'Dempo':[-4.02,103.13],'Papandayan':[-7.32,107.73],
+  'Guntur':[-7.25,107.85],'Batu Tara':[-7.79,123.58],'Karangetang':[2.78,125.41],'Lokon':[1.37,124.83],
+  'Kelimutu':[-8.77,121.82],'Egon':[-8.68,122.45],'Lewotobi':[-8.54,122.77],
+  'Lewotolo':[-8.27,123.50],'Paluweh':[-8.32,121.78],'Ili Lewotolok':[-8.27,123.50],'Sirung':[-8.49,124.13],
+  'Namlegung':[-8.07,123.40],'Iya':[-8.89,121.63],'Batur':[-8.24,115.38],'Gamalama':[0.80,127.33],
+  'Dieng':[-7.20,109.90],'Slamet':[-7.24,109.21],'Lawu':[-7.63,111.19],'Merbabu':[-7.45,110.44],
+  'Kelud':[-7.93,112.31],'Raung':[-8.13,114.06],'Argopuro':[-7.77,113.58],'Ijen':[-8.06,114.24],
+  'Marapi':[-0.38,100.47],'Soputan':[1.11,124.73],'Ruang':[2.30,125.37],'Tambora':[-8.25,118.0],
+  'Rinjani':[-8.41,116.46],'Tangkuban Parahu':[-6.76,107.61],'Galunggung':[-7.25,108.06],
+  'Ili Boleng':[-8.344,123.252],'Ile Werung':[-8.532,123.573],'Inerie':[-8.875,120.95],
+  'Awu':[3.667,125.500],'Banda Api':[-4.525,129.871],'Talang':[-0.978,100.679],
+  'Ciremai':[-6.892,108.40],'Gede':[-6.78,106.98],'Salak':[-6.716,106.734],'Sumbing':[-7.385,110.073]
+};
+
 function createGeoSensors({
   crypto,
   UA,
@@ -52,17 +69,6 @@ function createGeoSensors({
   });
 
   const disCache = { at: 0, data: null };
-  const VOLCANO_COORDS = {
-    'Anak Krakatau':[-6.10,105.42],'Merapi':[-7.54,110.44],'Semeru':[-8.11,112.92],'Ibu':[-1.49,127.63],
-    'Dukono':[1.69,127.88],'Sangeang Api':[-8.20,119.07],'Bromo':[-7.94,112.95],'Agung':[-8.34,115.51],
-    'Sinabung':[3.17,98.39],'Kerinci':[-1.70,101.26],'Dempo':[-4.02,103.13],'Papandayan':[-7.32,107.73],
-    'Guntur':[-7.25,107.85],'Batu Tara':[-7.79,123.58],'Karangetang':[2.78,125.41],'Lokon':[1.37,124.83],
-    'Kelimutu':[-8.77,122.80],'Egon':[-8.68,122.45],'Lewotobi':[-8.54,122.77],
-    'Lewotolo':[-8.27,123.50],'Paluweh':[-8.32,121.78],'Ili Lewotolok':[-8.27,123.50],'Sirung':[-8.49,124.13],
-    'Namlegung':[-8.07,123.40],'Iya':[-8.89,121.63],'Batur':[-8.24,115.38],'Gamalama':[-8.08,127.32],
-    'Dieng':[-7.20,109.90],'Slamet':[-7.24,109.21],'Lawu':[-7.63,111.19],'Merbabu':[-7.45,110.44],
-    'Kelud':[-7.93,112.31],'Raung':[-8.13,114.06],'Argopuro':[-7.77,113.58],'Ijen':[-8.06,114.24]
-  };
   function parseMagma(html) {
     const marks = [...html.matchAll(/Level\s+(IV|III|II|I)\s*\((Awas|Siaga|Waspada|Normal)\)/g)];
     const out = [];
@@ -675,4 +681,4 @@ function createGeoSensors({
   };
 }
 
-module.exports = { createGeoSensors };
+module.exports = { createGeoSensors, VOLCANO_COORDS };

@@ -9,8 +9,8 @@ try {
   if (fs.existsSync(BIG_PATH)) BIG = JSON.parse(fs.readFileSync(BIG_PATH, 'utf8'));
 } catch (e) {}
 
-let FIX = { kab: {}, prov: {} };
-try { FIX = require(path.join(__dirname, '..', 'geo', 'coord-fixes.json')); } catch (e) {}
+let FIX = { kab: {}, prov: {}, kec: {}, village: {} };
+try { FIX = { kab: {}, prov: {}, kec: {}, village: {}, ...require(path.join(__dirname, '..', 'geo', 'coord-fixes.json')) }; } catch (e) {}
 for (const k of G.kab) { const f = FIX.kab[k.code]; if (f) { k.la = f[0]; k.lo = f[1]; } }
 for (const p of G.prov) { const f = FIX.prov[p.code]; if (f) { p.la = f[0]; p.lo = f[1]; } }
 
@@ -118,9 +118,12 @@ const VOLC = {
   'tangkuban perahu': [-6.76, 107.61], galunggung: [-7.25, 108.06], slamet: [-7.24, 109.21], dieng: [-7.20, 109.90], lawu: [-7.63, 111.19], kelud: [-7.93, 112.31],
   raung: [-8.13, 114.06], ijen: [-8.06, 114.24], batur: [-8.24, 115.38], rinjani: [-8.41, 116.46], tambora: [-8.25, 118.0], 'sangeang api': [-8.20, 119.07],
   'lewotobi laki laki': [-8.54, 122.77], 'lewotobi': [-8.54, 122.77], 'ili lewotolok': [-8.27, 123.50], lewotolok: [-8.27, 123.50], 'batu tara': [-7.79, 123.58],
-  karangetang: [2.78, 125.41], lokon: [1.37, 124.83], soputan: [1.11, 124.73], ruang: [2.30, 125.37], ibu: [1.49, 127.63], dukono: [1.69, 127.88], gamalama: [0.80, 127.33], kelimutu: [-8.77, 122.80], egon: [-8.68, 122.45]
+  karangetang: [2.78, 125.41], lokon: [1.37, 124.83], soputan: [1.11, 124.73], ruang: [2.30, 125.37], ibu: [1.49, 127.63], dukono: [1.69, 127.88], gamalama: [0.80, 127.33], kelimutu: [-8.77, 121.82], egon: [-8.68, 122.45],
+  merbabu: [-7.45, 110.44], paluweh: [-8.32, 121.78], sirung: [-8.49, 124.13], iya: [-8.89, 121.63], argopuro: [-7.77, 113.58],
+  'ili boleng': [-8.344, 123.252], 'ile werung': [-8.532, 123.573], inerie: [-8.875, 120.95], awu: [3.667, 125.500], 'banda api': [-4.525, 129.871],
+  talang: [-0.978, 100.679], ciremai: [-6.892, 108.40], gede: [-6.78, 106.98], salak: [-6.716, 106.734], sumbing: [-7.385, 110.073]
 };
-const VOLC_BARE = new Set(['merapi', 'semeru', 'bromo', 'sinabung', 'kerinci', 'marapi', 'krakatau', 'anak krakatau', 'karangetang', 'lokon', 'soputan', 'lewotobi', 'lewotobi laki laki', 'ili lewotolok', 'lewotolok', 'kelud', 'raung', 'galunggung', 'tangkuban perahu', 'rinjani', 'tambora', 'papandayan', 'sangeang api', 'dukono', 'gamalama', 'kelimutu']);
+const VOLC_BARE = new Set(['merapi', 'semeru', 'bromo', 'sinabung', 'kerinci', 'marapi', 'krakatau', 'anak krakatau', 'karangetang', 'lokon', 'soputan', 'lewotobi', 'lewotobi laki laki', 'ili lewotolok', 'lewotolok', 'kelud', 'raung', 'galunggung', 'tangkuban perahu', 'rinjani', 'tambora', 'papandayan', 'sangeang api', 'dukono', 'gamalama', 'kelimutu', 'inerie', 'ili boleng', 'ile werung', 'banda api', 'ciremai', 'merbabu', 'paluweh', 'sirung', 'egon']);
 const POI = [];
 for (const [nm, [la, lo]] of Object.entries(VOLC)) {
   const label = 'Gunung ' + nm.replace(/\b\w/g, c => c.toUpperCase());
@@ -143,7 +146,7 @@ LM('monas', 'Monas', -6.1754, 106.8272, /(?:^| )(?:monas|patung kuda|medan merde
 LM('mk', 'Mahkamah Konstitusi', -6.1751, 106.8228, /(?:^| )(?:gedung mk|mahkamah konstitusi)(?= |$)/);
 LM('kpk', 'Gedung KPK', -6.2115, 106.8315, /(?:^| )(?:gedung kpk|kantor kpk|kpk ri)(?= |$)/);
 LM('kpu', 'KPU RI', -6.1994, 106.8322, /(?:^| )(?:gedung kpu|kantor kpu|kpu ri)(?= |$)/);
-POI.push({ re: /(?:^| )pelaga(?= |$)/, e: { id: 'pelaga', level: 'poi', name: 'Pelaga, Badung', la: -8.36, lo: 115.35, prov: 'Bali', prec: 'poi' } });
+POI.push({ re: /(?:^| )pelaga(?= |$)/, e: { id: 'pelaga', level: 'poi', name: 'Pelaga, Badung', la: -8.2918, lo: 115.2127, prov: 'Bali', prec: 'poi' } });
 
 const CITY = [];
 const CUE_PRE = '(?:di|ke|dari|warga|sekitar|area|kecamatan|kec|pemkot|dishub|polres|truk|bus|angkot|mahasiswa)';
@@ -205,7 +208,7 @@ cpoi('bali-mester', 'Bali Mester, Jatinegara', -6.2135, 106.8725, J, ['bali mest
 cpoi('pulo-gadung', 'Pulo Gadung', -6.1911, 106.8906, J, ['pulo gadung']);
 cpoi('cipayung', 'Cipayung', -6.3294, 106.9037, J, ['cipayung']);
 cpoi('klender', 'Klender', -6.2133, 106.8994, J, ['klender']);
-cpoi('cakung', 'Cakung', -6.2191, 106.9525, J, ['cakung']);
+cpoi('cakung', 'Cakung', -6.1897, 106.9397, J, ['cakung']);
 cpoi('pasar-rebo', 'Pasar Rebo', -6.3250, 106.8534, J, ['pasar rebo']);
 cpoi('kalibata', 'Kalibata', -6.2624, 106.8403, J, ['kalibata']);
 cpoi('lebak-bulus', 'Lebak Bulus', -6.3017, 106.7797, J, ['lebak bulus']);
@@ -225,7 +228,7 @@ cpoi('gondokusuman', 'Gondokusuman', -7.7867, 110.3810, 'DI Yogyakarta', ['gondo
 cpoi('umbulharjo', 'Umbulharjo', -7.8144, 110.3874, 'DI Yogyakarta', ['umbulharjo']);
 cpoi('gejayan', 'Gejayan', -7.7712, 110.3905, 'DI Yogyakarta', ['gejayan', 'jalan gejayan']);
 cpoi('kota-gudeg', 'Yogyakarta', -7.7999, 110.3914, 'DI Yogyakarta', ['kota gudeg']);
-cpoi('mlati', 'Mlati', -7.8013, 110.3647, 'DI Yogyakarta', ['mlati'], true);
+cpoi('mlati', 'Mlati', -7.7384, 110.3443, 'DI Yogyakarta', ['mlati'], true);
 cpoi('bandung-kota', 'Bandung Kota', -6.9143, 107.6021, 'Jawa Barat', ['bandung kota']);
 cpoi('dago', 'Dago', -6.8750, 107.6160, 'Jawa Barat', ['dago']);
 cpoi('cihampelas', 'Cihampelas', -6.8989, 107.6043, 'Jawa Barat', ['cihampelas']);
@@ -331,10 +334,23 @@ for (const [code, name, kabCode] of BIG.kecamatan) {
   if (!bigKecByName.has(key)) bigKecByName.set(key, []);
   bigKecByName.get(key).push(row);
 }
+for (const [code, entry] of Object.entries(FIX.kec || {})) {
+  const [, , name] = entry;
+  if (!name || bigKecByCode.has(code)) continue;
+  const row = { code, name, kabCode: code.slice(0, 5), provCode: code.slice(0, 2) };
+  bigKecByCode.set(code, row);
+  const key = norm(name);
+  bigKecMaxWords = Math.max(bigKecMaxWords, key.split(' ').length);
+  if (!bigKecByName.has(key)) bigKecByName.set(key, []);
+  bigKecByName.get(key).push(row);
+}
 const bigProvNameByCode = new Map(BIG.provinces.map(([code, name]) => [code, name]));
 const villageIdx = new Map();
+const kecVillagePts = new Map();
 let villageMaxWords = 1, ambiguousVillageNames = 0;
 for (const [code, rawName, sourceType, la, lo, status] of BIG.places) {
+  const vFix = FIX.village && FIX.village[code];
+  const vLa = vFix ? vFix[0] : la, vLo = vFix ? vFix[1] : lo;
   const parts = code.split('.');
   const provCode = parts[0], kabCode = parts.slice(0, 2).join('.'), kecCode = parts.slice(0, 3).join('.');
   const kec = bigKecByCode.get(kecCode), baseKab = kabByCode[kabCode], prov = provByCode[provCode];
@@ -343,15 +359,30 @@ for (const [code, rawName, sourceType, la, lo, status] of BIG.places) {
   const shortKabName = fullKabName.replace(/^(Kabupaten|Kota Administrasi|Kota)\s+/i, '');
   const kabName = (!baseKab.kota && kotaNames.has(norm(shortKabName)) ? 'Kab. ' : '') + (LABEL_FIX[shortKabName] || shortKabName);
   const type = sourceType === 'Desa' ? 'desa' : 'kelurahan';
-  const row = { id: 'B' + code, code, level: 'village', type, rawName, name: rawName, la, lo,
+  const row = { id: 'B' + code, code, level: 'village', type, rawName, name: rawName, la: vLa, lo: vLo,
     prov: prov.name, provCode, kabCode, kecCode, kecName: kec.name, kabName,
-    prec: type, coordinateSource: 'BIG administrative polygon centroid', boundaryStatus: status };
+    prec: type, coordinateSource: vFix ? 'BIG village coord fix' : 'BIG administrative polygon centroid', boundaryStatus: status };
+  if (!kecVillagePts.has(kecCode)) kecVillagePts.set(kecCode, []);
+  kecVillagePts.get(kecCode).push([vLa, vLo]);
   const key = norm(rawName);
   if (!key) throw new Error('BIG village has empty normalized name: ' + code);
   villageMaxWords = Math.max(villageMaxWords, key.split(' ').length);
   if (!villageIdx.has(key)) villageIdx.set(key, []);
   villageIdx.get(key).push(row);
 }
+const bigKecCoords = new Map();
+for (const [kCode, pts] of kecVillagePts) {
+  if (pts.length === 1) { bigKecCoords.set(kCode, pts[0]); continue; }
+  const mLa = pts.map(p => p[0]).sort((a, b) => a - b)[pts.length >> 1];
+  const mLo = pts.map(p => p[1]).sort((a, b) => a - b)[pts.length >> 1];
+  let best = pts[0], bestD = Infinity;
+  for (const p of pts) {
+    const d = (p[0] - mLa) ** 2 + (p[1] - mLo) ** 2;
+    if (d < bestD) { bestD = d; best = p; }
+  }
+  bigKecCoords.set(kCode, best);
+}
+for (const [kCode, entry] of Object.entries(FIX.kec || {})) bigKecCoords.set(kCode, [entry[0], entry[1]]);
 
 const villageLabels = new Set();
 for (const [key, rows] of villageIdx) {
@@ -434,7 +465,7 @@ function locate(title) {
     const prev = tk[i - 1] || '';
     const explicit = PREFIX_KEC.has(prev), loose = !explicit && KEC_LOOSE.has(prev);
     if (!explicit && !loose) continue;
-    for (let n = Math.min(3, tk.length - i); n >= 1; n--) {
+    for (let n = Math.min(Math.max(3, bigKecMaxWords), tk.length - i); n >= 1; n--) {
       const key = tk.slice(i, i + n).join(' ');
       const bigRows = bigKecByName.get(key) || [];
       const parents = kecIdx.get(key) || [...new Set(bigRows.map(r => r.kabCode))];
@@ -443,10 +474,19 @@ function locate(title) {
       const pc = parents.length === 1 ? parents[0] : parents.find(c => matched.some(m => m.id === c || (m.level === 'prov' && m.prov === (kabByCode[c] || {}).prov)));
       if (!pc || !kabByCode[pc]) break;
       const district = bigRows.filter(r => r.kabCode === pc);
-      const districtName = district.length === 1 ? district[0].name : (key || 'kecamatan');
+      const kecEntry = district.length === 1 ? district[0] : null;
+      const districtName = kecEntry ? kecEntry.name : (key || 'kecamatan');
       const parent = kabByCode[pc];
-      const e = { ...parent, id: district.length === 1 ? 'K' + district[0].code : parent.id, level: 'kec',
-        name: `Kecamatan ${districtName}, ${parent.name}`, prec: 'kec', coordinateSource: 'parent kab/kota center' };
+      const kCoord = kecEntry ? bigKecCoords.get(kecEntry.code) : null;
+      const e = {
+        ...parent,
+        id: kecEntry ? 'K' + kecEntry.code : parent.id,
+        ...(kecEntry ? { provCode: kecEntry.provCode, kabCode: kecEntry.kabCode, kecCode: kecEntry.code } : {}),
+        ...(kCoord ? { la: kCoord[0], lo: kCoord[1], coordinateSource: FIX.kec && FIX.kec[kecEntry.code] ? 'Kepmendagri 2025 kecamatan center' : 'BIG kecamatan village medoid' } : { coordinateSource: 'parent kab/kota center' }),
+        level: 'kec',
+        name: `Kecamatan ${districtName}, ${parent.name}`,
+        prec: 'kec'
+      };
       cands.push({ e, pos: i, cue: 1.5, score: LEVEL.kec, key });
       break;
     }
@@ -556,6 +596,7 @@ function locate(title) {
     ...(e.provCode ? { provCode: e.provCode } : {}),
     ...(e.kabCode ? { kabCode: e.kabCode } : {}),
     ...(e.kecCode ? { kecCode: e.kecCode } : {}),
+    ...(e.coordinateSource && !e.code ? { coordinateSource: e.coordinateSource } : {}),
     ...(e.code ? { code: e.code, coordinateSource: e.coordinateSource, boundaryStatus: e.boundaryStatus } : {}) };
 }
 
