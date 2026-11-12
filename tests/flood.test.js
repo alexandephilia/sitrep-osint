@@ -139,5 +139,7 @@ test('frontend flood telemetry, globe auto-focus, toast alert, and legend parity
   assert.match(html, /PINTU AIR · /);
   assert.match(html, /GENANGAN BANJIR · PETABENCANA\.ID/);
   assert.match(html, /'Banjir'\}?<\/span><\/span>|'Banjir'<\/span><\/span>|compactSensors \? 'BNJ' : 'Banjir'/);
-  assert.match(html, /data-layer="tma"[^>]*>.*<span>Banjir<\/span>/);
+  assert.match(html, /<symbol id="i-m-flood"/);
+  assert.match(html, /data-layer="tma"[^>]*>.*#i-m-flood.*<span>Banjir<\/span>/);
+  assert.match(html, /mp-flood-ic/);
 });

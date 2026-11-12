@@ -1569,7 +1569,7 @@ async function pullDisaster(){
         m.bindPopup(
           `<div class="mp-hud-card">
             <div class="mp-hud-head">
-              <span class="mp-k" style="color:${col}"><span class="mp-pulse-dot" style="color:${col}"></span>PINTU AIR · DSDA DKI</span>
+              <span class="mp-k" style="color:${col}"><svg class="ic mp-flood-ic" aria-hidden="true"><use href="#i-m-flood"></use></svg>PINTU AIR · DSDA DKI</span>
               <span class="mp-hud-tag" style="color:${col};border-color:${col}55">${esc(g.siaga_label || 'Siaga ' + siaga)}</span>
             </div>
             <div class="mp-hud-grid">
@@ -1616,7 +1616,7 @@ async function pullDisaster(){
         const poly = L.geoJSON(a.geometry, {
           style: { color: col, weight: 1.5, fillColor: col, fillOpacity: 0.24 }
         });
-        poly.bindPopup(`<div class="mp-k" style="color:${col}">GENANGAN BANJIR · PETABENCANA.ID</div>
+        poly.bindPopup(`<div class="mp-k" style="color:${col}"><svg class="ic mp-flood-ic" aria-hidden="true"><use href="#i-m-flood"></use></svg>GENANGAN BANJIR · PETABENCANA.ID</div>
           <div class="mp-t">${esc(a.name)}${a.city ? ' — ' + esc(a.city) : ''}</div>
           <div class="mp-m">${esc(a.parent || '')} · Siaga Level ${st}</div>`);
         tmaMarkers.push(poly);
@@ -1649,7 +1649,7 @@ async function pullDisaster(){
           fillColor: '#4589ff',
           fillOpacity: 0.88
         });
-        cm.bindPopup(`<div class="mp-k" style="color:#4589ff">LAPORAN BANJIR · PETABENCANA.ID</div>
+        cm.bindPopup(`<div class="mp-k" style="color:#4589ff"><svg class="ic mp-flood-ic" aria-hidden="true"><use href="#i-m-flood"></use></svg>LAPORAN BANJIR · PETABENCANA.ID</div>
           <div class="mp-t">${esc(r.title)}${r.depth ? ' (' + r.depth + ' cm)' : ''}</div>
           <div class="mp-m">${esc(r.text || '')}</div>`);
         cm.bindTooltip(`${esc(r.title)}${r.depth ? ' · ' + r.depth + ' cm' : ''}`, { direction: 'top', offset: [0, -6], opacity: .9 });
