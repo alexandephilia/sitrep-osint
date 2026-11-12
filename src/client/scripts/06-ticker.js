@@ -23,7 +23,7 @@ const TK_SIG = { demo:'#i-tk-demo', fire:'#i-tk-fire', flood:'#i-tk-flood', disa
   insiden:'#i-tk-insiden', siber:'#i-tk-siber', kriminal:'#i-tk-kriminal',
   kesehatan:'#i-tk-kesehatan', ekonomi:'#i-tk-ekonomi', politik:'#i-tk-politik' };
 let breakPrev = new Set(), breakSeeded = false;
-let tkFreshTimer = 0;
+let tkFreshTimer = 0, tkSurgeTimer = 0;
 const renderTk = (h, isNew) => {
   const cat = newsCat(h);
   return `<a class="tk${isNew ? ' tk-new' : ''}" data-cat="${esc(cat)}" href="${escUrl(h.url)}" target="_blank" rel="noopener" title="${esc(h.label || CAT_LABEL[cat] || '')}">` +
@@ -76,6 +76,14 @@ function buildTicker(force){
   if (freshN) tkFreshTimer = setTimeout(() => {
     document.querySelectorAll('.tk-fresh').forEach(el => el.remove());
   }, 30000);
+  const tkRoot = $('#ticker');
+  if (tkRoot && freshN) {
+    tkRoot.classList.remove('tk-surge');
+    void tkRoot.offsetWidth;
+    tkRoot.classList.add('tk-surge');
+    clearTimeout(tkSurgeTimer);
+    tkSurgeTimer = setTimeout(() => tkRoot.classList.remove('tk-surge'), 4900);
+  }
   const tkSep = '<span class="tk-sep" aria-hidden="true">///</span>';
   const one = [liveChip, ...breakItems.map(h => renderTk(h, fresh.has(h.url || h.title)))].join(tkSep) + tkSep;
   const vp = $('.tk-vp').clientWidth || innerWidth;

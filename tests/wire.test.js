@@ -215,7 +215,7 @@ test('in-app reader media uses adaptive mosaic grid classes and bounded layout',
   assert.ok(html.includes('class="rd-media rd-m-${mCount}"'), 'rdPost must attach dynamic rd-m-${mCount} class to media container');
 });
 
-test('breaking ticker uses a fixed column grid, canted telemetry blades and a fading gutter mark instead of animation slop', () => {
+test('breaking ticker uses a fixed column grid, canted telemetry blades and full-marquee soft shimmer without red lines', () => {
   const fs = require('fs');
   const path = require('path');
   const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
@@ -227,14 +227,18 @@ test('breaking ticker uses a fixed column grid, canted telemetry blades and a fa
   assert.ok(!html.includes('tk-sheen'), 'shimmer sheen must not exist');
   assert.ok(!html.includes('tk-laser') && !html.includes('tk-newflash') && !html.includes('tkpulse'), 'laser, flash and pulse animations must not exist');
   assert.ok(!html.includes('drop-shadow(0 0 4px rgba(241,194,27'), 'category glyphs must not glow');
+  const liveRule = (html.match(/\.tk-live\{[^}]*\}/) || [''])[0];
+  assert.ok(!html.includes('tk-mark') && !/255,59,65|e31b27/i.test(liveRule), 'red gutter mark and red LIVE hairline border must not exist');
 
   assert.ok(html.includes('.tk-mk{') && html.includes('background:none;border:none'), 'icon container must have no background box or border');
   assert.ok(html.includes('color:var(--cat,#8a8a94)'), 'glyph itself must be colored by category token');
   assert.ok(!html.includes('.tk-mk::after{'), 'the 2px underline mark must be gone');
   assert.ok(html.includes('class="tk-mk"><svg class="ic tk-sig"'), 'renderTk must wrap the glyph in .tk-mk');
 
-  assert.ok(html.includes('.tk.tk-new::before{') && html.includes('animation:tk-mark 6s linear forwards'), 'new items must use a self-extinguishing gutter mark');
-  assert.ok(html.includes('@media (prefers-reduced-motion:reduce){.tk.tk-new::before{animation:none}}'), 'gutter mark must respect reduced motion');
+  assert.ok(html.includes('.ticker.tk-surge::after{') && html.includes('animation:tk-marquee-shimmer'), 'new breaking arrivals must trigger a soft full-marquee shimmer');
+  assert.ok(html.includes("tkRoot.classList.add('tk-surge')"), 'buildTicker must activate tk-surge when fresh items arrive');
+  assert.ok(html.includes('.tk.tk-new::before{') && html.includes('animation:tk-shimmer'), 'new items must retain soft shimmer without tk-mark');
+  assert.ok(html.includes('@media (prefers-reduced-motion:reduce){.ticker.tk-surge::after,.ticker.tk-surge .tk-vp,.tk.tk-new::before,.tk.tk-new .tk-t{animation:none}}'), 'marquee shimmer must respect reduced motion');
 
   assert.ok(!html.includes('.tk-bg{') && !html.includes('--tk-cant'), 'canted card layer must be gone');
   assert.ok(html.includes('.tk-sep{') && html.includes('///'), 'ticker items must be separated by /// text');
