@@ -203,6 +203,6 @@ test('UI places Citra (Foto + S2) toggles right after API unit and before #map-r
   const mlEnd = html.indexOf('<div class="radar-ctrl"');
   const mlBlock = html.slice(mlStart, mlEnd);
   const hrefs = [...mlBlock.matchAll(/<button\b(?![^>]*\bhidden\b)[^>]*>[\s\S]*?<use href="(#[^"]+)"/g)].map(m => m[1]);
-  assert.equal(hrefs.length, 26, 'Expected 26 visible map toolbar buttons');
+  assert.equal(hrefs.length, 27, 'Expected 27 visible map toolbar buttons');
   assert.equal(new Set(hrefs).size, hrefs.length, 'Every visible map toolbar button must have a unique icon');
 });
