@@ -1,7 +1,7 @@
 'use strict';
 
 const CCTVCORE = require('../public/cctv-core');
-const { makeLane } = require('../cctv-gateway');
+const { makeLane } = require('./cctv-gateway');
 
 function createCctvCatalog({
   UA,

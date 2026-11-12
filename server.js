@@ -1,18 +1,18 @@
 'use strict';
-const SOC = require('./social');
-const HISTORY = require('./social-history');
-const ASSESS = require('./assessment');
-const NLP_ADAPTER = require('./nlp-adapter');
+const SOC = require('./src/social');
+const HISTORY = require('./src/social-history');
+const ASSESS = require('./src/assessment');
+const NLP_ADAPTER = require('./src/nlp-adapter');
 const nlpAdapter = NLP_ADAPTER.createNlpAdapter();
-const FEEDTEXT = require('./feedtext');
-const EXTRACT = require('./article-extract');
-const MEDIA = require('./article-media');
+const FEEDTEXT = require('./src/feedtext');
+const EXTRACT = require('./src/article-extract');
+const MEDIA = require('./src/article-media');
 const PIPELINE_VERSION = MEDIA.PIPELINE_VERSION;
 const assetReuse = new MEDIA.AssetReuseTracker();
-const COPERNICUS = require('./copernicus');
-const XPOOL = require('./xpool');
-const GEO = require('./geocode');
-const EVM = require('./evmerge');
+const COPERNICUS = require('./src/copernicus');
+const XPOOL = require('./src/xpool');
+const GEO = require('./src/geocode');
+const EVM = require('./src/evmerge');
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto'), zlib = require('zlib');
 
 try {
@@ -42,7 +42,7 @@ try {
   }
 } catch (e) {}
 
-const SEC = require('./security');
+const SEC = require('./src/security');
 const TRUSTED_ROOTS = SEC.loadTrustedRoots([
   ...String(process.env.SITREP_EXTRA_CA || '').split(/[,\n]/).map(s => s.trim()).filter(Boolean),
   ...(Array.isArray(CFG.trusted_ca) ? CFG.trusted_ca : (CFG.trusted_ca ? [CFG.trusted_ca] : []))
@@ -621,7 +621,7 @@ const GW_OPTIONS = {
   globalByteBurst: envPosInt('SITREP_HLS_GLOBAL_BURST', (isMacGwProfile ? 20 : 180) << 20),
   segCacheBytes: envPosInt('SITREP_HLS_CACHE_BYTES', (isMacGwProfile ? 32 : 64) << 20),
 };
-const GW = require('./cctv-gateway').createGateway({
+const GW = require('./src/cctv-gateway').createGateway({
   getRaw: mediaGetRaw, hostAllowed: hostOK, headersFor: cctvHeaders, rewriteUrl: cctvRewrite, px,
   trustProxy: Boolean(TRUST_PROXY),
   allowCors: openCors(),
@@ -1251,7 +1251,7 @@ const SITREP_SERVER = http.createServer(async (req, res) => {
     }
     if (u.pathname === '/api/xdiag') {
       if (!AUTH.hasRole(principal, 'admin')) return json({ ok: false, err: 'akses ditolak (butuh role admin)' }, 403);
-      const SQ = require('./social.js').socQueries('x', []);
+      const SQ = require('./src/social.js').socQueries('x', []);
       const tests = u.searchParams.get('all') ? SQ.map(e => e.q) : ['kebakaran', 'kebakaran lang:id', 'kebakaran -filter:replies', 'kebakaran lang:id -filter:replies', '(kebakaran OR damkar) lang:id -filter:replies', 'kebakaran since_time:' + Math.floor((Date.now() - 46 * 3600e3) / 1000)];
       const out = [];
       for (const q of tests) {

@@ -30,15 +30,15 @@ Real-time situation dashboard for Indonesia: incident news, social signals, disa
 - **Satellite** — Copernicus Sentinel-2 L2A tile proxy (CDSE) with quota caps and disk cache
 
   ![Sentinel-2 true-color overlay via Copernicus](docs/map-copernicus.jpg)
-- **CCTV/TV gateway** — HLS/VHS proxy with segment caching, playlist rewriting, and a curated camera catalog (BPJT, Jogja, Molecool, international channels)
+- **CCTV/TV gateway** — HLS/VHS proxy with segment caching, playlist rewriting, fMP4 init-segment (#EXT-X-MAP) and continuous MJPEG stream frame extraction, dedicated Pantau Banjir & Kali monitoring (DSDA Jakarta Waduk Pluit, Tangerang floodgates, Kali Ciliwung), and a curated camera catalog (BPJT, Jogja, Molecool, international channels)
 
   ![Live CCTV camera grid](docs/cctv.jpg)
 
 ## Stack
 
-- **Backend:** `server.js` — Node.js ≥24, native `http` + `franc` (only runtime dep)
+- **Backend:** `server.js` (HTTP gateway, routing, auth) + modular domain services in `src/` — Node.js ≥24, native `http` + `franc` (only runtime dep)
 - **Worker:** `vendor/threads_*.py` — Python 3 + `curl_cffi` (pinned in `requirements.txt`)
-- **Frontend:** `public/index.html` — single-file vanilla JS/CSS, no build step
+- **Frontend:** `public/index.html` — console dashboard (vanilla JS/CSS, no build step) with modular UMD browser cores (`public/cctv-core.js`, `public/signals.js`, `public/wire-core.js`)
 
 ## Quickstart
 
@@ -89,16 +89,20 @@ Full model, SSRF/DNS-pinning details, and reporting policy: [`SECURITY.md`](SECU
 
 ```text
 server.js              API surface, auth guard, boot + service wiring
-src/                   domain services — news, reader, social, market,
-                       geo sensors, CCTV catalog, TomTom, metrics
-security.js            SSRF guard, DNS-pinned HTTP/TLS, RBAC, rate-limit
-copernicus.js          Sentinel-2 tile proxy + quota + disk cache
-cctv-gateway.js        /hls & /vhs gateway, segment cache, coalescing
-social*.js             X/Threads ingestion, clustering, history, diagnostics
-public/index.html      UI (vanilla JS/CSS, no build)
+src/                   modular domain services & core engines (24 modules):
+                       ├── news-service, reader-service, social-service
+                       ├── cctv-gateway, cctv-catalog
+                       ├── security (SSRF guard, DNS-pinning, TLS chain repair)
+                       ├── geo-sensors, geocode, tomtom, copernicus
+                       ├── indonesian-nlp, nlp-adapter, feedtext, assessment, evmerge
+                       ├── social, social-cluster, social-history, social-diagnostics, xpool
+                       └── market, metrics
+*.js (root shims)      16 backward-compatibility shims forwarding to src/*
+public/index.html      UI console (vanilla JS/CSS, no build)
+public/*.js            extracted UMD browser modules (cctv-core, signals, wire-core, wxicons)
 vendor/                Python Threads scraper (see vendor/THREADS-SCRAPER-LICENSE)
 geo/                   Indonesian gazetteer & village index
-tests/                 node:test suite — npm test
+tests/                 node:test suite (284 tests) — npm test
 ```
 
 ## Deploy
