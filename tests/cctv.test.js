@@ -1,6 +1,8 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
 const http = require('http');
 const C = require('../public/cctv-core');
 const { createGateway, makeLane, makeBucket, makeLru } = require('../cctv-gateway');
@@ -552,4 +554,13 @@ test('gateway snap: serves direct JPEG snapshots for dpuprkotang.info without re
   assert.equal(r3.status, 200);
   assert.deepEqual(r3.body, fakeJpegB);
   assert.equal(calls.length, 2, 'different src=Alamanda must not collide with src=Sarakan');
+});
+
+test('cctv client pump re-entrancy lock and snapMode loop prevention', () => {
+  const cctvSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'scripts', '07-cctv.js'), 'utf8');
+  assert.ok(cctvSrc.includes('let inPump = false;'), 'must declare inPump re-entrancy lock');
+  assert.ok(cctvSrc.includes('if (inPump) { pumpSoon(); return; }'), 'must exit pump early when already inside pump frame');
+  assert.ok(!/if\s*\(c\s*&&\s*isDirectSnapFeed[^\}]*pump\(\);/.test(cctvSrc), 'startCell direct snap branch must never call pump() synchronously');
+  assert.ok(cctvSrc.includes('(p.h || p.snapMode) && p.loaded && !p.stopped'), 'pump must account for p.snapMode playing state');
+  assert.ok(cctvSrc.includes('if (!p.vis || ((p.h || p.snapMode) && !(p.stopped && !p.loaded))) continue;'), 'pump candidates filter must not repeatedly queue loaded snapMode feeds');
 });

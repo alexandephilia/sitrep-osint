@@ -63,7 +63,8 @@ function snapUrl(cam, viaProxy){
     if (viaProxy && API != null) return tokQ(API + '/api/cctv/snap?u=' + encodeURIComponent(cam.snap) + '&t=' + t);
     return cam.snap + (cam.snap.includes('?') ? '&' : '?') + 't=' + t;
   }
-  return tokQ(API + '/api/cctv/snap?u=' + encodeURIComponent(cam.s) + '&v=' + Math.floor(Date.now() / 60000));
+  const step = isDirectSnapFeed(cam && cam.s, cam) ? 15000 : 60000;
+  return tokQ(API + '/api/cctv/snap?u=' + encodeURIComponent(cam.s) + '&v=' + Math.floor(Date.now() / step));
 }
 const snapCooldown = p => p.snapFail ? Math.min(60000, 10000 * (p.snapFailN || 1)) : 0;
 function showSnap(cell, p){
@@ -90,7 +91,7 @@ function showSnap(cell, p){
     fr.insertBefore(im, fr.firstChild);
   }
   const isMjpeg = /(^|\.)dsdajakarta\.id/i.test(c.snap || c.s || '');
-  if (!im.src || (!isMjpeg && (!p.snapAt || Date.now() - p.snapAt > (c.snap ? 15000 : 60000)))) {
+  if (!im.src || (!isMjpeg && (!p.snapAt || Date.now() - p.snapAt > ((c.snap || p.snapMode) ? 15000 : 60000)))) {
     p.snapAt = Date.now();
     im.src = snapUrl(c, p.snapProxy);
   }
@@ -156,8 +157,13 @@ function startCell(cell){
   const p = P.get(cell); if (!p || p.dead) return;
   const c = camList[+cell.dataset.i];
   if (c && isDirectSnapFeed(c.s, c)) {
-    p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
-    showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pump();
+    p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false; p.stopped = false;
+    showSnap(cell, p); badge(cell, 'live', 'Live'); upd();
+    return;
+  }
+  if (p.snapMode && !p.h) {
+    p.stopped = false; p.loading = false; p.loaded = true;
+    showSnap(cell, p); badge(cell, 'live', 'Live'); upd();
     return;
   }
   const v = mkVid(cell);
@@ -186,7 +192,7 @@ function startCell(cell){
         cleanVid(v); p.h = null;
         if (c && (c.snap || camSnapOK)) {
           p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
-          showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pump();
+          showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pumpSoon();
         } else if ((p.step = (p.step || 0) + 1) < steps.length) {
           startCell(cell);
         } else kill(cell);
@@ -197,7 +203,7 @@ function startCell(cell){
       v.onerror = null;
       if (c && (c.snap || camSnapOK) && !p.loaded) {
         cleanVid(v); p.h = null; p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
-        showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pump();
+        showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pumpSoon();
         return;
       }
       if ((p.step = (p.step || 0) + 1) < steps.length) { p.h = null; startCell(cell); }
@@ -225,7 +231,7 @@ function startCell(cell){
           if (c && (c.snap || camSnapOK)) {
             p.nerr = p.merr = p.stalls = 0; try { h.destroy(); } catch (e) {} p.h = null;
             p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
-            showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pump();
+            showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pumpSoon();
             return;
           }
           if ((p.step = (p.step || 0) + 1) < steps.length) {
@@ -248,7 +254,7 @@ function startCell(cell){
       } else if (c && (c.snap || camSnapOK)) {
         p.nerr = p.merr = 0; try { h.destroy(); } catch (e) {} p.h = null;
         p.snapMode = true; p.snapOk = true; p.loaded = true; p.loading = false;
-        showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pump();
+        showSnap(cell, p); badge(cell, 'live', 'Live'); upd(); pumpSoon();
       } else if ((p.step = (p.step || 0) + 1) < steps.length) {
         p.nerr = p.merr = 0; try { h.destroy(); } catch (e) {} p.h = null; startCell(cell);
       } else kill(cell);
@@ -290,10 +296,10 @@ function startCell(cell){
   };
 }
 function stopCell(cell){
-  const p = P.get(cell); if (!p || !p.h || p.stopped) return;
-  if (p.h !== 'native') { try { p.h.stopLoad(); } catch (e) {} }
-  try { vid(cell).pause(); } catch (e) {}
-  p.stopped = true; p.playing = false; p.loading = false; badge(cell, 'wait', 'Jeda'); upd();
+  const p = P.get(cell); if (!p || (!p.h && !p.snapMode) || p.stopped) return;
+  if (p.h && p.h !== 'native') { try { p.h.stopLoad(); } catch (e) {} }
+  if (p.h) { try { vid(cell).pause(); } catch (e) {} }
+  p.stopped = true; p.playing = false; p.loading = false; badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live' : 'Jeda'); upd();
 }
 
 const camOfCell = cell => { const p = P.get(cell); if (!p) return null;
@@ -419,93 +425,100 @@ function dropLoadingCell(cell){
   p.h = null; p.loading = false; p.visAt = 0;
   badge(cell, p.snapMode ? 'live' : 'wait', p.snapMode ? 'Live' : 'Antre'); upd();
 }
+let inPump = false;
 function pump(){
-  const vr = camVisRect();
-  const liveCands = [];
-  P.forEach((p, c) => {
-    if (c.hidden || c.style.display === 'none' || c.classList.contains('is-offline')) {
-      p.vis = false;
-      return;
-    }
-    const rect = c.getBoundingClientRect();
-    const fr = c.querySelector('.frame');
-    const frameRect = fr ? fr.getBoundingClientRect() : null;
-    const m = CctvCore.measureCell(rect, frameRect, vr);
-    p.vis = m.inView;
-    p.visTop = m.inView ? rect.top : 1e9;
-    p.visFrac = m.visFrac;
-    if (m.inView) {
-      clearTimeout(p.t); clearTimeout(p.rel); p.t = 0; p.rel = 0;
-      if (!p.dead) liveCands.push({ key: c, rect, frameRect, m, bad: !!p.bad, idx: p.idx });
-    } else if (!p.dead && (p.h || p.loading || p.loaded) && !p.rel) {
-      p.rel = setTimeout(() => { p.rel = 0; if (!isCellVisible(c)) releaseCell(c); }, OFF_FREE_MS);
-    }
-  });
-  const all = [...P.entries()].filter(([, p]) => !p.dead);
+  if (inPump) { pumpSoon(); return; }
+  inPump = true;
+  try {
+    const vr = camVisRect();
+    const liveCands = [];
+    P.forEach((p, c) => {
+      if (c.hidden || c.style.display === 'none' || c.classList.contains('is-offline')) {
+        p.vis = false;
+        return;
+      }
+      const rect = c.getBoundingClientRect();
+      const fr = c.querySelector('.frame');
+      const frameRect = fr ? fr.getBoundingClientRect() : null;
+      const m = CctvCore.measureCell(rect, frameRect, vr);
+      p.vis = m.inView;
+      p.visTop = m.inView ? rect.top : 1e9;
+      p.visFrac = m.visFrac;
+      if (m.inView) {
+        clearTimeout(p.t); clearTimeout(p.rel); p.t = 0; p.rel = 0;
+        if (!p.dead) liveCands.push({ key: c, rect, frameRect, m, bad: !!p.bad, idx: p.idx });
+      } else if (!p.dead && (p.h || p.loading || p.loaded) && !p.rel) {
+        p.rel = setTimeout(() => { p.rel = 0; if (!isCellVisible(c)) releaseCell(c); }, OFF_FREE_MS);
+      }
+    });
+    const all = [...P.entries()].filter(([, p]) => !p.dead);
 
-  const visRanked = CctvCore.pickLiveKeys(liveCands, vr);
-  const wantLive = new Set(visRanked.slice(0, LIVE_CAP));
-  const wantLoadSlot = new Set();
-  {
-    const hostNeed = {};
-    let totalNeed = 0;
-    for (const c of wantLive) {
-      const p = P.get(c);
-      if (!p || p.dead || p.loaded) continue;
-      if (!p.loading && camCooling(camOfCell(c))) continue;
-      const h = p.host || '';
-      if (totalNeed < MAXL && (hostNeed[h] || 0) < PERHOST) {
-        wantLoadSlot.add(c);
-        hostNeed[h] = (hostNeed[h] || 0) + 1;
-        totalNeed++;
+    const visRanked = CctvCore.pickLiveKeys(liveCands, vr);
+    const wantLive = new Set(visRanked.slice(0, LIVE_CAP));
+    const wantLoadSlot = new Set();
+    {
+      const hostNeed = {};
+      let totalNeed = 0;
+      for (const c of wantLive) {
+        const p = P.get(c);
+        if (!p || p.dead || p.loaded) continue;
+        if (!p.loading && camCooling(camOfCell(c))) continue;
+        const h = p.host || '';
+        if (totalNeed < MAXL && (hostNeed[h] || 0) < PERHOST) {
+          wantLoadSlot.add(c);
+          hostNeed[h] = (hostNeed[h] || 0) + 1;
+          totalNeed++;
+        }
       }
     }
-  }
-  for (const [c, p] of all) {
-    if (wantLive.has(c)) {
-      if (!p.visAt && !p.loaded) p.visAt = Date.now();
-      if (p.loading && !p.loaded && !wantLoadSlot.has(c)) dropLoadingCell(c);
-    } else if (p.loading && !p.loaded) {
-      dropLoadingCell(c);
-    } else if (p.h && p.loaded && !p.stopped) {
-      stopCell(c);
+    for (const [c, p] of all) {
+      if (wantLive.has(c)) {
+        if (!p.visAt && !p.loaded) p.visAt = Date.now();
+        if (p.loading && !p.loaded && !wantLoadSlot.has(c)) dropLoadingCell(c);
+      } else if (p.loading && !p.loaded) {
+        dropLoadingCell(c);
+      } else if ((p.h || p.snapMode) && p.loaded && !p.stopped) {
+        stopCell(c);
+      }
     }
-  }
-  const loadingByHost = {}; let loading = 0, playing = 0;
-  all.forEach(([, p]) => {
-    if (p.loading) { loading++; loadingByHost[p.host] = (loadingByHost[p.host] || 0) + 1; }
-    if (p.h && p.loaded && !p.stopped) playing++;
-  });
+    const loadingByHost = {}; let loading = 0, playing = 0;
+    all.forEach(([, p]) => {
+      if (p.loading) { loading++; loadingByHost[p.host] = (loadingByHost[p.host] || 0) + 1; }
+      if ((p.h || p.snapMode) && p.loaded && !p.stopped) playing++;
+    });
 
-  const wantOrder = new Map([...wantLive].map((c, idx) => [c, idx]));
-  all.sort((a, b) =>
-    ((wantOrder.has(a[0]) ? wantOrder.get(a[0]) : 1e6) - (wantOrder.has(b[0]) ? wantOrder.get(b[0]) : 1e6)) ||
-    (b[1].vis - a[1].vis) ||
-    ((a[1].visTop || 1e9) - (b[1].visTop || 1e9)) ||
-    ((a[1].dem || 0) - (b[1].dem || 0)) ||
-    (a[1].idx - b[1].idx)
-  );
-  let wake = 0; const cands = [], wait = [];
-  for (const [c, p] of all) {
-    if (p.loading) continue;
-    if (p.h && p.stopped && p.vis && p.loaded) {
-      if (wantLive.has(c) && playing < LIVE_CAP) { startCell(c); playing++; }
-      else wait.push(c);
-      continue;
+    const wantOrder = new Map([...wantLive].map((c, idx) => [c, idx]));
+    all.sort((a, b) =>
+      ((wantOrder.has(a[0]) ? wantOrder.get(a[0]) : 1e6) - (wantOrder.has(b[0]) ? wantOrder.get(b[0]) : 1e6)) ||
+      (b[1].vis - a[1].vis) ||
+      ((a[1].visTop || 1e9) - (b[1].visTop || 1e9)) ||
+      ((a[1].dem || 0) - (b[1].dem || 0)) ||
+      (a[1].idx - b[1].idx)
+    );
+    let wake = 0; const cands = [], wait = [];
+    for (const [c, p] of all) {
+      if (p.loading) continue;
+      if ((p.h || p.snapMode) && p.stopped && p.vis && p.loaded) {
+        if (wantLive.has(c) && playing < LIVE_CAP) { startCell(c); playing++; }
+        else wait.push(c);
+        continue;
+      }
+      if (!p.vis || ((p.h || p.snapMode) && !(p.stopped && !p.loaded))) continue;
+      if (!wantLive.has(c)) { wait.push(c); continue; }
+      const until = camCooling(camOfCell(c));
+      if (until) { wake = wake ? Math.min(wake, until) : until; continue; }
+      cands.push({ key: c, host: p.host });
     }
-    if (!p.vis || (p.h && !(p.stopped && !p.loaded))) continue;
-    if (!wantLive.has(c)) { wait.push(c); continue; }
-    const until = camCooling(camOfCell(c));
-    if (until) { wake = wake ? Math.min(wake, until) : until; continue; }
-    cands.push({ key: c, host: p.host });
-  }
-  const picked = new Set(CctvCore.pickStarts(cands, { maxLoad: Math.min(MAXL, LIVE_CAP - playing), perHost: PERHOST, loadingTotal: loading, loadingByHost }));
-  picked.forEach(c => startCell(c));
+    const picked = new Set(CctvCore.pickStarts(cands, { maxLoad: Math.min(MAXL, LIVE_CAP - playing), perHost: PERHOST, loadingTotal: loading, loadingByHost }));
+    picked.forEach(c => startCell(c));
 
-  cands.forEach(x => { if (!picked.has(x.key)) { const p = P.get(x.key); if (p) showSnap(x.key, p); } });
-  wait.forEach(c => { const p = P.get(c); if (p) showSnap(c, p); });
-  if (wake) setTimeout(pump, Math.max(500, wake - Date.now() + 300));
-  upd();
+    cands.forEach(x => { if (!picked.has(x.key)) { const p = P.get(x.key); if (p) showSnap(x.key, p); } });
+    wait.forEach(c => { const p = P.get(c); if (p) showSnap(c, p); });
+    if (wake) setTimeout(pump, Math.max(500, wake - Date.now() + 300));
+    upd();
+  } finally {
+    inPump = false;
+  }
 }
 let pumpT = 0, pumpMaxT = 0, pumpAt = 0;
 function runPump(){
@@ -663,7 +676,7 @@ setInterval(() => {
         p.h = null; p.loading = false; startCell(c); return;
       }
     }
-    if (p.vis && !p.h && (!p.dead || p.snapMode) && !p.loading) { const cc = camOfCell(c); if (camSnapOK || (cc && cc.snap)) { const im = c.querySelector('img.snap'); if (!im || (p.snapAt && Date.now() - p.snapAt > (cc && cc.snap ? 15000 : 60000))) showSnap(c, p); } }
+    if (p.vis && !p.h && (!p.dead || p.snapMode) && !p.loading) { const cc = camOfCell(c); if (camSnapOK || (cc && cc.snap) || p.snapMode) { const im = c.querySelector('img.snap'); if (!im || (p.snapAt && Date.now() - p.snapAt > ((cc && cc.snap) || p.snapMode ? 15000 : 60000))) showSnap(c, p); } }
     if (p.loading && Date.now() - p.t0 > 45000) return kill(c);
     const v = vid(c); if (!p.h || !p.loaded || p.stopped || !p.vis || !v || v._lbPaused) return;
     if (p.waitT && Date.now() - p.waitT > 10000) {

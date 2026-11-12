@@ -628,10 +628,11 @@ function createGateway(d) {
     let entry = snapIn.get(snapKey);
     if (!entry) {
       const ac = new AbortController();
+      const directHost = directUrl ? (() => { try { return new URL(directUrl).host; } catch (e) { return 'snap-direct'; } })() : 'snap';
       const flight = {
         ac,
         waiters: 0,
-        promise: (directUrl ? lane.run('snap-direct', async () => {
+        promise: (directUrl ? lane.run(directHost, async () => {
           let u = directUrl; try { u = await rewriteUrl(u); } catch (e) {}
           return snapshotFor(u, ac.signal);
         }, ac.signal) : snapLane.run('snap', async () => {
