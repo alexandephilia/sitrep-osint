@@ -55,8 +55,15 @@ const HISTORICAL = /\b(dulu|jaman dulu|zaman dulu|tempo dulu|sejarah|mengenang|k
 const HISTORICAL_YEAR = /\b(?:tahun|pada|sejak|era)\s+((?:19|20)\d{2})\b/i;
 
 function isHistorical(span, year = new Date().getFullYear()) {
-  if (HISTORICAL.test(span)) return true;
-  const m = HISTORICAL_YEAR.exec(span);
+  const hasCurrentTime = /\b(?:hari\s+ini|pagi\s+ini|siang\s+ini|sore\s+ini|malam\s+ini|saat\s+ini|sekarang|barusan|baru\s+saja|pukul\s+\d{1,2}[:.]\d{2}|\d{1,2}[:.]\d{2}\s*wib)\b/i.test(span);
+  const cleaned = String(span || '')
+    .replace(/\b(?:yang\s+)?(?:sudah\s+)?(?:berjalan|berlangsung|ada|hadir|digelar|diselenggarakan|dimulai)\s+sejak\s+(?:tahun\s+)?(?:19|20)\d{2}\b/gi, ' ')
+    .replace(/\b(?:dibangun|didirikan|diresmikan|dibuka|dibeli|dijual|berdiri|lulus|menikah)\s+(?:pada\s+)?(?:tahun\s+(?:19|20)\d{2}|(?:19|20)\d{2}|tahun\s+lalu|bulan\s+lalu|dulu)\b/gi, ' ');
+  if (hasCurrentTime && !/\b(?:mengenang|kilas\s+balik|nostalgia|sejarah|tempo\s+dulu|jaman\s+dulu|zaman\s+dulu)\b/i.test(span)) {
+    return false;
+  }
+  if (HISTORICAL.test(cleaned)) return true;
+  const m = HISTORICAL_YEAR.exec(cleaned);
   return !!m && Number(m[1]) < year;
 }
 
@@ -105,7 +112,9 @@ function concreteTarget(span, category) {
   if (category !== 'siber' && category !== 'ekonomi' && category !== 'politik' && category !== 'kesehatan') return null;
   const known = span.match(LOCAL_ORG);
   if (known) return known[0].toUpperCase();
-  const m = span.match(/\b(?:[Ss]erver|[Jj]aringan|[Ss]istem|[Ss]itus|[Ww]ebsite|[Ll]ayanan|[Aa]kun|[Pp]abrik|[Pp]erusahaan|[Rr]umah\s+[Ss]akit|[Rr][Ss][Uu]?[Dd]?|[Pp]uskesmas|[Kk]linik|[Ss][Pp][Pp][Gg]|[Bb]adan\s+[Gg]izi\s+[Nn]asional)\s+((?:[A-Z][\w.-]*)(?:\s+[A-Z][\w.-]*){0,3})\b/);
+  const enGov = span.match(/\b(?:[Ii]ndonesia['’]?s\s+)?(?:[Vv]ice[- ]?[Pp]resident|[Pp]resident|[Mm]inister|[Gg]overnment|[Pp]arliament)\b/);
+  if (enGov) return enGov[0].toUpperCase();
+  const m = span.match(/\b(?:[Ss]erver|[Jj]aringan|[Ss]istem|[Ss]itus|[Ww]ebsite|[Ll]ayanan|[Aa]kun|[Pp]abrik|[Pp]erusahaan|[Rr]umah\s+[Ss]akit|[Rr][Ss][Uu]?[Dd]?|[Pp]uskesmas|[Kk]linik|[Ss][Pp][Pp][Gg]|[Bb]adan\s+[Gg]izi\s+[Nn]asional|[Kk]omdigi|[Kk]ominfo)\s+((?:[A-Z][\w.-]*)(?:\s+[A-Z][\w.-]*){0,3})\b/);
   return m ? m[1] : null;
 }
 
@@ -137,7 +146,7 @@ function isReport(topic, span, location, target, nlpClause) {
     case 'kesehatan': return identity && (/kasus|pasien|terjangkit|keracunan|wabah|\bklb\b|kejadian luar biasa|meninggal|tewas|korban|dirawat|terinfeksi|dilarikan|intoksikasi/i.test(span) || (/(?:mual|muntah)/i.test(span) && /(?:massal|keracunan|makanan|mbg|dilarikan|rumah\s+sakit|\brs\b|puskesmas|korban|banyak\s+orang|warga)/i.test(span)));
     case 'insiden': return identity && EVENT_ACTION.test(span) && /(?:jembatan|gedung|bangunan|atap|plafon|rumah|dinding|konstruksi|tembok|jalan|tebing|tower|tiang|kapal|perahu|sampan|tongkang|speedboat|dermaga|pohon|orang|bocah|anak|korban|warga|penumpang)\b/i.test(span) && !/(?:hati|jiwa|perasaan|senyuman|cinta|asmara)\b/i.test(span);
     case 'ransomware': return CYBER_TARGET.test(span) && CYBER_ACTION.test(span) && identity;
-    case 'serangan siber': case 'akun dibajak': return CYBER_ACTION.test(span) && identity;
+    case 'serangan siber': case 'akun dibajak': return (CYBER_ACTION.test(span) || /\b(?:takedown|sensor|blokir)\b/i.test(span)) && identity;
     case 'gempa': {
       if (!identity) return false;
       const isTsunami = /tsunami/i.test(span);
@@ -158,14 +167,14 @@ function isReport(topic, span, location, target, nlpClause) {
     }
     case 'karhutla': return identity && (/(?:titik\s+panas|hotspot|kebakaran\s+(?:hutan|lahan)|karhutla)\s+(?:meluas|terjadi|membakar|terpantau|hanguskan|di)/i.test(span) && !/tolak|tuntutan|isu|demo|unjuk\s+rasa/i.test(span));
     case 'penangkapan': return identity && /ditangkap|diamankan|penangkapan|\bott\b/i.test(span) && !NLP.CEREMONY_RE?.test(span) && /\b(?:polisi|polres|polda|polsek|kpk|bnn|densus|kejaksaan|aparat|pelaku|tersangka|buron|maling|begal|rampok|koruptor|suap|penipu|narkoba)\b/i.test(span);
-    case 'demo': return identity && /unjuk rasa|aksi massa|demonstrasi|demonstran|pengunjuk rasa|\bdemo\b|protes|mogok|kerusuhan|bentrok|pemogokan|women'?s\s+march|international\s+women'?s\s+day|hari\s+buruh|buruh\s+sedunia|kawal demo|gelar aksi|rencana aksi/i.test(span) && /berlangsung|turun ke jalan|berkumpul|(?:meng)?gelar|ricuh|bentrok|tuntut|menuntut|menolak|tolak|\borasi\b|\bmarch\b|\baksi\b|siapkan pengamanan|menyiapkan pengamanan|(?:di)?siagakan|rencana (?:aksi|demo|unjuk rasa)|(?:meng)?kawal (?:demo|aksi|massa)|(?:meng)?amankan (?:demo|aksi)|pengamanan (?:demo|aksi)|(?:di)?kerahkan|(?:di)?terjunkan|antisipasi/i.test(span);
+    case 'demo': return identity && /unjuk rasa|aksi massa|demonstrasi|demonstran|pengunjuk rasa|\bdemo\b|protes|mogok|kerusuhan|bentrok|pemogokan|women'?s\s+march|international\s+women'?s\s+day|hari\s+buruh|buruh\s+sedunia|kawal demo|gelar aksi|rencana aksi|aksi\s+kamisan|kamisan|revolusi/i.test(span) && /berlangsung|turun ke jalan|berkumpul|(?:meng)?gelar|ricuh|bentrok|tuntut|menuntut|menolak|tolak|\borasi\b|\bmarch\b|\baksi\b|siapkan pengamanan|menyiapkan pengamanan|(?:di)?siagakan|rencana (?:aksi|demo|unjuk rasa)|(?:meng)?kawal (?:demo|aksi|massa)|(?:meng)?amankan (?:demo|aksi)|pengamanan (?:demo|aksi)|(?:di)?kerahkan|(?:di)?terjunkan|antisipasi|aksi\s+kamisan|kamisan|revolusi/i.test(span);
     case 'wabah': return identity && /kasus|pasien|terjangkit|keracunan|wabah (?:dbd|campak|kolera|difteri)|kejadian luar biasa|intoksikasi/i.test(span);
     case 'listrik padam': return identity && /listrik padam|mati listrik|pemadaman listrik|padam listrik|mati lampu|pln[^.!?]{0,40}blackout/i.test(span);
     case 'phk': return identity && /melakukan|lakukan|terkena|mengalami|memutus|dirumahkan|pabrik tutup|tutup[^.!?]{0,25}phk|phk[^.!?]{0,30}(?:\d+|ratusan|ribuan)/i.test(span);
     case 'ihsg': return /trading halt|dihentikan|anjlok|merosot|turun\s+\d/i.test(span) && (!!target || LOCAL_ORG.test(span));
     case 'rupiah': return /melemah|menguat|anjlok/i.test(span) && /\d/.test(span) && (!!target || LOCAL_ORG.test(span));
     case 'pemilu': return identity && /ricuh|bentrok|ditunda|dibatalkan|pemungutan suara ulang/i.test(span);
-    case 'politik': return identity && /\b(?:resmi\s+dilantik|dilantik|dipecat|mengundurkan\s+diri|divonis|reshuffle|impeachment|dimakzulkan)\b/i.test(span) && !/\b(?:usul|wacana|menurut|angkat\s+bicara|komentar|opini)\b/i.test(span);
+    case 'politik': return identity && (/\b(?:resmi\s+dilantik|dilantik|dipecat|mengundurkan\s+diri|resignation|divonis|reshuffle|impeachment|dimakzulkan)\b/i.test(span) || /\b(?:komdigi|kominfo)\b[^.\n]{0,40}\b(?:takedown|anggaran|triliun)\b/i.test(span)) && (!/\b(?:usul|wacana|menurut|angkat\s+bicara|komentar|opini)\b/i.test(span) || /\b(?:komdigi|anggaran|resignation)\b/i.test(span));
     case 'konflik': return identity && !/\b(?:upacara|tabur\s+bunga|hari\s+pahlawan|dirgahayu|ziarah|hut\s+tni|museum\s+militer)\b/i.test(span) && !/perang\s+(?:antar\s+)?(?:fandom|fans?|warganet|netizen|cuitan|bocil)/i.test(span) && !/drone\s+(?:fpv|rakitan|mainan|kamera|balap)/i.test(span) && /\b(?:baku\s+tembak|kontak\s+senjata|serangan\s+udara|serangan\s+rudal|invasi|kudeta|gencatan\s+senjata|darurat\s+militer|pertempuran|penyanderaan|kkb\s+papua|separatis)\b/i.test(span);
     default: return false;
   }
@@ -453,14 +462,14 @@ function assess(text, registry, options = {}) {
     : nonAdhocFindings[0]?.reportType || findings[0]?.reportType || (nlp.intent === 'denial_or_debunk' ? 'denied' : nlp.intent === 'historical' ? 'historical' : nlp.intent === 'educational' ? 'educational' : nlp.intent === 'question' ? 'unverified_question' : 'irrelevant');
 
   const hasPermanentTopic = [...topics].some(tid => !reg.find(r => r.id === tid)?.adhoc);
-  const hasSituationalIntent = ['question', 'rumor', 'discussion', 'personal_experience', 'satire'].includes(nlp.intent)
+  const hasSituationalIntent = ['question', 'rumor', 'discussion', 'personal_experience', 'satire', 'incident_report', 'eyewitness_report', 'opinion'].includes(nlp.intent)
     || nlp.flags.anyMinorWaterlogging
     || (nlp.intent === 'eyewitness_report' && nlp.flags.anyMinorWaterlogging);
 
   const hasCrisisContext = nlp.clauses.some(c => c.flags.hasHazardCue || c.flags.hasHazardQuestion)
     || nonAdhocFindings.some(f => !f.adhoc && f.scope === 'Indonesia' && !['denied', 'historical', 'educational'].includes(f.reportType));
 
-  const ID_PROSE_RE = /\b(?:yang|yg|di|ke|dari|ini|itu|untuk|utk|dengan|dgn|atau|pada|akan|sudah|udah|udh|belum|blm|tidak|tak|bukan|ga|gak|nggak|enggak|engga|kagak|kaga|jangan|jgn|warga|korban|mahasiswa|polisi|aparat|pemerintah|kawan|orang|org|rumah|rmh|jalan|jln|kota|daerah|wilayah|tempat|kantor|sekolah|kampus|pasar|mall|stasiun|bandara|tol|sungai|kali|tanggul|hujan|ujan|angin|api|asap|listrik|air|lampu|mati\s+lampu|mati\s+listrik|listrik\s+padam|byarpet|banjir|kebanjiran|longsor|kebakaran|terbakar|damkar|karhutla|gempa|erupsi|puting\s+beliung|kecelakaan|tabrakan|penembakan|ditembak|pencurian|curanmor|begal|jambret|dirampok|maling|penangkapan|ditangkap|diamankan|tersangka|korupsi|suap|ott|unjuk\s+rasa|demonstrasi|aksi\s+massa|bentrok|ricuh|mogok|keracunan|wabah|demam\s+berdarah|puskesmas|sembako|minyak\s+goreng|pertalite|pertamax|spbu|bansos|pemilu|pilkada|pilpres|caleg|menteri|presiden|gubernur|bupati|prabowo|gibran|jokowi|ihsg|rupiah|diretas|dibobol|peretasan|kebocoran\s+data|bocor|hari|pagi|siang|sore|malam|malem|jam|tahun|bulan|minggu|tadi|barusan|kemarin|kmrn|besok|sekarang|skrg|ada|adakah|apakah|apa|siapa|kapan|dimana|dmn|kemana|gimana|gmn|bagaimana|kenapa|knp|mengapa|berapa|karena|krn|karna|kalau|kalo|klo|jika|bila|tapi|tp|tetapi|terus|trs|jadi|jd|masih|msh|lagi|lg|baru|abis|habis|mau|pengen|pingin|bisa|bs|sama|sm|buat|bikin|pakai|pake|cuma|cm|cuman|hanya|banyak|semua|para|tiap|setiap|saat|waktu|pas|terjadi|melanda|merendam|terendam|mengungsi|evakuasi|tewas|meninggal|luka|rusak|ambruk|roboh|runtuh|jebol|meluap|padam|naik|turun|parah|banget|bgt|sekali|bener|benar|beneran|katanya|kabarnya|kayak|kyk|seperti|kaya|malah|padahal|memang|emang|emg|pasti|mungkin|kayaknya|agak|lumayan|cukup|kurang|lebih|paling|makin|tambah|udah|sih|dong|deh|nih|tuh|kok|lah|kah|mah|pun|kek|yak|yaa|yah|yuk|mari|ayo|tolong|plis|jir|anjir|njir|bjir|anjay|astaga|waduh|buset|parno|hectic|jujurly|literally\s+(?:di|udah|lagi|bikin|parah|gue|gw|aku|ada|ga|gak)|gue|gw|gua|aku|saya|lo|lu|kamu|kalian|kami|kita|mereka|dia|beliau|pak|bu|bang|bg|mas|mbak|mba|kak|om|tante|nder|min|mimin|bro|sis|guys\s+(?:ada|di|yg|ini|itu|kok|udah|lagi)|wkwk\w*|haha\w*|hehe\w*|cok|cuk|rek|lur|gan|bray|wes|wis|ora|nek|neng|ning|ndek|iki|iku|koe|koen|ngopo|gawe|ketok|enek|ana|teu|geus|ayeuna|atuh|euy|punten|sampurasun|wargi|caah|lindhu|udan|banyu|cai)\b/i;
+  const ID_PROSE_RE = /\b(?:yang|yg|di|ke|dari|ini|itu|untuk|utk|dengan|dgn|atau|pada|akan|sudah|udah|udh|belum|blm|tidak|tak|bukan|ga|gak|nggak|enggak|engga|kagak|kaga|jangan|jgn|warga|korban|mahasiswa|polisi|aparat|pemerintah|kawan|orang|org|rumah|rmh|jalan|jln|kota|daerah|wilayah|tempat|kantor|sekolah|kampus|pasar|mall|stasiun|bandara|tol|sungai|kali|tanggul|hujan|ujan|angin|api|asap|listrik|air|lampu|mati\s+lampu|mati\s+listrik|listrik\s+padam|byarpet|banjir|kebanjiran|longsor|kebakaran|terbakar|damkar|karhutla|gempa|erupsi|puting\s+beliung|kecelakaan|tabrakan|penembakan|ditembak|pencurian|curanmor|begal|jambret|dirampok|maling|penangkapan|ditangkap|diamankan|tersangka|korupsi|suap|ott|unjuk\s+rasa|demonstrasi|aksi\s+massa|aksi\s+kamisan|kamisan|revolusi|bentrok|ricuh|mogok|keracunan|wabah|demam\s+berdarah|puskesmas|sembako|minyak\s+goreng|pertalite|pertamax|spbu|bansos|pemilu|pilkada|pilpres|caleg|menteri|presiden|gubernur|bupati|prabowo|gibran|jokowi|ihsg|rupiah|diretas|dibobol|peretasan|kebocoran\s+data|bocor|hari|pagi|siang|sore|malam|malem|jam|tahun|bulan|minggu|tadi|barusan|kemarin|kmrn|besok|sekarang|skrg|ada|adakah|apakah|apa|siapa|kapan|dimana|dmn|kemana|gimana|gmn|bagaimana|kenapa|knp|mengapa|berapa|karena|krn|karna|kalau|kalo|klo|jika|bila|tapi|tp|tetapi|terus|trs|jadi|jd|masih|msh|lagi|lg|baru|abis|habis|mau|pengen|pingin|bisa|bs|sama|sm|buat|bikin|pakai|pake|cuma|cm|cuman|hanya|banyak|semua|para|tiap|setiap|saat|waktu|pas|terjadi|melanda|merendam|terendam|mengungsi|evakuasi|tewas|meninggal|luka|rusak|ambruk|roboh|runtuh|jebol|meluap|padam|naik|turun|parah|banget|bgt|sekali|bener|benar|beneran|katanya|kabarnya|kayak|kyk|seperti|kaya|malah|padahal|memang|emang|emg|pasti|mungkin|kayaknya|agak|lumayan|cukup|kurang|lebih|paling|makin|tambah|udah|sih|dong|deh|nih|tuh|kok|lah|kah|mah|pun|kek|yak|yaa|yah|yuk|mari|ayo|tolong|plis|jir|anjir|njir|bjir|anjay|astaga|waduh|buset|parno|hectic|jujurly|literally\s+(?:di|udah|lagi|bikin|parah|gue|gw|aku|ada|ga|gak)|gue|gw|gua|aku|saya|lo|lu|kamu|kalian|kami|kita|mereka|dia|beliau|pak|bu|bang|bg|mas|mbak|mba|kak|om|tante|nder|min|mimin|bro|sis|guys\s+(?:ada|di|yg|ini|itu|kok|udah|lagi)|wkwk\w*|haha\w*|hehe\w*|cok|cuk|rek|lur|gan|bray|wes|wis|ora|nek|neng|ning|ndek|iki|iku|koe|koen|ngopo|gawe|ketok|enek|ana|teu|geus|ayeuna|atuh|euy|punten|sampurasun|wargi|caah|lindhu|udan|banyu|cai|indonesia['’]?s?\s+(?:vice[- ]?president|president|government|politics|parliament|cabinet)|indonesian\s+politics)\b/i;
   const FOREIGN_NON_ID_SCRIPT_OR_WORD_RE = /[¿¡ñÑçÇßãõÃÕåøæÅØÆłńśźżŁŃŚŹŻčřšžČŘŠŽğışĞİŞ]|\b(?:habra|habrá|dado|povo|assusta|infidelite|infidélité|nouveau|nouvelle|is\s+het|gaat\s+het|hebben\s+we|het\s+kabinet|uit\s+het|staat\s+op\s+vallen|gevallen|klappen|gestapt|vvd|cda|d66|pvv|fvd|nsc|tweede\s+kamer|eerste\s+kamer|den\s+haag|nederland|nederlands|verkiezingen|tussenformeren|belasting|gestemd|stemming|conclusie|hoezo|democratie|formatie|regerende\s+partijen|coalitieleden|verkiezingsuitslag|debacle-kabinet|links\s+kabinet|varian\s+baharu|baharu|dikesan|sejauh\s+mana\s+bahayanya)\b/i;
   const proseClean = raw.replace(/https?:\/\/\S+|[@#]\S+/g, ' ');
   const isForeignLanguage = nlp.flags.anyForeign || (nlp.layerTrace && nlp.layerTrace.isForeignLanguage);

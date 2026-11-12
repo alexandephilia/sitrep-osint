@@ -350,6 +350,7 @@ function normalizeIndonesian(rawText) {
       normFull: [normProse, ...rcTags].filter(Boolean).join(' ').trim(),
       hashtags: rcTags,
       hasQuestionMark: /\?(?![a-z0-9_]+=)/i.test(rcNoTags.replace(/\b(?:https?|hxxps?|ftp):\/\/\S+|\b[\w.-]+\[\.\][a-z]{2,}\S*/gi, ' ')),
+      docRaw: raw,
     };
   });
 
@@ -384,7 +385,13 @@ const HISTORICAL_RE = /\b(?:dulu|jaman dulu|zaman dulu|tempo dulu|sejarah|mengen
 const HISTORICAL_YEAR_RE = /\b(?:tahun|pada|sejak|era)\s+((?:19|20)\d{2})\b/i;
 
 function isHistoricalClause(text, year = new Date().getFullYear()) {
-  const cleaned = String(text || '').replace(/\b(?:dibangun|didirikan|diresmikan|dibuka|dibeli|dijual|berdiri|lulus|menikah)\s+(?:pada\s+)?(?:tahun\s+(?:19|20)\d{2}|(?:19|20)\d{2}|tahun\s+lalu|bulan\s+lalu|dulu)\b/gi, ' ');
+  const hasCurrentTime = /\b(?:hari\s+ini|pagi\s+ini|siang\s+ini|sore\s+ini|malam\s+ini|saat\s+ini|sekarang|barusan|baru\s+saja|pukul\s+\d{1,2}[:.]\d{2}|\d{1,2}[:.]\d{2}\s*wib)\b/i.test(text);
+  const cleaned = String(text || '')
+    .replace(/\b(?:yang\s+)?(?:sudah\s+)?(?:berjalan|berlangsung|ada|hadir|digelar|diselenggarakan|dimulai)\s+sejak\s+(?:tahun\s+)?(?:19|20)\d{2}\b/gi, ' ')
+    .replace(/\b(?:dibangun|didirikan|diresmikan|dibuka|dibeli|dijual|berdiri|lulus|menikah)\s+(?:pada\s+)?(?:tahun\s+(?:19|20)\d{2}|(?:19|20)\d{2}|tahun\s+lalu|bulan\s+lalu|dulu)\b/gi, ' ');
+  if (hasCurrentTime && !/\b(?:mengenang|kilas\s+balik|nostalgia|sejarah|tempo\s+dulu|jaman\s+dulu|zaman\s+dulu)\b/i.test(text)) {
+    return false;
+  }
   if (HISTORICAL_RE.test(cleaned)) return true;
   const m = HISTORICAL_YEAR_RE.exec(cleaned);
   return !!m && Number(m[1]) < year;
@@ -423,7 +430,7 @@ const METAPHOR_FRAMES = [
   { id: 'metaphor_siber_or_wabah', re: /\b(?:humans?|manusia|jiwa|otak|hati)\b[^.!?\n]{0,30}\b(?:malware|virus)\b|\bwabah\s+(?:judi|judol|korupsi|kebencian|cinta|rindu|hoaks|fitnah|drakor|k-?pop|tiktok)\b|\bracun\s+(?:tiktok|shopee|ig|belanja|skincare|cinta|asmara)\b/i },
   { id: 'metaphor_diamankan_noncrime', re: /\b(?:data|akun|aset|uang|dokumen|file|arsip|berkas|tiket|kursi|juara|poin|kemenangan|medali)\b[^.!?\n]{0,18}\b(?:diamankan)\b/i },
   { id: 'metaphor_bocor_nonincident', re: /\b(?:atap|genteng|ban|ember|pipa\s+air|rahasia|soal\s+ujian|kunci\s+jawaban|skor|bocoran\s+film)\b[^.!?\n]{0,15}\b(?:bocor|kebocoran)\b|\b(?:bocor)\s+(?:halus|alusan)\b/i },
-  { id: 'nonincident_sport_entertainment', re: /\b(?:dead\s+by\s+daylight|main\s+dbd|play\s+dbd|grand\s+prix|formula\s+1|safety\s+car|sinopsis\s+film|review\s+film|trailer\s+film|cdrama|drachin|jdrama|boboiboy|baby\s+gempa|baju\s+gempa|kaos\s+gempa|goyang\s+gempa|joget\s+gempa|sid\s+bukan\s+pahlawan|bermahkotakan\s+duri|emyu|munyuk|bobotoh\s+persib|mantan\s+rp|pacar\s+rl)\b/i },
+  { id: 'nonincident_sport_entertainment', re: /\b(?:dead\s+by\s+daylight|main\s+dbd|play\s+dbd|jogar\s+dbd|grand\s+prix|formula\s+1|safety\s+car|sinopsis\s+film|review\s+film|trailer\s+film|cdrama|drachin|jdrama|boboiboy|baby\s+gempa|baju\s+gempa|kaos\s+gempa|goyang\s+gempa|joget\s+gempa|sid\s+bukan\s+pahlawan|bermahkotakan\s+duri|emyu|munyuk|bobotoh\s+persib|mantan\s+rp|pacar\s+rl)\b|\b(?:game|gaming|crashed|tome|grabs?|pick\s*ups?|crawled|dcing|perks?|killer|survivor|hooked|gen|pallets?)\b[^.!?\n]{0,80}\bdbd\b|\bdbd\b[^.!?\n]{0,80}\b(?:game|gaming|crashed|tome|grabs?|pick\s*ups?|crawled|dcing|perks?|killer|survivor|hooked|gen|pallets?)\b/i },
 ];
 
 const METAPHOR_TOPIC_SCOPE = {
@@ -587,10 +594,10 @@ const EVENT_FRAMES = [
     eventType: 'demo',
     detect: c => {
       const t = c.normGeo;
-      const hasDemo = /\b(?:unjuk\s+rasa|aksi\s+massa|demonstrasi|demonstran|pengunjuk\s+rasa|(?:ber|men|di)?demo|protes|mogok|kerusuhan|bentrok|pemogokan|long\s+march|women'?s\s+march|hari\s+buruh|may\s+day|[a-z]+\s+memanggil|kampus\s+dikepung|logistik\s+dihalangi|kawan\s+diculik|(?:ga|gak|tidak|kurang)\s+kondusif|menyuarakan\s+keadilan|memperjuangkan\s+kebenaran)\b|\b(?:gelar|menggelar|melakukan)\s+aksi\b|\baksi\s+(?:tolak|menolak|tuntut|menuntut|mahasiswa|buruh|damai|bela|massa|bem)\b|\bmahasiswa\s+(?:turun|bergerak|melawan|dikepung|diculik)\b/.test(t);
+      const hasDemo = /\b(?:unjuk\s+rasa|aksi\s+massa|demonstrasi|demonstran|pengunjuk\s+rasa|(?:ber|men|di)?demo|protes|mogok|kerusuhan|bentrok|pemogokan|long\s+march|women'?s\s+march|hari\s+buruh|may\s+day|[a-z]+\s+memanggil|kampus\s+dikepung|logistik\s+dihalangi|kawan\s+diculik|(?:ga|gak|tidak|kurang)\s+kondusif|menyuarakan\s+keadilan|memperjuangkan\s+kebenaran)\b|\b(?:gelar|menggelar|melakukan)\s+aksi\b|\baksi\s+(?:tolak|menolak|tuntut|menuntut|mahasiswa|buruh|damai|bela|massa|bem)\b|\bmahasiswa\s+(?:turun|bergerak|melawan|dikepung|diculik)\b|\baksi\s+kamisan\b|\bkamisan\b|\brevolusi(?:\s+(?:rakyat|sosial|total))?\b/.test(t);
       if (!hasDemo) return null;
       if (/\b(?:demo\s+(?:lagu|musik|app|aplikasi|produk|game|masak|cooking|vokal|versi|website)|free\s+demo|live\s+demo|cooking\s+demo|happy\s+labor\s+day)\b/.test(t)) return null;
-      const strong = /\b(?:berlangsung|turun\s+ke\s+jalan|turun\s+ke\s+aspal|berkumpul|gelar|menggelar|melakukan\s+aksi|aksi\s+(?:tolak|menolak|tuntut|menuntut)|ricuh|bentrok|tuntut|menuntut|menolak|tolak|orasi|aksi|siapkan\s+pengamanan|menyiapkan\s+pengamanan|siagakan|disiagakan|kerahkan|dikerahkan|antisipasi|kawal\s+demo|amankan\s+demo|pengamanan|tiba\s+di\s+depan|gerbang|blokade|gas\s+air\s+mata|water\s+cannon|barikade|mahasiswa|buruh|ojol|dpr|dprd|istana|patung\s+kuda|polisi|aparat|kampus\s+dikepung|kawan\s+diculik|tidak\s+kondusif|ga\s+kondusif|memanggil)\b/.test(t);
+      const strong = /\b(?:berlangsung|turun\s+ke\s+jalan|turun\s+ke\s+aspal|berkumpul|gelar|menggelar|melakukan\s+aksi|aksi\s+(?:tolak|menolak|tuntut|menuntut)|ricuh|bentrok|tuntut|menuntut|menolak|tolak|orasi|aksi|siapkan\s+pengamanan|menyiapkan\s+pengamanan|siagakan|disiagakan|kerahkan|dikerahkan|antisipasi|kawal\s+demo|amankan\s+demo|pengamanan|tiba\s+di\s+depan|gerbang|blokade|gas\s+air\s+mata|water\s+cannon|barikade|mahasiswa|buruh|ojol|dpr|dprd|istana|patung\s+kuda|polisi|aparat|kampus\s+dikepung|kawan\s+diculik|tidak\s+kondusif|ga\s+kondusif|memanggil|aksi\s+kamisan|kamisan|revolusi)\b/.test(t);
       return { action: 'protesting', strong, type: 'demo' };
     },
   },
@@ -648,6 +655,8 @@ const EVENT_FRAMES = [
     eventType: 'health_incident',
     detect: c => {
       const t = c.normGeo;
+      if (/\b(?:game|gaming|crashed|tome|grabs?|pick\s*ups?|crawled|dcing|killer|survivor|hooked|gen|pallets?|steam|lobby|fps)\b/i.test(c.raw || t) || /\b(?:dead\s+by\s+daylight|main\s+dbd|play\s+dbd|jogar\s+dbd)\b/i.test(c.raw || t)) return null;
+      if (/\bdbd\b/i.test(c.raw || t) && /\b(?:game|gaming|crashed|tome|grabs?|pick\s*ups?|crawled|dcing|perks?|killer|survivor|hooked|gen|pallets?|lobby|steam|fps)\b/i.test(c.docRaw || '')) return null;
       const hasHealth = /\b(?:keracunan|intoksikasi|wabah|klb|kejadian\s+luar\s+biasa|dbd|demam\s+berdarah|campak|difteri|kolera|rabies|polio|mpox|leptospirosis|tifus|malaria|serangan\s+jantung|stroke|gagal\s+ginjal|miras\s+oplosan|oplosan\s+maut|muntah|mual|diare)\b/.test(t);
       if (!hasHealth) return null;
       const strong = /\b(?:kasus|pasien|terjangkit|keracunan\s+(?:massal|makanan|mbg|pangan|nasi|katering)|korban|meninggal|tewas|dirawat|dilarikan\s+ke|puskesmas|rumah\s+sakit|rsud|rsup|klb|wabah|intoksikasi|oplosan)\b/.test(t)
@@ -673,8 +682,8 @@ const EVENT_FRAMES = [
     eventType: 'intrusion',
     detect: c => {
       const t = c.normGeo;
-      const hasCyberAction = /\b(?:ransomware|malware|diserang|diretas|dibobol|dibajak|terenkripsi|dienkripsi|dicuri|bocor|kebocoran\s+data|data\s+breach|ddos|defacement|deface|phishing|dieksploitasi|lumpuh)\b/.test(t);
-      const hasCyberTarget = /\b(?:server|sistem|jaringan|database|situs|website|layanan|akun|data|pdn|bssn|bank|rumah\s+sakit|pemerintah|kementerian|aplikasi)\b/.test(t);
+      const hasCyberAction = /\b(?:ransomware|malware|diserang|diretas|dibobol|dibajak|terenkripsi|dienkripsi|dicuri|bocor|kebocoran\s+data|data\s+breach|ddos|defacement|deface|phishing|dieksploitasi|lumpuh|takedown|sensor\s+konten|blokir\s+konten|takedown\s+konten)\b/.test(t);
+      const hasCyberTarget = /\b(?:server|sistem|jaringan|database|situs|website|layanan|akun|data|pdn|bssn|bank|rumah\s+sakit|pemerintah|kementerian|aplikasi|komdigi|kominfo|konten(?:\s+kritis)?)\b/.test(t);
       if (!hasCyberAction) return null;
       const type = /\b(?:ransomware|lockbit|blackcat)\b/.test(t) ? 'ransomware'
         : /\bddos\b/.test(t) ? 'ddos'
@@ -701,10 +710,10 @@ const EVENT_FRAMES = [
     eventType: 'politik',
     detect: c => {
       const t = c.normGeo;
-
-      const act = /\b(?:resmi\s+dilantik|dilantik|mengundurkan\s+diri|dipecat|diberhentikan|reshuffle\s+kabinet|divonis|dimakzulkan|impeachment)\b/.test(t);
+      const act = /\b(?:resmi\s+dilantik|dilantik|mengundurkan\s+diri|resignation|dipecat|diberhentikan|reshuffle\s+kabinet|divonis|dimakzulkan|impeachment)\b/.test(t)
+        || /\banggaran\s+(?:komdigi|kominfo|kementerian|menteri)[^.\n]{0,30}\btriliun\b|\btakedown\s+konten(?:\s+kritis)?\b|\btakedown\b(?=[^.\n]{0,30}\b(?:komdigi|kominfo)\b)|\b(?:komdigi|kominfo)\b[^.\n]{0,30}\btakedown\b|\bresignation\s+of\s+(?:indonesia['’]?s\s+)?(?:president|vice[- ]?president|minister)\b|\bindonesian\s+politics\b/.test(t);
       if (!act) return null;
-      if (/\b(?:usul|wacana|menurut|komentar|opini|mengkhianati|katanya|andai|jika)\b/.test(t)) return null;
+      if (/\b(?:usul|wacana|menurut|komentar|opini|mengkhianati|katanya|andai|jika)\b/.test(t) && !/\banggaran|komdigi|takedown|resignation\b/.test(t)) return null;
       return { action: 'institutional_event', strong: true, type: 'politik' };
     },
   },
@@ -791,7 +800,7 @@ function extractEventTime(text, isHistorical) {
 
 const FOREIGN_MARKER_RE = /\b(chiba|odesa|kharkiv|tel aviv|abu dhabi|dubai|jepang|japan|nepal|london|oyo|osun|nigeria|amerika|united states|\busa\b|americans?|american|british|canadian|australian|japanese|chinese|korean|french|german|russian|indian|ukrainian|israeli|palestinian|malaysian|singaporean|filipino|vietnamese|brazilian|mexican|european|texas|california|new york|michigan|florida|ohio|illinois|pennsylvania|virginia|washington|boston|chicago|los angeles|brasil|brazil|filipina|philippines|thailand|malaysia|m'sia|msia|lebuhraya|sejuk beku|bekalan makanan|plusline|llmtrafik|korang|macam ni|banjir tak|banjir ke|kesiannya|memandu|tanpa halangan banjir|terowong smart|berbaki|penyokong|rombak kabinet|bubarkan parlimen|bubar parlimen|parlimen|timbalan perdana menteri|pakatan harapan|perikatan nasional|barisan nasional|umno|menteri besar|ketua menteri|dewan rakyat|dewan negara|kerajaan perpaduan|kerajaan madani|malaysia madani|varian baharu|baharu|dikesan|sejauh mana bahayanya|siakap keli|thesiakapkeli|banjir kilat|jabatan bomba|polis diraja|kawasan terjejas|hospital kerajaan|kementerian kesihatan|kelantan|pulau pinang|sabah|sarawak|terengganu|pahang|kedah|perak|selangor|putrajaya|negeri sembilan|melaka|kota kinabalu|kuching|ipoh|seremban|alor setar|kuantan|kuala terengganu|kota bharu|astro awani|awani|jbpm|pdrm|korea|china|tiongkok|inggris|britain|prancis|perancis|paris|france|eiffel|jerman|germany|australia|india|pakistan|iran|israel|palestina|palestine|ukraina|ukraine|rusia|russia|gaza|turki|turkey|meksiko|mexico|kanada|canada|vietnam|chile|argentina|spanyol|spain|portugal|italia|italy|belanda|netherlands|den haag|s-gravenhage|tweede kamer|eerste kamer|vvd|cda|d66|pvv|fvd|nsc|gl-pvda|groenlinks|pvda|nederland|nederlands|holland|amsterdam|rotterdam|utrecht|eindhoven|groningen|kabinet rutte|kabinet schoof|dick schoof|geert wilders|swiss|swedia|sweden|norwegia|norway|denmark|yunani|greece|eropa|europe|fincen|poland|polandia|polonia|krakow|warsaw|warszawa|warschau|lublin|gdansk|wroclaw|poznan|szczecin|czechia|czech|ceko|prague|praha|brno|ostrava|austria|vienna|wina|salzburg|innsbruck|finland|finlandia|helsinki|singapura|singapore|hong kong|taipei|tokyo|kyoto|osaka|seoul|pyongyang|beijing|shanghai|guangzhou|shenzhen|manila|bangkok|chiang mai|hanoi|haiphong|vientiane|phnom penh|kualalumpur|kuala lumpur|penang|johor|kathmandu|colombo|islamabad|karachi|lahore|mumbai|delhi|new delhi|chennai|kolkata|dhaka|chittagong|yangon|mandalay|ulaanbaatar|timor leste|papua new guinea|port moresby|brunei|darussalam|afghanistan|kabul|herat|suriah|syria|irak|iraq|mesir|egypt|cairo|giza|libya|libia|maroko|morocco|sudan|ethiopia|kenya|ghana|myanmar|kamboja|cambodia|laos|srilanka|sri lanka|bangladesh|lebanon|yordania|jordan|yaman|yemen|oman|qatar|uea|georgia|panama|san francisco)\b|\btpm\b(?=\s+(?:pula|kata|malaysia|dato|datuk|zahid|fadillah))/i;
 const LOCAL_ORG_RE = /\b(bmkg|bnpb|bpbd|bssn|pdn|polri|pln|kpu|bawaslu|komdigi|kominfo|bank indonesia|bursa efek indonesia|ihsg|kemenkes|kemensos|kemdikbud|kemendikdasmen|kemenhub|kejaksaan|kemenkumham|kementerian|pemkot|pemkab|pemprov|dishub|damkar|bpjs|taspen|bri|bni|mandiri|basarnas|knkt|kpk|polres|polda|polsek|kodim)\b/i;
-const LOCAL_MACRO_RE = /\b(?:(?:di|in|wilayah|pulau|kawasan)\s+indonesia|jabodetabek|sumatera|sumatra|kalimantan|sulawesi|nusa\s+tenggara|kepulauan\s+riau|bangka\s+belitung|pantura|\bwni\b|tol\s+(?:cipularang|jagorawi|cikampek|cipali|palikanci|pejagan|cisumdawu|mbz|japek|trans\s+jawa|bali\s+mandara)|jembatan\s+suramadu|sungai\s+ciliwung|kali\s+bekasi|gunung\s+(?:semeru|merapi|marapi|bromo|sinabung|lewotobi|rinjani|agung))\b/i;
+const LOCAL_MACRO_RE = /\b(?:(?:di|in|wilayah|pulau|kawasan|kota[- ]kota|seluruh|berbagai)\s+(?:wilayah\s+|daerah\s+|kota\s+)?indonesia|jabodetabek|sumatera|sumatra|kalimantan|sulawesi|nusa\s+tenggara|kepulauan\s+riau|bangka\s+belitung|pantura|\bwni\b|tol\s+(?:cipularang|jagorawi|cikampek|cipali|palikanci|pejagan|cisumdawu|mbz|japek|trans\s+jawa|bali\s+mandara)|jembatan\s+suramadu|sungai\s+ciliwung|kali\s+bekasi|gunung\s+(?:semeru|merapi|marapi|bromo|sinabung|lewotobi|rinjani|agung)|(?:indonesia['’]?s?|indonesian)\s+(?:politics|government|president|vice[- ]?president|minister|cabinet|parliament|election|democracy|court|military|police|unrest|regime|oligarchy)|(?:in|of)\s+indonesia)\b/i;
 
 function formatLoc(loc) {
   if (!loc) return null;
@@ -1143,6 +1152,9 @@ function analyzePost(rawText, options = {}) {
       || (normDoc.emojiSignals.mockery && /\b(?:banjir|gempa|kebakaran|macet|demo|tenggelam)\b/.test(t));
 
     const clauseMetaphors = [];
+    const isDocGamingDbd = /\b(?:dead\s+by\s+daylight|main\s+dbd|play\s+dbd|jogar\s+dbd)\b/i.test(c.docRaw || '')
+      || (/\bdbd\b/i.test(c.docRaw || '') && /\b(?:game|gaming|crashed|tome|grabs?|pick\s*ups?|crawled|dcing|perks?|killer|survivor|hooked|gen|pallets?|lobby|steam|fps)\b/i.test(c.docRaw || ''));
+    if (isDocGamingDbd) clauseMetaphors.push('nonincident_sport_entertainment');
     for (const mf of METAPHOR_FRAMES) {
       if (mf.id === 'metaphor_jatuh' && /\b(?:trading\s+halt|bursa\s+efek)\b/i.test(t)) continue;
       if (mf.re.test(t) || mf.re.test(rawC)) clauseMetaphors.push(mf.id);
@@ -1174,7 +1186,7 @@ function analyzePost(rawText, options = {}) {
     }
 
     const hasPriceWord = /\b(?:harga|tarif|biaya|ongkos|tiket|penduduk|order|penjualan|omzet)\b/.test(t);
-    const hasHazardCue = (/\b(?:banjir|kebanjiran|gempa|tsunami|erupsi|kebakaran|terbakar|longsor|kecelakaan|tabrakan|penembakan|begal|(?:ber|men|di)?demo|unjuk\s+rasa|aksi\s+massa|kampus\s+dikepung|kawan\s+diculik|gas\s+air\s+mata|water\s+cannon|bentrok|ricuh|(?:ga|gak|tidak|kurang)\s+kondusif|keracunan|listrik\s+padam|mati\s+lampu|puting\s+beliung|angin\s+kencang|phk|pemutusan\s+hubungan\s+kerja|pabrik\s+tutup|trading\s+halt)\b|\btanggul\b[^.!?\n]{0,20}\bjebol\b|\b(?:gunung|g\.)\s+[a-z]+\b[^.!?\n]{0,30}\bstatus\b[^.!?\n]{0,20}\b(?:awas|siaga)\b|\b(?:gelar|menggelar|melakukan)\s+aksi\b|\baksi\s+(?:tolak|menolak|mahasiswa|buruh|massa)\b|\b(?:air(?:\s+(?:hujan|kali|sungai|selokan|got))?)\s+(?:(?:sudah|mulai|lagi|terus)\s+){0,3}(?:naik|masuk)/.test(t)
+    const hasHazardCue = (/\b(?:banjir|kebanjiran|gempa|tsunami|erupsi|kebakaran|terbakar|longsor|kecelakaan|tabrakan|penembakan|begal|(?:ber|men|di)?demo|unjuk\s+rasa|aksi\s+massa|aksi\s+kamisan|kamisan|revolusi|kampus\s+dikepung|kawan\s+diculik|gas\s+air\s+mata|water\s+cannon|bentrok|ricuh|(?:ga|gak|tidak|kurang)\s+kondusif|keracunan|listrik\s+padam|mati\s+lampu|puting\s+beliung|angin\s+kencang|phk|pemutusan\s+hubungan\s+kerja|pabrik\s+tutup|trading\s+halt)\b|\btanggul\b[^.!?\n]{0,20}\bjebol\b|\b(?:gunung|g\.)\s+[a-z]+\b[^.!?\n]{0,30}\bstatus\b[^.!?\n]{0,20}\b(?:awas|siaga)\b|\b(?:gelar|menggelar|melakukan)\s+aksi\b|\baksi\s+(?:tolak|menolak|mahasiswa|buruh|massa)\b|\b(?:komdigi|kominfo)\b[^.!?\n]{0,50}\b(?:takedown|sensor|blokir|konten\s+kritis|anggaran)\b|\btakedown\s+konten\b|\b(?:air(?:\s+(?:hujan|kali|sungai|selokan|got))?)\s+(?:(?:sudah|mulai|lagi|terus)\s+){0,3}(?:naik|masuk)/.test(t)
       || (!hasPriceWord && /\b(?:ledakan|meledak)\b/.test(t)))
       && !effectiveCommercial && !isAd && !isVent && clauseMetaphors.length === 0;
     const hasSituationalSupplyCue = /\b(?:antrean\s+(?:bbm|spbu|pertalite|pertamax|solar)|kelangkaan\s+(?:bbm|elpiji|beras)|harga\s+(?:beras|telur|minyak\s+goreng|cabai|gula|sembako|bbm)[^.!?\n]{0,55}\b(?:naik|melonjak|merangkak|mahal|turun|melambung)|operasi\s+pasar|antrean\s+panjang\s+di\s+spbu|(?:bansos|bantuan\s+(?:sosial|langsung\s+tunai)|pkh|bpnt|blt)\b[^.!?\n]{0,40}\b(?:cair|pencairan|disalurkan|penerima|kemensos))\b/.test(t)
@@ -1395,10 +1407,11 @@ function analyzePost(rawText, options = {}) {
 
   if (Math.max(...Object.values(scores)) < 0.45) {
     const hasSupplyCue = clauseResults.some(c => c.flags.hasSituationalSupplyCue);
-    if ((clauseResults.some(c => c.flags.hasHazardCue) || hasSupplyCue || hasAnyEvent) &&
-        (hasActiveIndonesiaScope || LOCAL_ORG_RE.test(normDoc.decoded)) &&
+    const hasDigPolCue = /\b(?:komdigi|kominfo)\b[^.!?\n]{0,50}\b(?:takedown|sensor|blokir|konten\s+kritis|anggaran)\b|\btakedown\s+konten\b|\bindonesian\s+politics\b|\bresignation\s+of\s+(?:indonesia['’]?s\s+)?(?:president|vice[- ]?president)\b/i.test(normDoc.decoded);
+    if ((clauseResults.some(c => c.flags.hasHazardCue) || hasSupplyCue || hasDigPolCue || hasAnyEvent) &&
+        (hasActiveIndonesiaScope || LOCAL_ORG_RE.test(normDoc.decoded) || LOCAL_MACRO_RE.test(normDoc.decoded)) &&
         !anyCommercial && !anyAd && !anyVent && !anyOpinion && !anySpam && !anyMetaphor && !anyDenial && !anyHistorical && !anyEducational) {
-      scores.discussion = hasSupplyCue ? 0.64 : 0.62;
+      scores.discussion = hasSupplyCue ? 0.64 : 0.65;
     } else if (normDoc.normalizedProse.length < 12) {
       scores.unknown = 0.55;
     } else {
