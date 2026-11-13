@@ -287,7 +287,7 @@ test('incident map popups for hotspot and air quality use structured split KPI h
   assert.ok(html.includes('<div class="mp-kpi-card" style="--kpi-c:${col}">') && html.includes('HOTSPOT · SIPONGI KEMENHUT'), 'SiPongi hotspot must use split KPI layout');
   assert.ok(html.includes('HOTSPOT · NASA FIRMS') && html.includes('Titik Api Karhutla'), 'NASA FIRMS hotspot must use split KPI layout');
 
-  assert.ok(html.includes('KUALITAS UDARA · AQMS KLHK') && html.includes('<span class="mp-kpi-sub">ISPU</span>'), 'AQMS air quality must use split KPI layout with ISPU hero metric');
+  assert.ok(html.includes('<svg class="ic mp-flood-ic" aria-hidden="true"><use href="#i-m-aqms"></use></svg>KUALITAS UDARA · AQMS KLHK') && html.includes('<span class="mp-kpi-sub">ISPU</span>'), 'AQMS air quality must use split KPI layout with ISPU hero metric and #i-m-aqms menu icon');
 });
 
 test('incident map popups remove redundant close button', () => {
@@ -311,7 +311,7 @@ test('earthquake incident map popups use dual-metric tactical HUD with container
 
   assert.ok(!html.includes('.mp-hud-box{border-left') && !html.includes('mp-hud-box" style="border-left'), 'mp-hud-box must not use colored left border');
 
-  assert.ok(html.includes('GEMPA BUMI · BMKG') && html.includes('class="mp-hud-card"'), 'BMKG gempa must render mp-hud-card');
+  assert.ok(html.includes('<svg class="ic mp-flood-ic" aria-hidden="true"><use href="#i-activity"></use></svg>GEMPA BUMI · BMKG') && html.includes('<svg class="ic mp-flood-ic" aria-hidden="true"><use href="#i-activity"></use></svg>GEMPA · WIRE NEWS') && html.includes('class="mp-hud-card"'), 'BMKG and Wire gempa popups must render mp-hud-card with #i-activity menu icon');
   assert.ok(html.includes('mp-hud-box" style="--box-c:${magCol}"') && html.includes('MAGNITUDE'), 'BMKG gempa must render magnitude hero box');
   assert.ok(html.includes('mp-hud-box" style="--box-c:${depCol}"') && html.includes('KEDALAMAN'), 'BMKG gempa must render depth hero box');
   assert.ok(html.includes('mp-hud-banner banner-safe') && html.includes('TIDAK BERPOTENSI TSUNAMI'), 'BMKG gempa must render tsunami status banner');

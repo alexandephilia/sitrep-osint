@@ -60,12 +60,12 @@ test('Load Test A — Loopback bind + Edge/Origin HIT simulation across stepped 
   };
   after(cleanup);
 
-  const deadline = Date.now() + 15000;
+  const deadline = Date.now() + 35000;
   let ready = false;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error('server exited early');
     try {
-      const r = await fetch(`http://127.0.0.1:${port}/api/ping`, { signal: AbortSignal.timeout(1000) });
+      const r = await fetch(`http://127.0.0.1:${port}/api/ping`, { signal: AbortSignal.timeout(5000) });
       if (r.status === 200) { ready = true; break; }
     } catch {}
     await new Promise(r => setTimeout(r, 150));

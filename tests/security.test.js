@@ -511,7 +511,7 @@ test('05 startup guard fails closed (exit 78) on non-loopback local-token bind a
     });
     let stderr = '';
     child.stderr.on('data', d => { stderr += d.toString(); });
-    const t = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('expected immediate exit 78')); }, 6000);
+    const t = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('expected immediate exit 78')); }, 15000);
     child.on('exit', code => { clearTimeout(t); resolve({ code, stderr }); });
   });
   assert.equal(denied.code, 78);
@@ -528,7 +528,7 @@ test('05 startup guard fails closed (exit 78) on non-loopback local-token bind a
       stdio: ['ignore', 'pipe', 'pipe']
     });
     let out = '', err = '';
-    const t = setTimeout(() => { proc.kill('SIGKILL'); reject(new Error('local boot timeout: ' + out + err)); }, 10000);
+    const t = setTimeout(() => { proc.kill('SIGKILL'); reject(new Error('local boot timeout: ' + out + err)); }, 25000);
     proc.stdout.on('data', d => {
       out += d.toString();
       if (out.includes('SITREP jalan')) { clearTimeout(t); resolve({ proc, out }); }

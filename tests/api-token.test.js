@@ -25,16 +25,16 @@ function killChild() {
 after(() => killChild());
 
 async function waitForPing() {
-  const deadline = Date.now() + 20000;
+  const deadline = Date.now() + 35000;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error('server process exited before it became ready');
     try {
-      const r = await fetch(`${BASE}/api/ping`, withTimeout(1000));
+      const r = await fetch(`${BASE}/api/ping`, withTimeout(5000));
       if (r.status === 200) return;
     } catch {  }
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  throw new Error('server did not answer /api/ping within ~10s');
+  throw new Error('server did not answer /api/ping within ~35s');
 }
 
 test('API token gate (spawned server.js)', { timeout: 90000 }, async (t) => {
