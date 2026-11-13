@@ -149,7 +149,7 @@ function syncLayers(){
     }
   }
   const pairs = [[heat, 'heat'], [pinLayer, 'pins'], [camLayer, 'cams'], [tmaLayer, 'tma'], [ttFlowLayer, 'ttflow'], [ttIncTileLayer, 'ttinc'], [ttIncDataLayer, 'ttdata'], [flightLayer, 'flight'], [shipLayer, 'ship'], [transitLayer, 'transit'], [gempaLayer, 'gempa'], [gunungLayer, 'gunung'], [wxLayer, 'cuaca'], [windVelocityLayer, 'wind'], [radarLayer, 'radar'], [radarBmkgLayer, 'radarbmkg'], [peringatanLayer, 'peringatan'], [satIrLayer, 'sat-ir'], [satNcLayer, 'sat-nc'], [satWvLayer, 'sat-wv'], [satRainLayer, 'sat-rain'], [airLayer, 'air']];
-  const legGate = { tma: 'flood', gempa: 'gempa', gunung: 'gunung' };
+  const legGate = { tma: 'tma', gempa: 'gempa', gunung: 'gunung' };
   for (const [l, k] of pairs) {
     if (!l) continue;
     const on = !!layerOn[k] && (!legGate[k] || legendOn[legGate[k]] !== false);
@@ -1016,7 +1016,7 @@ function renderGeoTelemetry(){
     if (k) counts[k] = (counts[k] || 0) + 1;
   }
   if (specEl) {
-    const specKeys = ['gempa', 'gunung'].concat(GEO_SHINGLE_ORDER).filter(k => (counts[k] || 0) > 0);
+    const specKeys = ['gempa', 'gunung', 'tma'].concat(GEO_SHINGLE_ORDER).filter(k => (counts[k] || 0) > 0);
     specEl.innerHTML = pts.length && specKeys.length
       ? specKeys.map(k => `<span class="geo-seg" style="flex:${counts[k]} 1 0%;background:${CAT_COLOR[k] || '#8d8d8d'}"></span>`).join('')
       : '';
@@ -1654,7 +1654,7 @@ async function pullDisaster(){
           name: g.name,
           label: 'PINTU AIR · ' + (g.siaga_label || ('SIAGA ' + siaga)).toUpperCase(),
           src: 'DSDA DKI',
-          url: 'https://pantaubanjir.jakarta.go.id/',
+          url: 'tma://' + tmaKey + '/s' + siaga,
           weight: siaga === 1 ? 0.95 : siaga === 2 ? 0.8 : 0.55
         });
       }
@@ -1709,7 +1709,7 @@ async function pullDisaster(){
         name: a.name,
         label: 'BANJIR · PETABENCANA',
         src: 'PetaBencana.id',
-        url: 'https://petabencana.id/',
+        url: 'petabencana://area/' + (a.id || a.name),
         weight: st >= 4 ? 0.92 : st === 3 ? 0.78 : 0.55
       });
       if (mapOpen && a.geometry) {
@@ -1738,7 +1738,7 @@ async function pullDisaster(){
         name: r.src || 'PetaBencana',
         label: 'LAPORAN BANJIR',
         src: 'PetaBencana.id',
-        url: r.url || 'https://petabencana.id/',
+        url: 'petabencana://report/' + (r.id || (r.lat + ',' + r.lon + ',' + r.ts)),
         weight: st >= 3 ? 0.78 : 0.52
       });
       if (mapOpen) {
@@ -1761,9 +1761,9 @@ async function pullDisaster(){
     renderGeoTelemetry();
     if (SIT && typeof renderSituation === 'function') renderSituation();
     else if (SIT) renderMapLegend({ ...(SIT.stats || {}),
-      flood: ((SIT.stats && SIT.stats.flood) || 0) + dp.filter(p => p.kind === 'flood').length,
       gempa: dp.filter(p => p.sub === 'gempa').length,
-      gunung: dp.filter(p => p.sub === 'volcano').length });
+      gunung: dp.filter(p => p.sub === 'volcano').length,
+      tma: dp.filter(p => p.sub === 'tma' || p.sub === 'flood').length });
     try { drawGlobe(performance.now()); } catch (e) {}
     maybeFocusFresh();
 

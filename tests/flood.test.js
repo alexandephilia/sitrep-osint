@@ -143,3 +143,15 @@ test('frontend flood telemetry, globe auto-focus, toast alert, and legend parity
   assert.match(html, /data-layer="tma"[^>]*>.*#i-m-flood.*<span>Banjir<\/span>/);
   assert.match(html, /mp-flood-ic/);
 });
+
+test('globe pintu air / petabencana sensors use internal sensor URIs, dedicated tma legend, and never open government dashboards in reader', () => {
+  const root = path.join(__dirname, '..');
+  const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
+  assert.equal(html.includes('https://pantaubanjir.jakarta.go.id/'), false);
+  assert.match(html, /url:\s*'tma:\/\/'\s*\+\s*tmaKey/);
+  assert.match(html, /url:\s*'petabencana:\/\/area\/'/);
+  assert.match(html, /url:\s*'petabencana:\/\/report\/'/);
+  assert.match(html, /const LEGEND_SUB\s*=\s*\['gempa','gunung','tma'\]/);
+  assert.match(html, /tma:'Pintu Air'/);
+  assert.match(html, /const isReadUrl\s*=/);
+});

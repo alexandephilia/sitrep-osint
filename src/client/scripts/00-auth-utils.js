@@ -212,10 +212,10 @@ setInterval(() => {
 paintCountdown();
 
 const CAT_ORDER = ['demo','fire','flood','disaster','insiden','siber','kriminal','kesehatan','ekonomi','politik'];
-const CAT_COLOR = { demo:'#f1c21b', fire:'#da1e28', flood:'#4589ff', disaster:'#be95ff', insiden:'#8d8d8d', siber:'#c8f04b', kriminal:'#ff9f43', kesehatan:'#ff6b9d', ekonomi:'#3ddc97', politik:'#6ea8fe', gempa:'#ff5a4e', gunung:'#ff9f0a' };
-const CAT_LABEL = { demo:'Demo', fire:'Kebakaran', flood:'Banjir', disaster:'Bencana', insiden:'Insiden', siber:'Siber', kriminal:'Kriminal', kesehatan:'Kesehatan', ekonomi:'Ekonomi', politik:'Politik', gempa:'Gempa', gunung:'Gunung Api' };
+const CAT_COLOR = { demo:'#f1c21b', fire:'#da1e28', flood:'#4589ff', disaster:'#be95ff', insiden:'#8d8d8d', siber:'#c8f04b', kriminal:'#ff9f43', kesehatan:'#ff6b9d', ekonomi:'#3ddc97', politik:'#6ea8fe', gempa:'#ff5a4e', gunung:'#ff9f0a', tma:'#00e5ff' };
+const CAT_LABEL = { demo:'Demo', fire:'Kebakaran', flood:'Banjir', disaster:'Bencana', insiden:'Insiden', siber:'Siber', kriminal:'Kriminal', kesehatan:'Kesehatan', ekonomi:'Ekonomi', politik:'Politik', gempa:'Gempa', gunung:'Gunung Api', tma:'Pintu Air' };
 const CAT_GEO = { demo:1, fire:1, flood:1, disaster:1, insiden:1, siber:1, kriminal:1, kesehatan:1, ekonomi:1, politik:1 };
-const LEGEND_SUB = ['gempa','gunung'];
+const LEGEND_SUB = ['gempa','gunung','tma'];
 const CAT_RE = {
   demo:/(\bdemo\b(?!\s*(aplikasi|game|produk|sistem|fitur|cara|tutorial|masak|memasak|kuliner|spesial|special))(?<!cooking demo|cooking\s+demo)|unjuk rasa|aksi massa|protes|mogok|kerusuhan|bentrok|pemogokan|long march|women'?s\s+march|international\s+women'?s\s+day|hari\s+buruh|buruh\s+sedunia|labour\s+day|labor\s+day)/i,
   fire:/(?:\b(?:kebakaran|karhutla|kebakaran hutan|kebakaran lahan|terbakar|kobaran api|asap tebal)\b)(?!\s+(?:jenggot|harga|promo|diskon|api amarah|api cemburu|api asmara|semangat))/i,
@@ -353,8 +353,8 @@ let PULSE = [], DIS_PULSE = [], globeReady = false, globeCtx = null, globeIdn = 
 let globeActInc = '', globeActNode = '';
 let globeShakeX = 0, globeShakeY = 0;
 let activeGlobeQuake = null;
-const legendOn = { ...Object.fromEntries(Object.keys(CAT_GEO).map(c => [c, true])), gempa: true, gunung: true };
-const legendKeyOf = p => p.sub === 'gempa' ? 'gempa' : p.sub === 'volcano' ? 'gunung' : p.kind;
+const legendOn = { ...Object.fromEntries(Object.keys(CAT_GEO).map(c => [c, true])), gempa: true, gunung: true, tma: true };
+const legendKeyOf = p => p.sub === 'gempa' ? 'gempa' : p.sub === 'volcano' ? 'gunung' : (p.sub === 'tma' || p.sub === 'flood') ? 'tma' : p.kind;
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const view = { lon: 118, lat: -2.5, zoom: 2.2 };
 const ZOOM_MAX = 48;

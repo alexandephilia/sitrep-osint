@@ -200,7 +200,7 @@ function createGeoSensors({
           lon,
           img: p.image_url ? String(p.image_url) : '',
           src: String(p.source || 'PetaBencana'),
-          url: 'https://petabencana.id/'
+          url: 'petabencana://report/' + String(p.pkey || '')
         });
       }
     } else if (prev && Array.isArray(prev.reports)) {

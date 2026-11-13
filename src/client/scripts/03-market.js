@@ -38,7 +38,7 @@ function renderBrandCase(st){
   const g = {
     demo: st.demo || 0,
     insiden: (st.insiden || 0) + (st.fire || 0),
-    bencana: (st.disaster || 0) + (st.flood || 0) + (st.gempa || 0) + (st.gunung || 0),
+    bencana: (st.disaster || 0) + (st.flood || 0) + (st.gempa || 0) + (st.gunung || 0) + (st.tma || 0),
   };
   const total = g.demo + g.insiden + g.bencana;
   document.querySelectorAll('.bc-stat b[data-bc]').forEach(b => { b.textContent = g[b.dataset.bc]; });

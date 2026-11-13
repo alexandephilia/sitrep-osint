@@ -3404,10 +3404,10 @@ setInterval(() => {
 paintCountdown();
 
 const CAT_ORDER = ['demo','fire','flood','disaster','insiden','siber','kriminal','kesehatan','ekonomi','politik'];
-const CAT_COLOR = { demo:'#f1c21b', fire:'#da1e28', flood:'#4589ff', disaster:'#be95ff', insiden:'#8d8d8d', siber:'#c8f04b', kriminal:'#ff9f43', kesehatan:'#ff6b9d', ekonomi:'#3ddc97', politik:'#6ea8fe', gempa:'#ff5a4e', gunung:'#ff9f0a' };
-const CAT_LABEL = { demo:'Demo', fire:'Kebakaran', flood:'Banjir', disaster:'Bencana', insiden:'Insiden', siber:'Siber', kriminal:'Kriminal', kesehatan:'Kesehatan', ekonomi:'Ekonomi', politik:'Politik', gempa:'Gempa', gunung:'Gunung Api' };
+const CAT_COLOR = { demo:'#f1c21b', fire:'#da1e28', flood:'#4589ff', disaster:'#be95ff', insiden:'#8d8d8d', siber:'#c8f04b', kriminal:'#ff9f43', kesehatan:'#ff6b9d', ekonomi:'#3ddc97', politik:'#6ea8fe', gempa:'#ff5a4e', gunung:'#ff9f0a', tma:'#00e5ff' };
+const CAT_LABEL = { demo:'Demo', fire:'Kebakaran', flood:'Banjir', disaster:'Bencana', insiden:'Insiden', siber:'Siber', kriminal:'Kriminal', kesehatan:'Kesehatan', ekonomi:'Ekonomi', politik:'Politik', gempa:'Gempa', gunung:'Gunung Api', tma:'Pintu Air' };
 const CAT_GEO = { demo:1, fire:1, flood:1, disaster:1, insiden:1, siber:1, kriminal:1, kesehatan:1, ekonomi:1, politik:1 };
-const LEGEND_SUB = ['gempa','gunung'];
+const LEGEND_SUB = ['gempa','gunung','tma'];
 const CAT_RE = {
   demo:/(\bdemo\b(?!\s*(aplikasi|game|produk|sistem|fitur|cara|tutorial|masak|memasak|kuliner|spesial|special))(?<!cooking demo|cooking\s+demo)|unjuk rasa|aksi massa|protes|mogok|kerusuhan|bentrok|pemogokan|long march|women'?s\s+march|international\s+women'?s\s+day|hari\s+buruh|buruh\s+sedunia|labour\s+day|labor\s+day)/i,
   fire:/(?:\b(?:kebakaran|karhutla|kebakaran hutan|kebakaran lahan|terbakar|kobaran api|asap tebal)\b)(?!\s+(?:jenggot|harga|promo|diskon|api amarah|api cemburu|api asmara|semangat))/i,
@@ -3545,8 +3545,8 @@ let PULSE = [], DIS_PULSE = [], globeReady = false, globeCtx = null, globeIdn = 
 let globeActInc = '', globeActNode = '';
 let globeShakeX = 0, globeShakeY = 0;
 let activeGlobeQuake = null;
-const legendOn = { ...Object.fromEntries(Object.keys(CAT_GEO).map(c => [c, true])), gempa: true, gunung: true };
-const legendKeyOf = p => p.sub === 'gempa' ? 'gempa' : p.sub === 'volcano' ? 'gunung' : p.kind;
+const legendOn = { ...Object.fromEntries(Object.keys(CAT_GEO).map(c => [c, true])), gempa: true, gunung: true, tma: true };
+const legendKeyOf = p => p.sub === 'gempa' ? 'gempa' : p.sub === 'volcano' ? 'gunung' : (p.sub === 'tma' || p.sub === 'flood') ? 'tma' : p.kind;
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const view = { lon: 118, lat: -2.5, zoom: 2.2 };
 const ZOOM_MAX = 48;
@@ -3813,10 +3813,12 @@ function hideSitAlert(){
   }, 320);
 }
 
+const isReadUrl = u => /^https?:\/\//i.test(String(u || '').trim());
 function showSitAlert(p){
   const el = $('#sit-alert'); if (!el) return;
-  const cat = p.kind || 'insiden';
+  const cat = legendKeyOf(p) || p.kind || 'insiden';
   const color = CAT_COLOR[cat] || '#8d8d8d';
+  const canRead = isReadUrl(p.url);
   const ageMin = p.ts ? Math.max(0, Math.floor((Date.now() - p.ts) / 60000)) : -1;
   const ago = ageMin < 0 ? '' : ageMin < 1 ? 'baru saja' : ageMin < 60 ? ageMin + ' mnt lalu' : ageMin < 1440 ? Math.floor(ageMin / 60) + ' jam lalu' : Math.floor(ageMin / 1440) + ' hari lalu';
   el.innerHTML = `<div class="sa-box" style="--sa-c:${color}">
@@ -3827,15 +3829,15 @@ function showSitAlert(p){
       <div class="sa-ft">
         <span class="sa-m">${esc(cleanSrc(p.src, p.pub))}${p.n > 1 ? ` · ${p.n} artikel` : ''}</span>
         <div class="sa-acts">
-          <button class="sa-go" type="button" aria-label="Buka di reader" title="Buka di reader">Buka reader ↗</button>
+          ${canRead ? '<button class="sa-go" type="button" aria-label="Buka di reader" title="Buka di reader">Buka reader ↗</button>' : ''}
           <button class="sa-close-btn" type="button" aria-label="Tutup alert" title="Tutup alert">Tutup</button>
         </div>
       </div>
     </div>
   </div>`;
-  el.title = 'Buka di reader';
+  el.title = canRead ? 'Buka di reader' : '';
   el.setAttribute('role', 'button');
-  sitAlertUrl = p.url || '';
+  sitAlertUrl = canRead ? p.url : '';
   el.hidden = false;
   el.classList.remove('hide');
   requestAnimationFrame(() => el.classList.add('show'));
@@ -4329,11 +4331,12 @@ function placeSitTip(e, touch){
 function showGlobeTip(e, d, touch){
   const tip = $('#sit-tip');
   const p = d.p || {};
+  const canRead = isReadUrl(p.url);
   activeGlobeQuake = (d.cat === 'gempa' || p.sub === 'gempa' || p.kind === 'gempa') ? p : null;
-  tip.dataset.url = p.url || '';
+  tip.dataset.url = canRead ? p.url : '';
   tip.innerHTML = `<div class="tip-k" style="color:${d.color}">${esc(p.label || CAT_LABEL[d.cat])}${p.name ? ' · ' + esc(p.name) : ''}</div>
     <div class="tip-t">${esc(cleanTitle(deEmoji(p.title || ''), p.pub || p.src))}</div>
-    <div class="tip-m">${esc(cleanSrc(p.src, p.pub))} · <span class="tip-time">${esc(p.ts ? wibTime(p.ts) + ' WIB' : '')}</span>${precTxt(p) ? ' · ' + esc(precTxt(p)) : ''}</div>${touch && p.url ? '<div class="tip-h">Buka reader ↗</div>' : ''}`;
+    <div class="tip-m">${esc(cleanSrc(p.src, p.pub))} · <span class="tip-time">${esc(p.ts ? wibTime(p.ts) + ' WIB' : '')}</span>${precTxt(p) ? ' · ' + esc(precTxt(p)) : ''}</div>${touch && canRead ? '<div class="tip-h">Buka reader ↗</div>' : ''}`;
   tip.hidden = false;
   placeSitTip(e, touch);
 }
@@ -4355,13 +4358,13 @@ let sitPopUrl = '';
 function showGlobePop(e, d){
   const pop = $('#sit-pop'); if (!pop) return;
   const p = d.p || {};
+  const canRead = isReadUrl(p.url);
   activeGlobeQuake = (d.cat === 'gempa' || p.sub === 'gempa' || p.kind === 'gempa') ? p : null;
-  sitPopUrl = p.url || '';
+  sitPopUrl = canRead ? p.url : '';
   pop.dataset.url = sitPopUrl;
   pop.innerHTML = `<div class="tip-k" style="color:${d.color}">${esc(p.label || CAT_LABEL[d.cat])}${p.name ? ' · ' + esc(p.name) : ''}</div>
     <div class="tip-t">${esc(cleanTitle(deEmoji(p.title || ''), p.pub || p.src))}</div>
-    <div class="tip-m">${esc(cleanSrc(p.src, p.pub))} · <span class="tip-time">${esc(p.ts ? wibTime(p.ts) + ' WIB' : '')}</span>${precTxt(p) ? ' · ' + esc(precTxt(p)) : ''}</div>
-    <div class="pop-ft"><span class="pop-go">Buka reader ↗</span></div>`;
+    <div class="tip-m">${esc(cleanSrc(p.src, p.pub))} · <span class="tip-time">${esc(p.ts ? wibTime(p.ts) + ' WIB' : '')}</span>${precTxt(p) ? ' · ' + esc(precTxt(p)) : ''}</div>${canRead ? '<div class="pop-ft"><span class="pop-go">Buka reader ↗</span></div>' : ''}`;
   pop.hidden = false;
   const wrap = $('.sit-mapwrap').getBoundingClientRect();
   const pw = pop.offsetWidth, ph = pop.offsetHeight;
@@ -4560,7 +4563,7 @@ function bindGlobeEvents(){
       return;
     }
     const inc = hit ? hit.d : null;
-    if (inc && inc.p && inc.p.url) rdOpen(inc.p.url, null, true, '').catch(() => window.open(inc.p.url, '_blank', 'noopener'));
+    if (inc && inc.p && isReadUrl(inc.p.url)) rdOpen(inc.p.url, null, true, '').catch(() => window.open(inc.p.url, '_blank', 'noopener'));
   });
 }
 function renderMapLegend(st){
@@ -5264,7 +5267,7 @@ function renderBrandCase(st){
   const g = {
     demo: st.demo || 0,
     insiden: (st.insiden || 0) + (st.fire || 0),
-    bencana: (st.disaster || 0) + (st.flood || 0) + (st.gempa || 0) + (st.gunung || 0),
+    bencana: (st.disaster || 0) + (st.flood || 0) + (st.gempa || 0) + (st.gunung || 0) + (st.tma || 0),
   };
   const total = g.demo + g.insiden + g.bencana;
   document.querySelectorAll('.bc-stat b[data-bc]').forEach(b => { b.textContent = g[b.dataset.bc]; });
@@ -9108,7 +9111,7 @@ function syncLayers(){
     }
   }
   const pairs = [[heat, 'heat'], [pinLayer, 'pins'], [camLayer, 'cams'], [tmaLayer, 'tma'], [ttFlowLayer, 'ttflow'], [ttIncTileLayer, 'ttinc'], [ttIncDataLayer, 'ttdata'], [flightLayer, 'flight'], [shipLayer, 'ship'], [transitLayer, 'transit'], [gempaLayer, 'gempa'], [gunungLayer, 'gunung'], [wxLayer, 'cuaca'], [windVelocityLayer, 'wind'], [radarLayer, 'radar'], [radarBmkgLayer, 'radarbmkg'], [peringatanLayer, 'peringatan'], [satIrLayer, 'sat-ir'], [satNcLayer, 'sat-nc'], [satWvLayer, 'sat-wv'], [satRainLayer, 'sat-rain'], [airLayer, 'air']];
-  const legGate = { tma: 'flood', gempa: 'gempa', gunung: 'gunung' };
+  const legGate = { tma: 'tma', gempa: 'gempa', gunung: 'gunung' };
   for (const [l, k] of pairs) {
     if (!l) continue;
     const on = !!layerOn[k] && (!legGate[k] || legendOn[legGate[k]] !== false);
@@ -9975,7 +9978,7 @@ function renderGeoTelemetry(){
     if (k) counts[k] = (counts[k] || 0) + 1;
   }
   if (specEl) {
-    const specKeys = ['gempa', 'gunung'].concat(GEO_SHINGLE_ORDER).filter(k => (counts[k] || 0) > 0);
+    const specKeys = ['gempa', 'gunung', 'tma'].concat(GEO_SHINGLE_ORDER).filter(k => (counts[k] || 0) > 0);
     specEl.innerHTML = pts.length && specKeys.length
       ? specKeys.map(k => `<span class="geo-seg" style="flex:${counts[k]} 1 0%;background:${CAT_COLOR[k] || '#8d8d8d'}"></span>`).join('')
       : '';
@@ -10613,7 +10616,7 @@ async function pullDisaster(){
           name: g.name,
           label: 'PINTU AIR · ' + (g.siaga_label || ('SIAGA ' + siaga)).toUpperCase(),
           src: 'DSDA DKI',
-          url: 'https://pantaubanjir.jakarta.go.id/',
+          url: 'tma://' + tmaKey + '/s' + siaga,
           weight: siaga === 1 ? 0.95 : siaga === 2 ? 0.8 : 0.55
         });
       }
@@ -10668,7 +10671,7 @@ async function pullDisaster(){
         name: a.name,
         label: 'BANJIR · PETABENCANA',
         src: 'PetaBencana.id',
-        url: 'https://petabencana.id/',
+        url: 'petabencana://area/' + (a.id || a.name),
         weight: st >= 4 ? 0.92 : st === 3 ? 0.78 : 0.55
       });
       if (mapOpen && a.geometry) {
@@ -10697,7 +10700,7 @@ async function pullDisaster(){
         name: r.src || 'PetaBencana',
         label: 'LAPORAN BANJIR',
         src: 'PetaBencana.id',
-        url: r.url || 'https://petabencana.id/',
+        url: 'petabencana://report/' + (r.id || (r.lat + ',' + r.lon + ',' + r.ts)),
         weight: st >= 3 ? 0.78 : 0.52
       });
       if (mapOpen) {
@@ -10720,9 +10723,9 @@ async function pullDisaster(){
     renderGeoTelemetry();
     if (SIT && typeof renderSituation === 'function') renderSituation();
     else if (SIT) renderMapLegend({ ...(SIT.stats || {}),
-      flood: ((SIT.stats && SIT.stats.flood) || 0) + dp.filter(p => p.kind === 'flood').length,
       gempa: dp.filter(p => p.sub === 'gempa').length,
-      gunung: dp.filter(p => p.sub === 'volcano').length });
+      gunung: dp.filter(p => p.sub === 'volcano').length,
+      tma: dp.filter(p => p.sub === 'tma' || p.sub === 'flood').length });
     try { drawGlobe(performance.now()); } catch (e) {}
     maybeFocusFresh();
 

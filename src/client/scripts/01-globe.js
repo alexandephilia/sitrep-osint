@@ -140,10 +140,12 @@ function hideSitAlert(){
   }, 320);
 }
 
+const isReadUrl = u => /^https?:\/\//i.test(String(u || '').trim());
 function showSitAlert(p){
   const el = $('#sit-alert'); if (!el) return;
-  const cat = p.kind || 'insiden';
+  const cat = legendKeyOf(p) || p.kind || 'insiden';
   const color = CAT_COLOR[cat] || '#8d8d8d';
+  const canRead = isReadUrl(p.url);
   const ageMin = p.ts ? Math.max(0, Math.floor((Date.now() - p.ts) / 60000)) : -1;
   const ago = ageMin < 0 ? '' : ageMin < 1 ? 'baru saja' : ageMin < 60 ? ageMin + ' mnt lalu' : ageMin < 1440 ? Math.floor(ageMin / 60) + ' jam lalu' : Math.floor(ageMin / 1440) + ' hari lalu';
   el.innerHTML = `<div class="sa-box" style="--sa-c:${color}">
@@ -154,15 +156,15 @@ function showSitAlert(p){
       <div class="sa-ft">
         <span class="sa-m">${esc(cleanSrc(p.src, p.pub))}${p.n > 1 ? ` · ${p.n} artikel` : ''}</span>
         <div class="sa-acts">
-          <button class="sa-go" type="button" aria-label="Buka di reader" title="Buka di reader">Buka reader ↗</button>
+          ${canRead ? '<button class="sa-go" type="button" aria-label="Buka di reader" title="Buka di reader">Buka reader ↗</button>' : ''}
           <button class="sa-close-btn" type="button" aria-label="Tutup alert" title="Tutup alert">Tutup</button>
         </div>
       </div>
     </div>
   </div>`;
-  el.title = 'Buka di reader';
+  el.title = canRead ? 'Buka di reader' : '';
   el.setAttribute('role', 'button');
-  sitAlertUrl = p.url || '';
+  sitAlertUrl = canRead ? p.url : '';
   el.hidden = false;
   el.classList.remove('hide');
   requestAnimationFrame(() => el.classList.add('show'));
@@ -656,11 +658,12 @@ function placeSitTip(e, touch){
 function showGlobeTip(e, d, touch){
   const tip = $('#sit-tip');
   const p = d.p || {};
+  const canRead = isReadUrl(p.url);
   activeGlobeQuake = (d.cat === 'gempa' || p.sub === 'gempa' || p.kind === 'gempa') ? p : null;
-  tip.dataset.url = p.url || '';
+  tip.dataset.url = canRead ? p.url : '';
   tip.innerHTML = `<div class="tip-k" style="color:${d.color}">${esc(p.label || CAT_LABEL[d.cat])}${p.name ? ' · ' + esc(p.name) : ''}</div>
     <div class="tip-t">${esc(cleanTitle(deEmoji(p.title || ''), p.pub || p.src))}</div>
-    <div class="tip-m">${esc(cleanSrc(p.src, p.pub))} · <span class="tip-time">${esc(p.ts ? wibTime(p.ts) + ' WIB' : '')}</span>${precTxt(p) ? ' · ' + esc(precTxt(p)) : ''}</div>${touch && p.url ? '<div class="tip-h">Buka reader ↗</div>' : ''}`;
+    <div class="tip-m">${esc(cleanSrc(p.src, p.pub))} · <span class="tip-time">${esc(p.ts ? wibTime(p.ts) + ' WIB' : '')}</span>${precTxt(p) ? ' · ' + esc(precTxt(p)) : ''}</div>${touch && canRead ? '<div class="tip-h">Buka reader ↗</div>' : ''}`;
   tip.hidden = false;
   placeSitTip(e, touch);
 }
@@ -682,13 +685,13 @@ let sitPopUrl = '';
 function showGlobePop(e, d){
   const pop = $('#sit-pop'); if (!pop) return;
   const p = d.p || {};
+  const canRead = isReadUrl(p.url);
   activeGlobeQuake = (d.cat === 'gempa' || p.sub === 'gempa' || p.kind === 'gempa') ? p : null;
-  sitPopUrl = p.url || '';
+  sitPopUrl = canRead ? p.url : '';
   pop.dataset.url = sitPopUrl;
   pop.innerHTML = `<div class="tip-k" style="color:${d.color}">${esc(p.label || CAT_LABEL[d.cat])}${p.name ? ' · ' + esc(p.name) : ''}</div>
     <div class="tip-t">${esc(cleanTitle(deEmoji(p.title || ''), p.pub || p.src))}</div>
-    <div class="tip-m">${esc(cleanSrc(p.src, p.pub))} · <span class="tip-time">${esc(p.ts ? wibTime(p.ts) + ' WIB' : '')}</span>${precTxt(p) ? ' · ' + esc(precTxt(p)) : ''}</div>
-    <div class="pop-ft"><span class="pop-go">Buka reader ↗</span></div>`;
+    <div class="tip-m">${esc(cleanSrc(p.src, p.pub))} · <span class="tip-time">${esc(p.ts ? wibTime(p.ts) + ' WIB' : '')}</span>${precTxt(p) ? ' · ' + esc(precTxt(p)) : ''}</div>${canRead ? '<div class="pop-ft"><span class="pop-go">Buka reader ↗</span></div>' : ''}`;
   pop.hidden = false;
   const wrap = $('.sit-mapwrap').getBoundingClientRect();
   const pw = pop.offsetWidth, ph = pop.offsetHeight;
@@ -887,7 +890,7 @@ function bindGlobeEvents(){
       return;
     }
     const inc = hit ? hit.d : null;
-    if (inc && inc.p && inc.p.url) rdOpen(inc.p.url, null, true, '').catch(() => window.open(inc.p.url, '_blank', 'noopener'));
+    if (inc && inc.p && isReadUrl(inc.p.url)) rdOpen(inc.p.url, null, true, '').catch(() => window.open(inc.p.url, '_blank', 'noopener'));
   });
 }
 function renderMapLegend(st){
