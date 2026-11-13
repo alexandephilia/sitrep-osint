@@ -816,3 +816,12 @@ test('non-toll regional expansion and multi-tag Pantau Banjir + Tangerang / Jaka
   const gwSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'cctv-gateway.js'), 'utf8');
   assert.ok(gwSrc.includes("return 'tk:'") && gwSrc.includes("return 'bali:'"), 'cctv-gateway must compute distinct canonicalKey for tangerangkab and baliprov');
 });
+
+test('JKP Satpol PP Gatot Subroto C11 keeps active CCTV-01, drops dead CCTV-02, and supports middle-dot camera search queries', () => {
+  const cams = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src/client/data/cams.json'), 'utf8'));
+  const c11 = cams.filter(c => /502507_JKP_SATPOL-PP_JL\.-JEND\.-GATOT-SUBROTO-C11/i.test(c.s || ''));
+  assert.equal(c11.length, 1, 'Only live CCTV-01 must remain for Gatot Subroto C11');
+  assert.match(c11[0].s, /_CCTV-01\/index\.m3u8$/);
+  const cctvJs = fs.readFileSync(path.join(__dirname, '..', 'src/client/scripts/07-cctv.js'), 'utf8');
+  assert.match(cctvJs, /replace\(\/\[·\|\]\+\/g, ' '\)/, 'CCTV search must tokenize middot-separated queries like Name · City');
+});

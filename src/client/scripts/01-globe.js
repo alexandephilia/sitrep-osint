@@ -307,9 +307,9 @@ function drawGlobe(now){
     const baseR = Math.min(w, h) / 2 - 8;
 
     const grad = bctx.createRadialGradient(w * 0.38, h * 0.34, baseR * view.zoom * 0.12, w / 2, h / 2, baseR * view.zoom + 2);
-    grad.addColorStop(0, '#161616');
-    grad.addColorStop(0.72, '#101010');
-    grad.addColorStop(1, '#0b0b0b');
+    grad.addColorStop(0, 'rgba(18,18,22,.36)');
+    grad.addColorStop(0.72, 'rgba(12,12,15,.48)');
+    grad.addColorStop(1, 'rgba(8,8,10,.60)');
     bctx.beginPath(); bpath({ type: 'Sphere' });
     bctx.fillStyle = grad; bctx.fill();
     bctx.lineWidth = 1; bctx.strokeStyle = '#2e2e2e'; bctx.stroke();

@@ -867,16 +867,17 @@ function layout(){
   cells.slice(total - r).forEach((c, k) => c.style.gridColumn = 'span ' + (base + (k < extra ? 1 : 0)));
 }
 function wantList(){
-  const q = ($('#cq').value || '').toLowerCase();
+  const q = ($('#cq').value || '').toLowerCase().replace(/[·|]+/g, ' ').trim();
+  const toks = q ? q.split(/\s+/).filter(Boolean) : [];
   const list = [];
   let srvOff = 0;
   for (let i = 0; i < CAMS.length; i++) {
     const c = CAMS[i];
     if (c._hide === true) continue;
     if (!camInDistrict(c, district)) continue;
-    if (q) {
+    if (toks.length) {
       const hay = ((c.n || '') + ' ' + (c.sub || '') + ' ' + (c.region || '') + ' ' + (c.rawC || '') + ' ' + (c.c || '')).toLowerCase();
-      if (!hay.includes(q)) continue;
+      if (!toks.every(t => hay.includes(t))) continue;
     }
     const isSrvOff = Boolean(aliveMap && aliveMap[i] === false);
     if (isSrvOff && !showOfflineCams) { srvOff++; continue; }
