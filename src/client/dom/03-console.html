@@ -3,8 +3,19 @@
   <section class="pane" aria-label="Situasi nasional">
     <div class="ph"><span class="ph-k">[01]</span><h2 class="ph-t">Situasi</h2><span class="ph-m" id="dmeta">sync —</span></div>
     <div class="pb sit-body">
-      <div class="sit-mapwrap">
+      <div class="sit-mapwrap is-loading">
         <canvas id="sit-globe" role="img" aria-label="Globe dunia dengan titik insiden live, bisa di-drag dan di-zoom"></canvas>
+        <div id="sit-globe-load" class="sit-globe-load" aria-live="polite" aria-hidden="false">
+          <canvas id="sgl-noise" class="sgl-noise" width="160" height="96"></canvas>
+          <div class="sgl-scan" aria-hidden="true"></div>
+          <div class="sgl-hud">
+            <span class="sgl-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            <span class="sgl-tx">
+              <b class="sgl-k">SINKRONISASI GLOBE</b>
+              <span id="sgl-msg" class="sgl-msg">Mencari koneksi…</span>
+            </span>
+          </div>
+        </div>
         <div class="sit-corners" aria-hidden="true"><i class="ctl"></i><i class="ctr"></i><i class="cbl"></i><i class="cbr"></i></div>
         <div class="sit-globe-kpi">
           <div class="sit-kpi-main">

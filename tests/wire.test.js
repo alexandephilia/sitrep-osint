@@ -1379,3 +1379,25 @@ test('reader service runs bounded parallel bot probes, learns WAF/hcdn challenge
     else process.env.FIRECRAWL_API_KEY = prevFcKey;
   }
 });
+
+test('globe stage renders initial static-noise loading overlay, single reticle grid, and surrounding-edge fade scrim', () => {
+  const root = path.join(__dirname, '..');
+  const consoleHtml = fs.readFileSync(path.join(root, 'src/client/dom/03-console.html'), 'utf8');
+  const situasiCss = fs.readFileSync(path.join(root, 'src/client/styles/04-situasi.css'), 'utf8');
+  const globeJs = fs.readFileSync(path.join(root, 'src/client/scripts/01-globe.js'), 'utf8');
+  const bootUtilJs = fs.readFileSync(path.join(root, 'src/client/scripts/09-tv-footer.js'), 'utf8');
+
+  assert.match(consoleHtml, /class="sit-mapwrap is-loading"/);
+  assert.match(consoleHtml, /id="sit-globe-load"/);
+  assert.match(consoleHtml, /id="sgl-noise"/);
+  assert.match(consoleHtml, /Mencari koneksi…/);
+
+  assert.doesNotMatch(situasiCss, /14px 14px/, 'redundant minor 14px grid must be removed from globe stage');
+  assert.match(situasiCss, /\.sit-mapwrap::after\{[\s\S]*z-index:3;[\s\S]*linear-gradient\(to bottom[\s\S]*linear-gradient\(to right[\s\S]*radial-gradient/);
+  assert.match(situasiCss, /\.sit-mapwrap:not\(\.is-loading\) \.sit-globe-load/);
+
+  assert.match(globeJs, /function drawGlobeNoiseFrame\(/);
+  assert.match(globeJs, /function syncGlobeLoadState\(/);
+  assert.match(globeJs, /globeTopoDone && \(incDone \|\| offlineReady\)/);
+  assert.match(bootUtilJs, /apiProbed = true/);
+});

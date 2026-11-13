@@ -594,26 +594,73 @@ a{color:inherit;text-decoration:none;text-underline-offset:2px}
 .sit-mapwrap::before{
   content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
   background-image:
-    linear-gradient(rgba(255,255,255,.075) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.075) 1px, transparent 1px),
-    linear-gradient(rgba(255,255,255,.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px);
-  background-size: 56px 56px, 56px 56px, 14px 14px, 14px 14px;
+    linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
+  background-size: 56px 56px;
   background-position: center center;
-  -webkit-mask-image: radial-gradient(ellipse 130% 100% at 50% 42%, #000 26%, rgba(0,0,0,.55) 55%, transparent 82%);
-  mask-image: radial-gradient(ellipse 130% 100% at 50% 42%, #000 26%, rgba(0,0,0,.55) 55%, transparent 82%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 62% at 50% 48%, #000 18%, rgba(0,0,0,.42) 52%, transparent 82%);
+  mask-image: radial-gradient(ellipse 70% 62% at 50% 48%, #000 18%, rgba(0,0,0,.42) 52%, transparent 82%);
 }
 .sit-mapwrap::after{
-  content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
-  background: radial-gradient(ellipse 120% 95% at 50% 42%, transparent 55%, rgba(0,0,0,.55) 100%);
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+  background:
+    linear-gradient(to bottom, #0e0e0e 0%, rgba(14,14,14,.55) 7%, transparent 20%, transparent 78%, rgba(14,14,14,.62) 92%, #0e0e0e 100%),
+    linear-gradient(to right, #0e0e0e 0%, rgba(14,14,14,.52) 6%, transparent 18%, transparent 82%, rgba(14,14,14,.52) 94%, #0e0e0e 100%),
+    radial-gradient(ellipse 84% 76% at 50% 48%, transparent 54%, rgba(14,14,14,.48) 78%, #0e0e0e 100%);
 }
-.sit-corners{position:absolute;inset:5px;z-index:3;pointer-events:none}
+.sit-corners{position:absolute;inset:5px;z-index:4;pointer-events:none}
 .sit-corners i{position:absolute;width:15px;height:15px;border:0 solid rgba(244,244,244,.34)}
 .sit-corners .ctl{top:0;left:0;border-top-width:1px;border-left-width:1px}
 .sit-corners .ctr{top:0;right:0;border-top-width:1px;border-right-width:1px}
 .sit-corners .cbl{bottom:0;left:0;border-bottom-width:1px;border-left-width:1px}
 .sit-corners .cbr{bottom:0;right:0;border-bottom-width:1px;border-right-width:1px}
 #sit-globe{position:relative;z-index:2;display:block;width:100%;height:100%;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.sit-mapwrap .sit-globe-tag{z-index:4}
+.sit-globe-load{
+  position:absolute;inset:0;z-index:5;pointer-events:none;
+  display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse 76% 68% at 50% 48%, rgba(11,13,16,.84) 0%, rgba(14,14,14,.92) 70%, #0e0e0e 100%);
+  opacity:1;visibility:visible;
+  transition:opacity .42s ease, visibility 0s linear 0s;
+}
+.sit-mapwrap:not(.is-loading) .sit-globe-load{
+  opacity:0;visibility:hidden;
+  transition:opacity .42s ease, visibility 0s linear .42s;
+}
+.sgl-noise{
+  position:absolute;inset:0;width:100%;height:100%;display:block;
+  opacity:.24;mix-blend-mode:screen;image-rendering:pixelated;
+  -webkit-mask-image:radial-gradient(ellipse 84% 76% at 50% 48%, #000 32%, rgba(0,0,0,.45) 68%, transparent 98%);
+  mask-image:radial-gradient(ellipse 84% 76% at 50% 48%, #000 32%, rgba(0,0,0,.45) 68%, transparent 98%);
+}
+.sgl-scan{
+  position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(to bottom, rgba(255,255,255,.045) 0 1px, transparent 1px 3px);
+  opacity:.55;
+}
+.sgl-hud{
+  position:relative;z-index:1;display:inline-flex;align-items:center;gap:10px;
+  padding:8px 13px;border-radius:4px;
+  background:rgba(12,12,16,.82);border:1px solid rgba(255,255,255,.12);
+  box-shadow:0 8px 24px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+}
+.sgl-bars{display:inline-flex;align-items:flex-end;gap:2px;height:14px}
+.sgl-bars i{display:block;width:2px;height:4px;background:var(--text3);border-radius:1px;animation:sglBar 1.05s ease-in-out infinite}
+.sgl-bars i:nth-child(2){animation-delay:.16s}
+.sgl-bars i:nth-child(3){animation-delay:.32s}
+.sgl-bars i:nth-child(4){animation-delay:.48s}
+@keyframes sglBar{
+  0%,100%{height:4px;background:var(--text3);opacity:.45}
+  45%{height:14px;background:#72d8c8;opacity:1}
+}
+.sgl-tx{display:flex;flex-direction:column;gap:2px;min-width:138px}
+.sgl-k{font:600 9px/1 var(--mono,monospace);letter-spacing:.14em;color:var(--text);text-transform:uppercase}
+.sgl-msg{font:400 10px/1.2 var(--mono,monospace);letter-spacing:.03em;color:var(--text2);white-space:nowrap}
+@media (prefers-reduced-motion: reduce){
+  .sgl-bars i{animation:none;height:9px;background:#72d8c8;opacity:.75}
+  .sit-globe-load{transition:opacity .15s ease, visibility 0s linear .15s}
+}
 .sit-globe-kpi{
   position:absolute;z-index:4;top:24px;left:12px;right:12px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;
   pointer-events:none;
@@ -2855,8 +2902,19 @@ button.mp-src{background:none;border-top:0;border-left:0;border-right:0;cursor:p
   <section class="pane" aria-label="Situasi nasional">
     <div class="ph"><span class="ph-k">[01]</span><h2 class="ph-t">Situasi</h2><span class="ph-m" id="dmeta">sync —</span></div>
     <div class="pb sit-body">
-      <div class="sit-mapwrap">
+      <div class="sit-mapwrap is-loading">
         <canvas id="sit-globe" role="img" aria-label="Globe dunia dengan titik insiden live, bisa di-drag dan di-zoom"></canvas>
+        <div id="sit-globe-load" class="sit-globe-load" aria-live="polite" aria-hidden="false">
+          <canvas id="sgl-noise" class="sgl-noise" width="160" height="96"></canvas>
+          <div class="sgl-scan" aria-hidden="true"></div>
+          <div class="sgl-hud">
+            <span class="sgl-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            <span class="sgl-tx">
+              <b class="sgl-k">SINKRONISASI GLOBE</b>
+              <span id="sgl-msg" class="sgl-msg">Mencari koneksi…</span>
+            </span>
+          </div>
+        </div>
         <div class="sit-corners" aria-hidden="true"><i class="ctl"></i><i class="ctr"></i><i class="cbl"></i><i class="cbr"></i></div>
         <div class="sit-globe-kpi">
           <div class="sit-kpi-main">
@@ -3227,6 +3285,7 @@ const SITREP_TOKEN = (() => {
 const SIT_TOKEN = SITREP_TOKEN;
 const SITREP_CAN_FRESH = !SITREP_PUBLIC || Boolean(SIT_TOKEN);
 let API = null;
+let apiProbed = false;
 const isOurUrl = url => {
   try {
     const u = new URL(url, location.href);
@@ -3959,6 +4018,7 @@ function jitterGeo(name, la, lo, slot, prec){
 let globeBaseCanvas = null, globeBaseCtx = null, globeBaseKey = '', globeAnimOn = false;
 function wakeGlobe(){ if (globeReady && !globeRaf && !mapOpen && !document.hidden) globeRaf = requestAnimationFrame(globeLoop); }
 function drawGlobe(now){
+  if (!globeLoadDone) syncGlobeLoadState();
   now = now || performance.now();
   const c = $('#sit-globe');
   if (!c || typeof d3 === 'undefined') return;
@@ -4608,15 +4668,121 @@ function renderMapLegend(st){
     mLeg.innerHTML = cats.map(c => `<span class="lg"><i style="background:${CAT_COLOR[c]}"></i>${CAT_LABEL[c]}</span>`).join('');
   }
 }
+let globeTopoDone = false, globeLoadDone = false, globeLoadForced = false;
+let globeNoiseTimer = 0, globeLoadWatchTimer = 0, globeLoadFailTimer = 0;
+let globeNoiseImg = null, globeNoiseSeed = (Date.now() ^ 0x9e3779b9) >>> 0;
+
+function drawGlobeNoiseFrame(){
+  const cv = $('#sgl-noise');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  if (!ctx) return;
+  const w = cv.width, h = cv.height;
+  if (!globeNoiseImg || globeNoiseImg.width !== w || globeNoiseImg.height !== h) {
+    globeNoiseImg = ctx.createImageData(w, h);
+  }
+  const d = globeNoiseImg.data;
+  let s = globeNoiseSeed || 0x13579bdf;
+  s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
+  const bandY = Math.abs(s) % h;
+  const hasBand = (s & 7) === 0;
+  for (let y = 0; y < h; y++) {
+    const bandBoost = (hasBand && Math.abs(y - bandY) <= 1) ? 46 : 0;
+    const rowOff = y * w;
+    for (let x = 0; x < w; x++) {
+      s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
+      const u = s >>> 24;
+      const i = (rowOff + x) * 4;
+      const v = Math.min(255, ((u * u) >> 9) + bandBoost);
+      d[i] = v;
+      d[i + 1] = Math.min(255, v + (bandBoost ? 14 : 6));
+      d[i + 2] = Math.min(255, v + (bandBoost ? 18 : 10));
+      d[i + 3] = u > 180 ? 150 : 64;
+    }
+  }
+  globeNoiseSeed = s;
+  ctx.putImageData(globeNoiseImg, 0, 0);
+}
+
+function stopGlobeNoise(){
+  if (globeNoiseTimer) { clearInterval(globeNoiseTimer); globeNoiseTimer = 0; }
+  if (globeLoadWatchTimer) { clearInterval(globeLoadWatchTimer); globeLoadWatchTimer = 0; }
+  if (globeLoadFailTimer) { clearTimeout(globeLoadFailTimer); globeLoadFailTimer = 0; }
+  globeNoiseImg = null;
+}
+
+function startGlobeNoise(){
+  if (globeLoadDone || document.hidden) return;
+  drawGlobeNoiseFrame();
+  if (!REDUCED && !globeNoiseTimer) {
+    globeNoiseTimer = setInterval(() => {
+      if (globeLoadDone || document.hidden) {
+        if (globeNoiseTimer) { clearInterval(globeNoiseTimer); globeNoiseTimer = 0; }
+        return;
+      }
+      drawGlobeNoiseFrame();
+      syncGlobeLoadState();
+    }, 75);
+  } else if (!globeLoadWatchTimer) {
+    globeLoadWatchTimer = setInterval(() => {
+      if (globeLoadDone) {
+        if (globeLoadWatchTimer) { clearInterval(globeLoadWatchTimer); globeLoadWatchTimer = 0; }
+        return;
+      }
+      syncGlobeLoadState();
+    }, 150);
+  }
+}
+
+function syncGlobeLoadState(){
+  const wrap = $('.sit-mapwrap');
+  const box = $('#sit-globe-load');
+  const msg = $('#sgl-msg');
+  if (!wrap || !box) return;
+  if (globeLoadDone) return;
+  const incDone = typeof geoIncLoaded !== 'undefined' && geoIncLoaded;
+  const offlineReady = apiProbed && API == null;
+  if (msg) {
+    if (globeTopoDone && !globeReady) msg.textContent = 'Peta gagal dimuat…';
+    else if (!apiProbed && !globeTopoDone) msg.textContent = 'Mencari koneksi…';
+    else if (!globeTopoDone) msg.textContent = 'Memuat topologi peta…';
+    else if (offlineReady) msg.textContent = 'Mode offline · peta siaga';
+    else if (!incDone) msg.textContent = 'Memuat insiden & sensor…';
+    else msg.textContent = 'Tersinkron';
+  }
+  if ((globeTopoDone && (incDone || offlineReady)) || globeLoadForced) {
+    globeLoadDone = true;
+    wrap.classList.remove('is-loading');
+    box.setAttribute('aria-hidden', 'true');
+    stopGlobeNoise();
+  }
+}
+
 function sitInitMap(){
   bindGlobeEvents();
+  startGlobeNoise();
+  syncGlobeLoadState();
+  if (!globeLoadFailTimer) {
+    globeLoadFailTimer = setTimeout(() => { globeLoadForced = true; syncGlobeLoadState(); }, 18000);
+  }
   fetchGlobe().then(ok => {
     globeReady = ok;
+    globeTopoDone = true;
     if (!ok) $('.sit-globe-tag').textContent = 'PETA GAGAL DIMUAT';
+    syncGlobeLoadState();
     drawGlobe(performance.now());
     if (!globeRaf) globeRaf = requestAnimationFrame(globeLoop);
   });
 }
+document.addEventListener('visibilitychange', () => {
+  if (globeLoadDone) return;
+  if (document.hidden) {
+    if (globeNoiseTimer) { clearInterval(globeNoiseTimer); globeNoiseTimer = 0; }
+  } else {
+    startGlobeNoise();
+    syncGlobeLoadState();
+  }
+});
 const smlgBox = $('#sit-map-legend');
 smlgBox.addEventListener('click', e => {
   const it = e.target.closest('.smlg-it');
@@ -11592,7 +11758,7 @@ async function getJson(url, ms, retries = 1){
   }
 }
 async function detectApi(){
-  if (API != null) return true;
+  if (API != null) { apiProbed = true; if (typeof syncGlobeLoadState === 'function') syncGlobeLoadState(); return true; }
   const rawQp = new URLSearchParams(location.search).get('api');
   const local = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(location.hostname);
   let qp = null;
@@ -11608,9 +11774,11 @@ async function detectApi(){
     if (waits[i]) await new Promise(r => setTimeout(r, waits[i]));
     try {
       API = await Promise.any(c.map(async b => { const d = await getJson(b + '/api/ping', 5000); if (d && d.ok) return b; throw 0; }));
-      if (API != null) return true;
+      if (API != null) { apiProbed = true; if (typeof syncGlobeLoadState === 'function') syncGlobeLoadState(); return true; }
     } catch (e) {}
   }
+  apiProbed = true;
+  if (typeof syncGlobeLoadState === 'function') syncGlobeLoadState();
   return API != null;
 }
 

@@ -261,6 +261,7 @@ function jitterGeo(name, la, lo, slot, prec){
 let globeBaseCanvas = null, globeBaseCtx = null, globeBaseKey = '', globeAnimOn = false;
 function wakeGlobe(){ if (globeReady && !globeRaf && !mapOpen && !document.hidden) globeRaf = requestAnimationFrame(globeLoop); }
 function drawGlobe(now){
+  if (!globeLoadDone) syncGlobeLoadState();
   now = now || performance.now();
   const c = $('#sit-globe');
   if (!c || typeof d3 === 'undefined') return;
@@ -910,15 +911,121 @@ function renderMapLegend(st){
     mLeg.innerHTML = cats.map(c => `<span class="lg"><i style="background:${CAT_COLOR[c]}"></i>${CAT_LABEL[c]}</span>`).join('');
   }
 }
+let globeTopoDone = false, globeLoadDone = false, globeLoadForced = false;
+let globeNoiseTimer = 0, globeLoadWatchTimer = 0, globeLoadFailTimer = 0;
+let globeNoiseImg = null, globeNoiseSeed = (Date.now() ^ 0x9e3779b9) >>> 0;
+
+function drawGlobeNoiseFrame(){
+  const cv = $('#sgl-noise');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  if (!ctx) return;
+  const w = cv.width, h = cv.height;
+  if (!globeNoiseImg || globeNoiseImg.width !== w || globeNoiseImg.height !== h) {
+    globeNoiseImg = ctx.createImageData(w, h);
+  }
+  const d = globeNoiseImg.data;
+  let s = globeNoiseSeed || 0x13579bdf;
+  s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
+  const bandY = Math.abs(s) % h;
+  const hasBand = (s & 7) === 0;
+  for (let y = 0; y < h; y++) {
+    const bandBoost = (hasBand && Math.abs(y - bandY) <= 1) ? 46 : 0;
+    const rowOff = y * w;
+    for (let x = 0; x < w; x++) {
+      s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
+      const u = s >>> 24;
+      const i = (rowOff + x) * 4;
+      const v = Math.min(255, ((u * u) >> 9) + bandBoost);
+      d[i] = v;
+      d[i + 1] = Math.min(255, v + (bandBoost ? 14 : 6));
+      d[i + 2] = Math.min(255, v + (bandBoost ? 18 : 10));
+      d[i + 3] = u > 180 ? 150 : 64;
+    }
+  }
+  globeNoiseSeed = s;
+  ctx.putImageData(globeNoiseImg, 0, 0);
+}
+
+function stopGlobeNoise(){
+  if (globeNoiseTimer) { clearInterval(globeNoiseTimer); globeNoiseTimer = 0; }
+  if (globeLoadWatchTimer) { clearInterval(globeLoadWatchTimer); globeLoadWatchTimer = 0; }
+  if (globeLoadFailTimer) { clearTimeout(globeLoadFailTimer); globeLoadFailTimer = 0; }
+  globeNoiseImg = null;
+}
+
+function startGlobeNoise(){
+  if (globeLoadDone || document.hidden) return;
+  drawGlobeNoiseFrame();
+  if (!REDUCED && !globeNoiseTimer) {
+    globeNoiseTimer = setInterval(() => {
+      if (globeLoadDone || document.hidden) {
+        if (globeNoiseTimer) { clearInterval(globeNoiseTimer); globeNoiseTimer = 0; }
+        return;
+      }
+      drawGlobeNoiseFrame();
+      syncGlobeLoadState();
+    }, 75);
+  } else if (!globeLoadWatchTimer) {
+    globeLoadWatchTimer = setInterval(() => {
+      if (globeLoadDone) {
+        if (globeLoadWatchTimer) { clearInterval(globeLoadWatchTimer); globeLoadWatchTimer = 0; }
+        return;
+      }
+      syncGlobeLoadState();
+    }, 150);
+  }
+}
+
+function syncGlobeLoadState(){
+  const wrap = $('.sit-mapwrap');
+  const box = $('#sit-globe-load');
+  const msg = $('#sgl-msg');
+  if (!wrap || !box) return;
+  if (globeLoadDone) return;
+  const incDone = typeof geoIncLoaded !== 'undefined' && geoIncLoaded;
+  const offlineReady = apiProbed && API == null;
+  if (msg) {
+    if (globeTopoDone && !globeReady) msg.textContent = 'Peta gagal dimuat…';
+    else if (!apiProbed && !globeTopoDone) msg.textContent = 'Mencari koneksi…';
+    else if (!globeTopoDone) msg.textContent = 'Memuat topologi peta…';
+    else if (offlineReady) msg.textContent = 'Mode offline · peta siaga';
+    else if (!incDone) msg.textContent = 'Memuat insiden & sensor…';
+    else msg.textContent = 'Tersinkron';
+  }
+  if ((globeTopoDone && (incDone || offlineReady)) || globeLoadForced) {
+    globeLoadDone = true;
+    wrap.classList.remove('is-loading');
+    box.setAttribute('aria-hidden', 'true');
+    stopGlobeNoise();
+  }
+}
+
 function sitInitMap(){
   bindGlobeEvents();
+  startGlobeNoise();
+  syncGlobeLoadState();
+  if (!globeLoadFailTimer) {
+    globeLoadFailTimer = setTimeout(() => { globeLoadForced = true; syncGlobeLoadState(); }, 18000);
+  }
   fetchGlobe().then(ok => {
     globeReady = ok;
+    globeTopoDone = true;
     if (!ok) $('.sit-globe-tag').textContent = 'PETA GAGAL DIMUAT';
+    syncGlobeLoadState();
     drawGlobe(performance.now());
     if (!globeRaf) globeRaf = requestAnimationFrame(globeLoop);
   });
 }
+document.addEventListener('visibilitychange', () => {
+  if (globeLoadDone) return;
+  if (document.hidden) {
+    if (globeNoiseTimer) { clearInterval(globeNoiseTimer); globeNoiseTimer = 0; }
+  } else {
+    startGlobeNoise();
+    syncGlobeLoadState();
+  }
+});
 const smlgBox = $('#sit-map-legend');
 smlgBox.addEventListener('click', e => {
   const it = e.target.closest('.smlg-it');

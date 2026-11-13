@@ -409,7 +409,7 @@ async function getJson(url, ms, retries = 1){
   }
 }
 async function detectApi(){
-  if (API != null) return true;
+  if (API != null) { apiProbed = true; if (typeof syncGlobeLoadState === 'function') syncGlobeLoadState(); return true; }
   const rawQp = new URLSearchParams(location.search).get('api');
   const local = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(location.hostname);
   let qp = null;
@@ -425,9 +425,11 @@ async function detectApi(){
     if (waits[i]) await new Promise(r => setTimeout(r, waits[i]));
     try {
       API = await Promise.any(c.map(async b => { const d = await getJson(b + '/api/ping', 5000); if (d && d.ok) return b; throw 0; }));
-      if (API != null) return true;
+      if (API != null) { apiProbed = true; if (typeof syncGlobeLoadState === 'function') syncGlobeLoadState(); return true; }
     } catch (e) {}
   }
+  apiProbed = true;
+  if (typeof syncGlobeLoadState === 'function') syncGlobeLoadState();
   return API != null;
 }
 

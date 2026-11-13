@@ -24,6 +24,7 @@ const SITREP_TOKEN = (() => {
 const SIT_TOKEN = SITREP_TOKEN;
 const SITREP_CAN_FRESH = !SITREP_PUBLIC || Boolean(SIT_TOKEN);
 let API = null;
+let apiProbed = false;
 const isOurUrl = url => {
   try {
     const u = new URL(url, location.href);
