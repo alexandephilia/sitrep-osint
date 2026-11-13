@@ -1277,3 +1277,105 @@ test('responsive mobile resize auto-switches layout, geobar spans full width on 
   assert.ok(html.includes('Math.ceil(leftMs / 1000)') && html.includes('((leftMs / (CYCLE * 1000)) * 100).toFixed(2)') && html.includes('if (remainMs === 0 && !syncKickTimer)'), 'sync countdown bar must animate smoothly to 0.00% before triggering sync');
   assert.ok(html.includes('((leftMs / (BREAK_CYCLE * 1000)) * 100).toFixed(2)') && html.includes('if (breakRemainMs === 0 && !breakKickTimer)'), 'breaking fetch bar must animate smoothly to 0.00% before fetching');
 });
+
+test('reader service runs bounded parallel bot probes, learns WAF/hcdn challenge hosts, and escalates to Firecrawl without starvation', async () => {
+  const { createReaderService } = require('../src/reader-service');
+  const SEC = require('../src/security');
+  const EXTRACT = require('../article-extract');
+  const MEDIA = require('../article-media');
+  const prevFcKey = process.env.FIRECRAWL_API_KEY;
+  process.env.FIRECRAWL_API_KEY = 'fc-test-key';
+
+  try {
+    const cache = new Map();
+    const bodyCache = new Map();
+    const uasSeen = [];
+    let botMaxConcurrent = 0;
+    let botInFlight = 0;
+    let firecrawlCalls = 0;
+
+    const jpegHdr = Buffer.from([
+      0xFF, 0xD8,
+      0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x02, 0xEE, 0x04, 0x65, 0x03, 0x01, 0x11, 0x00,
+      0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00,
+    ]);
+    const jpegPad = Buffer.concat([jpegHdr, Buffer.alloc(6000, 0x11), Buffer.from([0xFF, 0xD9])]);
+
+    const makeRes = (status, headersObj, bodyBufOrStr) => {
+      const hdrs = new Map(Object.entries(headersObj || {}).map(([k, v]) => [k.toLowerCase(), String(v)]));
+      const buf = Buffer.isBuffer(bodyBufOrStr) ? bodyBufOrStr : Buffer.from(String(bodyBufOrStr || ''), 'utf8');
+      return {
+        ok: status >= 200 && status < 300,
+        status,
+        headers: { get: k => hdrs.get(String(k || '').toLowerCase()) || null },
+        arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+        text: async () => buf.toString('utf8'),
+        json: async () => JSON.parse(buf.toString('utf8')),
+      };
+    };
+
+    const articleUrl = 'https://masakini.co/2026/11/13/bibit-siklon-92b-terpantau-di-teluk-benggala-aceh-berpotensi-dilanda-hujan-lebat/';
+    const imgUrl = 'https://i0.wp.com/masakini.co/wp-content/uploads/2026/11/IMG_6053.jpeg?fit=1125%2C747&ssl=1';
+    const articleHtml = `<!doctype html><html><head><title>Bibit Siklon 92B Terpantau di Teluk Benggala - Masakini</title><meta property="og:image" content="${imgUrl}"></head><body><article><h1>Bibit Siklon 92B Terpantau di Teluk Benggala, Aceh Berpotensi Dilanda Hujan Lebat</h1><p>Badan Meteorologi Klimatologi dan Geofisika melaporkan bibit siklon tropis 92B terpantau aktif di kawasan Teluk Benggala sebelah utara perairan Aceh pada Jumat pagi.</p><p>Kondisi atmosfer yang labil berpotensi memicu peningkatan curah hujan intensitas sedang hingga lebat disertai angin kencang di sejumlah kabupaten pesisir barat dan selatan Aceh.</p><p>Warga di wilayah rawan banjir dan longsor diminta tetap siaga serta memantau peringatan dini cuaca ekstrem dari otoritas setempat selama tiga hari ke depan.</p></article></body></html>`;
+
+    const svc = createReaderService({
+      CFG: {},
+      AUTH: { publicMode: true },
+      API_TOKEN: '',
+      SEC: { ...SEC, rdAssertPublic: async () => true },
+      MEDIA,
+      EXTRACT,
+      FEEDTEXT,
+      PIPELINE_VERSION: 'test-fc-resilience',
+      assetReuse: new MEDIA.AssetReuseTracker(),
+      cache,
+      bodyCache,
+      lruCap: (m, cap) => { while (m.size > cap) m.delete(m.keys().next().value); },
+      memo: (_k, _ttl, fn) => fn(),
+      makeSem: () => fn => fn(),
+      get: async (url, opt = {}) => {
+        if (String(url).startsWith('https://api.firecrawl.dev/v1/scrape')) {
+          firecrawlCalls++;
+          return makeRes(200, { 'content-type': 'application/json' }, JSON.stringify({
+            success: true,
+            data: { html: articleHtml, metadata: { title: 'Bibit Siklon 92B Terpantau di Teluk Benggala' } },
+          }));
+        }
+        if (String(url).startsWith('https://i0.wp.com/')) {
+          return makeRes(200, { 'content-type': 'image/jpeg', 'content-length': String(jpegPad.length) }, jpegPad);
+        }
+        if (String(url).startsWith('https://masakini.co/')) {
+          const ua = (opt.headers && (opt.headers['user-agent'] || opt.headers['User-Agent'])) || '';
+          if (ua) {
+            uasSeen.push(ua);
+            botInFlight++;
+            if (botInFlight > botMaxConcurrent) botMaxConcurrent = botInFlight;
+            await new Promise(r => setTimeout(r, 25));
+            botInFlight--;
+          }
+          return makeRes(403, { server: 'hcdn', 'content-type': 'text/html' }, '<html><title>Checking your browser</title><body>Just a moment...</body></html>');
+        }
+        if (String(url).startsWith('https://archive.org/wayback/')) {
+          return makeRes(200, { 'content-type': 'application/json' }, '{}');
+        }
+        return makeRes(502, { 'content-type': 'text/plain' }, 'blocked');
+      },
+      sleep: ms => new Promise(r => setTimeout(r, Math.min(ms, 5))),
+      openCors: {},
+      isBannedHostUrl: () => false,
+    });
+
+    const out = await svc.rdRead(articleUrl, false, false);
+    assert.equal(out.via, 'firecrawl', 'blocked/tarpitted hcdn host must escalate cleanly to firecrawl');
+    assert.equal(out.wireFallback, undefined, 'successful firecrawl read must not emit wireFallback');
+    assert.ok(out.paras.length >= 3, 'firecrawl HTML must yield full article paragraphs');
+    assert.ok(out.img && out.imgVerified, 'article hero image on i0.wp.com must verify cleanly');
+    assert.equal(firecrawlCalls, 1, 'firecrawl scrape must be invoked once within budget');
+    assert.ok(botMaxConcurrent >= 2, 'bot UA probing must run in parallel rather than sequential loop');
+    assert.ok(uasSeen.length <= 3, 'bot probe must cap parallel UA fanout cleanly');
+    assert.equal(svc.isWafHostUrl(articleUrl), true, 'host returning hcdn challenge / resolved via firecrawl must be learned as WAF host');
+  } finally {
+    if (prevFcKey === undefined) delete process.env.FIRECRAWL_API_KEY;
+    else process.env.FIRECRAWL_API_KEY = prevFcKey;
+  }
+});

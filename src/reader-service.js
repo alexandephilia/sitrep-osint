@@ -91,6 +91,65 @@ function createReaderService({
     'curl/8.7.1',
   ];
   const CF_WAF_HOST_RE = /(?:^|\.)(?:tempo\.co|cnnindonesia\.com|cnbcindonesia\.com|jpnn\.com|pikiran-rakyat\.com|mediaindonesia\.com|tribunnews\.com|bisnis\.com|kontan\.co\.id|kompasiana\.com|suara\.com|sindonews\.com|okezone\.com|inews\.id)$/i;
+  const WAF_SERVER_RE = /\b(?:hcdn|cloudflare|ddos-guard|sucuri|akamaighost)\b/i;
+  const LEARNED_WAF_TTL = 30 * 60000;
+  const learnedWafHosts = new Map();
+  function wafHostKey(u) {
+    try { return new URL(u).hostname.replace(/^www\./i, '').toLowerCase(); } catch (e) { return ''; }
+  }
+  function isWafHostUrl(u) {
+    const h = wafHostKey(u);
+    if (!h) return false;
+    if (CF_WAF_HOST_RE.test(h)) return true;
+    const exp = learnedWafHosts.get(h) || 0;
+    if (exp > Date.now()) return true;
+    if (exp) learnedWafHosts.delete(h);
+    return false;
+  }
+  function markWafHost(u) {
+    const h = wafHostKey(u);
+    if (!h) return false;
+    learnedWafHosts.delete(h);
+    learnedWafHosts.set(h, Date.now() + LEARNED_WAF_TTL);
+    lruCap(learnedWafHosts, 200);
+    return true;
+  }
+  function noteWafResponse(u, r, htmlSnippet = '') {
+    const status = r && Number(r.status);
+    const srv = (r && r.headers && r.headers.get && (r.headers.get('server') || '')) || '';
+    const hdrWaf = (status === 403 || status === 503 || status === 429) && WAF_SERVER_RE.test(srv);
+    const bodyChallenge = Boolean(htmlSnippet && BOT_CHALLENGE_RE.test(String(htmlSnippet).slice(0, 30000)));
+    return (hdrWaf || bodyChallenge) ? markWafHost(u) : false;
+  }
+  async function raceBotUas(targetUrl, totalMs, parentSignal, handler, uas = RD_BOT_UAS.slice(0, 3)) {
+    if (!uas.length || totalMs < 1200) throw new Error('bot timeout');
+    const ac = new AbortController();
+    const onParentAbort = () => { try { ac.abort(); } catch {} };
+    if (parentSignal) {
+      if (parentSignal.aborted) { onParentAbort(); throw new Error('aborted'); }
+      parentSignal.addEventListener('abort', onParentAbort, { once: true });
+    }
+    const timer = setTimeout(() => { try { ac.abort(); } catch {} }, totalMs);
+    if (timer.unref) timer.unref();
+    try {
+      let lastErr = null;
+      const attempts = uas.map(async bua => {
+        const { r, url } = await rdSafeGet(targetUrl, totalMs, { 'user-agent': bua }, ac.signal);
+        noteWafResponse(url || targetUrl, r);
+        return await handler(r, url, bua);
+      });
+      for (const p of attempts) p.catch(e => { lastErr = e; });
+      try {
+        return await Promise.any(attempts);
+      } catch (agg) {
+        throw lastErr || (agg && agg.errors && agg.errors[0]) || new Error('bot challenge/block');
+      }
+    } finally {
+      clearTimeout(timer);
+      if (parentSignal) parentSignal.removeEventListener('abort', onParentAbort);
+      try { ac.abort(); } catch {}
+    }
+  }
 
   const readMediaSem = makeSem(16);
   function sanitizeHopHeaders(headers, firstOrigin, curUrl) {
@@ -681,12 +740,16 @@ function createReaderService({
         : await rdSafeGet(targetUrl, ms, hdrs, thumbAc.signal);
       const r = g.r;
       const finalUrl = fromProxy ? article : g.url;
+      if (!fromProxy) noteWafResponse(finalUrl || targetUrl, r);
       if (!r.ok) { try { if (r.body && r.body.cancel) await r.body.cancel(); } catch (e) {} throw new Error('HTTP ' + r.status); }
       const ct = r.headers.get('content-type') || '';
       if (ct && !/text\/html|application\/xhtml|text\/plain/i.test(ct)) { try { if (r.body && r.body.cancel) await r.body.cancel(); } catch (e) {} throw new Error('bukan HTML'); }
       const html = await mediaText(r, 3 << 20);
       if (!html || html.length < 400) throw new Error('html tipis');
-      if (BOT_CHALLENGE_RE.test(html.slice(0, 30000))) throw new Error('halaman challenge');
+      if (BOT_CHALLENGE_RE.test(html.slice(0, 30000))) {
+        if (!fromProxy) noteWafResponse(finalUrl || targetUrl, r, html);
+        throw new Error('halaman challenge');
+      }
       if (isHijackedThumbHtml(article, finalUrl, html, fromProxy)) throw new Error('redirect mencurigakan');
       return { html, finalUrl, via };
     };
@@ -699,14 +762,12 @@ function createReaderService({
       if (cachedDoc.html) doc = { html: cachedDoc.html, finalUrl: cachedDoc.finalUrl || article, via: cachedDoc.via || 'doc-cache' };
       if (cachedDoc.jinaTxt) jinaMd = cachedDoc.jinaTxt;
     }
-    let artHost = '';
-    try { artHost = new URL(article).hostname; } catch (e) {}
-    const isWafHost = CF_WAF_HOST_RE.test(artHost);
+    const isWafHost = isWafHostUrl(article);
     if (!doc && !jinaMd) {
       const directP = (isWafHost
-        ? sleep(250).then(() => tryDocFetch(article, 6000, {}, false, 'direct'))
-        : tryDocFetch(article, 7000, {}, false, 'direct'));
-      const fastBotP = tryDocFetch(article, 6000, { 'user-agent': RD_BOT_UAS[0] }, false, 'bot');
+        ? sleep(250).then(() => tryDocFetch(article, 4500, {}, false, 'direct'))
+        : tryDocFetch(article, 6500, {}, false, 'direct'));
+      const fastBotP = tryDocFetch(article, isWafHost ? 4500 : 5500, { 'user-agent': RD_BOT_UAS[0] }, false, 'bot');
 
       directP.catch(() => {});
       fastBotP.catch(() => {});
@@ -719,14 +780,16 @@ function createReaderService({
         try { thumbAc.abort(); } catch {}
       } else {
         const jobs = [directP, fastBotP];
-        jobs.push((async () => {
-          for (const bua of RD_BOT_UAS.slice(1, 5)) {
-            if (thumbAc.signal.aborted) break;
-            try { return await tryDocFetch(article, 4500, { 'user-agent': bua }, false, 'bot'); }
-            catch (e) {}
-          }
-          throw new Error('bot gagal');
-        })());
+        jobs.push(raceBotUas(article, isWafHost ? 4000 : 4800, thumbAc.signal, async (r, finalUrl) => {
+          if (!r.ok) { try { if (r.body && r.body.cancel) await r.body.cancel(); } catch (e) {} throw new Error('HTTP ' + r.status); }
+          const ct = r.headers.get('content-type') || '';
+          if (ct && !/text\/html|application\/xhtml|text\/plain/i.test(ct)) { try { if (r.body && r.body.cancel) await r.body.cancel(); } catch (e) {} throw new Error('bukan HTML'); }
+          const html = await mediaText(r, 3 << 20);
+          if (!html || html.length < 400) throw new Error('html tipis');
+          if (BOT_CHALLENGE_RE.test(html.slice(0, 30000))) { noteWafResponse(finalUrl || article, r, html); throw new Error('halaman challenge'); }
+          if (isHijackedThumbHtml(article, finalUrl, html, false)) throw new Error('redirect mencurigakan');
+          return { html, finalUrl, via: 'bot' };
+        }, RD_BOT_UAS.slice(1, 4)));
         for (const av of rdAmpVariants(article).slice(0, 2)) {
           jobs.push(tryDocFetch(av, 4500, { 'user-agent': RD_BOT_UAS[0] }, false, 'amp'));
         }
@@ -740,7 +803,7 @@ function createReaderService({
 
       if (!doc) {
         try {
-          const { r } = await jinaGet('https://r.jina.ai/' + article, 9000, { accept: 'text/plain' });
+          const { r } = await jinaGet('https://r.jina.ai/' + article, 8000, { accept: 'text/plain' });
           if (r.ok) {
             const txt = await mediaText(r, 2 << 20);
             if (txt && !BOT_CHALLENGE_RE.test(txt.slice(0, 5000))) jinaMd = txt;
@@ -754,8 +817,8 @@ function createReaderService({
           const r = await get('https://api.firecrawl.dev/v1/scrape', {
             method: 'POST',
             headers: { 'content-type': 'application/json', authorization: 'Bearer ' + FC_KEY },
-            body: JSON.stringify({ url: article, formats: ['html'], onlyMainContent: false, timeout: 8000 })
-          }, 9000);
+            body: JSON.stringify({ url: article, formats: ['html'], onlyMainContent: false, timeout: 12000 })
+          }, 14000);
           if (r.ok) {
             const j = await r.json();
             let html = j && j.data && j.data.html;
@@ -763,6 +826,7 @@ function createReaderService({
             if (html && String(html).length > 500 && !BOT_CHALLENGE_RE.test(String(html).slice(0, 30000))) {
               html = injectSyntheticHead(String(html), md);
               doc = { html: html.slice(0, 3e6), finalUrl: article, via: 'firecrawl' };
+              markWafHost(article);
               fcOk = true;
             }
           }
@@ -1355,6 +1419,7 @@ function createReaderService({
   const outboundScrapeRl = SEC.createRateLimiter({ outbound: { limit: 180, windowMs: 60000 } });
 
   async function rdRead(raw, bg, forceFresh = false) {
+    const reqT0 = Date.now();
     const x = publicURL(raw);
     if (!x) throw new Error('URL tidak valid');
     if (isBannedHostUrl(raw)) {
@@ -1388,7 +1453,8 @@ function createReaderService({
 
     const p = rdReadSem(async () => {
       const t0 = Date.now();
-      const left = () => Math.max(5000, 40000 - (Date.now() - t0));
+      const remMs = () => Math.max(0, 42000 - (Date.now() - reqT0));
+      const left = remMs;
       const wireIt = rdWireFind(target) || rdWireFind(raw);
       const wireTitles = rdWireTitles();
       const expectedTitle = (wireIt && wireIt.title) || '';
@@ -1409,6 +1475,7 @@ function createReaderService({
         const q = d.extraction && d.extraction.quality;
         if (q && q.isChallengeOrError) {
           sawTransientUpstream = true;
+          noteWafResponse(url, null, html);
           throw new Error('halaman challenge/CAPTCHA');
         }
         if (d.offTopic || (q && !q.isOnTopic)) {
@@ -1457,9 +1524,10 @@ function createReaderService({
         return r;
       };
 
-      let targetHost = '';
-      try { targetHost = new URL(target).hostname; } catch (e) {}
-      const isWafHost = CF_WAF_HOST_RE.test(targetHost);
+      const isWafHost = isWafHostUrl(target);
+      const FC_KEY = process.env.FIRECRAWL_API_KEY || '';
+      const hasFc = Boolean(FC_KEY && !fcBlocked(target));
+      const raceMs = cap => Math.min(cap, Math.max(2000, hasFc ? remMs() - 15000 : remMs()));
 
       if (!forceFresh) {
         const docHit = docCacheGet(canon) || docCacheGet(target) || docCacheGet(raw);
@@ -1486,10 +1554,11 @@ function createReaderService({
       const raceAc = new AbortController();
       jobs.push({ via: 'direct', p: (async () => {
         if (isWafHost) {
-          await sleep(2000);
+          await sleep(1200);
           if (raceAc.signal.aborted) throw new Error('aborted');
         }
-        const { r, url } = await rdSafeGet(target, Math.min(10000, left()), {}, raceAc.signal);
+        const { r, url } = await rdSafeGet(target, raceMs(isWafHost ? 4500 : 7000), {}, raceAc.signal);
+        noteWafResponse(url || target, r);
         if (!r.ok) {
           if (r.status === 403 || r.status === 429 || r.status >= 500) sawTransientUpstream = true;
           throw new Error('HTTP ' + r.status);
@@ -1504,31 +1573,22 @@ function createReaderService({
         return { d, html, jinaTxt: null, url };
       })() });
 
-      jobs.push({ via: 'bot', p: (async () => {
-        let lastBotErr = null;
-        for (const bua of RD_BOT_UAS) {
-          if (raceAc.signal.aborted || left() < 4000) break;
-          try {
-            const { r, url } = await rdSafeGet(target, Math.min(5500, left()), { 'user-agent': bua }, raceAc.signal);
-            if (!r.ok) {
-              if (r.status === 403 || r.status === 429 || r.status >= 500) sawTransientUpstream = true;
-              lastBotErr = new Error('HTTP ' + r.status);
-              continue;
-            }
-            const ct = r.headers.get('content-type') || '';
-            if (!/text\/html|application\/xhtml/i.test(ct)) continue;
-            let html = await mediaText(r, 5 << 20);
-            if (html.length > 3e6) html = html.slice(0, 3e6);
-            const d = evaluateHtml(html, url);
-            return { d, html, jinaTxt: null, url };
-          } catch (e) { lastBotErr = e; }
+      jobs.push({ via: 'bot', p: raceBotUas(target, raceMs(isWafHost ? 4000 : 5500), raceAc.signal, async (r, url) => {
+        if (!r.ok) {
+          if (r.status === 403 || r.status === 429 || r.status >= 500) sawTransientUpstream = true;
+          throw new Error('HTTP ' + r.status);
         }
-        throw lastBotErr || new Error('bot challenge/block');
-      })() });
+        const ct = r.headers.get('content-type') || '';
+        if (!/text\/html|application\/xhtml/i.test(ct)) throw new Error('bukan halaman HTML');
+        let html = await mediaText(r, 5 << 20);
+        if (html.length > 3e6) html = html.slice(0, 3e6);
+        const d = evaluateHtml(html, url);
+        return { d, html, jinaTxt: null, url };
+      }) });
 
       let raceSettled = false;
       jobs.push({ via: 'jina', p: (async () => {
-        const { r } = await jinaGet('https://r.jina.ai/' + target, Math.min(9000, left()), { accept: 'text/plain' }, () => !raceSettled, !bg, raceAc.signal);
+        const { r } = await jinaGet('https://r.jina.ai/' + target, raceMs(isWafHost ? 5500 : 8000), { accept: 'text/plain' }, () => !raceSettled, !bg, raceAc.signal);
         if (!r.ok) {
           if (r.status === 402 || r.status === 429 || r.status >= 500) sawTransientUpstream = true;
           throw new Error('HTTP ' + r.status);
@@ -1553,7 +1613,7 @@ function createReaderService({
         const px = RD_PROXIES[pi];
         const isCustom = Boolean(CUSTOM_PROXY && pi === 0);
         jobs.push({ via: 'proxy', p: (async () => {
-          const { r } = await mediaGet(px(target), Math.min(isCustom ? 10000 : 5500, left()), {}, null, !bg, raceAc.signal);
+          const { r } = await mediaGet(px(target), raceMs(isCustom ? 7500 : (isWafHost ? 4000 : 5500)), {}, null, !bg, raceAc.signal);
           if (!r.ok) {
             if (r.status === 429 || r.status >= 500) sawTransientUpstream = true;
             throw new Error('HTTP ' + r.status);
@@ -1577,15 +1637,17 @@ function createReaderService({
       });
       if (win) { fetchMs = Date.now() - t0; return await fin(win.d, win.url, win.html, win.jinaTxt, win.via || 'race'); }
 
-      const FC_KEY = process.env.FIRECRAWL_API_KEY || '';
-      if (FC_KEY && left() > 16000 && !fcBlocked(target)) {
+      const fcAvail = remMs();
+      if (hasFc && fcAvail > 7500) {
+        const fcReqMs = Math.min(18000, Math.max(6000, fcAvail - 2500));
+        const fcScrapeMs = Math.max(5000, fcReqMs - 1500);
         let fcOk = false;
         try {
           const r = await get('https://api.firecrawl.dev/v1/scrape', {
             method: 'POST',
             headers: { 'content-type': 'application/json', authorization: 'Bearer ' + FC_KEY },
-            body: JSON.stringify({ url: target, formats: ['html'], onlyMainContent: false, timeout: 15000 })
-          }, Math.min(15000, left() - 5000));
+            body: JSON.stringify({ url: target, formats: ['html'], onlyMainContent: false, timeout: fcScrapeMs })
+          }, fcReqMs);
           if (r.ok) {
             const j = await r.json();
             let html = j && j.data && j.data.html;
@@ -1598,18 +1660,22 @@ function createReaderService({
               if (!d.byline && md.author) d.byline = md.author;
               if (!d.time && md['article:published_time']) d.time = md['article:published_time'];
               fetchMs = Date.now() - t0;
+              markWafHost(target);
               fcOk = true;
               return await fin(d, target, html, null, 'firecrawl');
             }
+          } else {
+            attempts.push({ via: 'firecrawl', err: 'HTTP ' + r.status });
           }
         } catch (e) { lastErr = e; attempts.push({ via: 'firecrawl', err: String(e && e.message || e).slice(0, 90) }); }
-        if (!fcOk) fcFailMark(target);
+        if (!fcOk && fcReqMs >= 10000) fcFailMark(target);
       }
 
       const tryDoc = async (u, ms, via) => {
         let r, url;
-        try { ({ r, url } = await rdSafeGet(u, Math.min(ms, left()), { 'user-agent': RD_BOT_UAS[0] })); }
-        catch (e) { ({ r, url } = await rdSafeGet(u, Math.min(ms, left()))); }
+        const cap = () => Math.max(1500, Math.min(ms, left()));
+        try { ({ r, url } = await rdSafeGet(u, cap(), { 'user-agent': RD_BOT_UAS[0] })); }
+        catch (e) { ({ r, url } = await rdSafeGet(u, cap())); }
         if (!r.ok) {
           if (r.status === 403 || r.status === 429 || r.status >= 500) sawTransientUpstream = true;
           throw new Error('HTTP ' + r.status);
@@ -1630,7 +1696,7 @@ function createReaderService({
         }
         if (left() > 8000) {
           const wu = await rdWaybackRaw(target);
-          if (wu) {
+          if (wu && left() > 2500) {
             try { return await tryDoc(wu, 6500, 'wayback'); }
             catch (e) { attempts.push({ via: 'wayback', err: String(e && e.message || e).slice(0, 90) }); }
           } else attempts.push({ via: 'wayback', err: 'no snapshot' });
@@ -1953,6 +2019,8 @@ function createReaderService({
     getDocCacheBytes: () => docCacheBytes,
     fcBlocked,
     fcFailMark,
+    learnedWafHosts,
+    isWafHostUrl,
     mediaCacheGet,
     mediaCacheSet,
     thumb,
