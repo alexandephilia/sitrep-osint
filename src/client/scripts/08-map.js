@@ -49,7 +49,7 @@ function mapPopup(it){
     ${it.url ? `<button type="button" class="mp-src mp-read" data-read="${esc(it.url)}">Baca${ic('out')}</button>` : ''}`;
 }
 function camPopup(c){
-  const isWater = /^pantau\s+banjir/i.test(c.c) || /Kali|Pintu Air|Bendungan|Drain/i.test(c.n);
+  const isWater = camIsFlood(c);
   const tag = isWater ? '<span style="color:#00e5ff;font-weight:700">PANTAU BANJIR & KALI</span> · ' : '';
   return `<div class="mp-k"${isWater ? ' style="color:#00e5ff"' : ''}>${tag}CCTV · ${esc(c.c || 'Kota Jakarta')}</div>
     <div class="mp-t">${esc(deEmoji(c.n))}</div>
@@ -552,7 +552,7 @@ function paintMap(){
   camLayer.clearLayers();
   for (const c of CAMS) {
     if (!c.la || !c.lo) continue;
-    const isWater = /^pantau\s+banjir/i.test(c.c) || /Kali|Pintu Air|Bendungan|Drain/i.test(c.n);
+    const isWater = camIsFlood(c);
     const m = L.circleMarker([c.la, c.lo], {
       radius: isWater ? 5 : 2,
       color: isWater ? '#00e5ff' : '#8d8d8d',

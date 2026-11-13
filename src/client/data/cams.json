@@ -162,8 +162,7 @@
     "fb": [
       "https://jakcctv.jakarta.go.id/Bendungan-Hilir-003-700014_1/index.m3u8?proto=hls"
     ],
-    "sub": "Jakarta Pusat",
-    "flood": true
+    "sub": "Jakarta Pusat"
   },
   {
     "n": "JKP POLDA JL. GERBANG PEMUDA C02",
@@ -470,8 +469,7 @@
     "la": -6.20763,
     "lo": 106.80376,
     "c": "Jakarta Pusat",
-    "sub": "Jakarta Pusat",
-    "flood": true
+    "sub": "Jakarta Pusat"
   },
   {
     "n": "Jl. Gatot Subroto (Seberang DPR RI - Benhil 002)",
@@ -498,8 +496,7 @@
     "la": -6.215,
     "lo": 106.8179,
     "c": "Jakarta Pusat",
-    "sub": "Jakarta Pusat",
-    "flood": true
+    "sub": "Jakarta Pusat"
   },
   {
     "n": "Gelora 026",
@@ -553,8 +550,7 @@
     "la": -6.2145,
     "lo": 106.8165,
     "c": "Jakarta Pusat",
-    "sub": "Jakarta Pusat",
-    "flood": true
+    "sub": "Jakarta Pusat"
   },
   {
     "n": "Bendungan Hilir 008",
@@ -563,8 +559,7 @@
     "la": -6.2135,
     "lo": 106.815,
     "c": "Jakarta Pusat",
-    "sub": "Jakarta Pusat",
-    "flood": true
+    "sub": "Jakarta Pusat"
   },
   {
     "n": "Tugu Tani",
@@ -609,34 +604,13 @@
     "sub": "Jakarta Timur"
   },
   {
-    "n": "Jembatan MT Haryono / Cikoko (Tebet) — Sudut 1",
-    "s": "https://jakcctv.jakarta.go.id/Cikoko-006-705651_1/index.m3u8?proto=hls",
-    "e": "https://jakcctv.jakarta.go.id/Cikoko-006-705651_1/embed.html?proto=hls",
-    "la": -6.2425,
-    "lo": 106.8582,
-    "c": "Jakarta Selatan",
-    "sub": "Jakarta Selatan",
-    "flood": true
-  },
-  {
-    "n": "Jembatan MT Haryono / Cikoko (Tebet) — Sudut 2",
-    "s": "https://jakcctv.jakarta.go.id/Cikoko-006-705651_2/index.m3u8?proto=hls",
-    "e": "https://jakcctv.jakarta.go.id/Cikoko-006-705651_2/embed.html?proto=hls",
-    "la": -6.2425,
-    "lo": 106.8582,
-    "c": "Jakarta Selatan",
-    "sub": "Jakarta Selatan",
-    "flood": true
-  },
-  {
     "n": "Jembatan MT Haryono / Cikoko (Tebet) — Sudut 3",
     "s": "https://jakcctv.jakarta.go.id/Cikoko-006-705651_3/index.m3u8?proto=hls",
     "e": "https://jakcctv.jakarta.go.id/Cikoko-006-705651_3/embed.html?proto=hls",
     "la": -6.2425,
     "lo": 106.8582,
     "c": "Jakarta Selatan",
-    "sub": "Jakarta Selatan",
-    "flood": true
+    "sub": "Jakarta Selatan"
   },
   {
     "n": "Menteng Dalam / Tebet — Sudut 1",
@@ -663,8 +637,7 @@
     "la": -6.2162,
     "lo": 106.8145,
     "c": "Jakarta Pusat",
-    "sub": "Jakarta Pusat",
-    "flood": true
+    "sub": "Jakarta Pusat"
   },
   {
     "n": "Bendungan Hilir — Sudut 2",
@@ -673,28 +646,16 @@
     "la": -6.2162,
     "lo": 106.8145,
     "c": "Jakarta Pusat",
-    "sub": "Jakarta Pusat",
-    "flood": true
+    "sub": "Jakarta Pusat"
   },
   {
     "n": "Cengkareng Barat — Sudut 1",
-    "s": "https://jakcctv.jakarta.go.id/Cengkareng-Barat-013-702131_1/index.m3u8?proto=hls",
-    "e": "https://jakcctv.jakarta.go.id/Cengkareng-Barat-013-702131_1/embed.html?proto=hls",
+    "s": "https://jakcctv.jakarta.go.id/Cengkareng-Barat-013-702131_4/index.m3u8?proto=hls",
+    "e": "https://jakcctv.jakarta.go.id/Cengkareng-Barat-013-702131_4/embed.html?proto=hls",
     "la": -6.1525,
     "lo": 106.7388,
     "c": "Jakarta Barat",
-    "sub": "Jakarta Barat",
-    "flood": true
-  },
-  {
-    "n": "Cengkareng Barat — Sudut 2",
-    "s": "https://jakcctv.jakarta.go.id/Cengkareng-Barat-013-702131_2/index.m3u8?proto=hls",
-    "e": "https://jakcctv.jakarta.go.id/Cengkareng-Barat-013-702131_2/embed.html?proto=hls",
-    "la": -6.1525,
-    "lo": 106.7388,
-    "c": "Jakarta Barat",
-    "sub": "Jakarta Barat",
-    "flood": true
+    "sub": "Jakarta Barat"
   },
   {
     "n": "Tomang / Kali Grogol — Sudut 1",
@@ -721,8 +682,7 @@
     "la": -6.1783,
     "lo": 106.6319,
     "c": "Tangerang",
-    "sub": "Kota Tangerang",
-    "flood": true
+    "sub": "Kota Tangerang"
   },
   {
     "n": "Pintu Air Sarakan (Sungai Cirarab)",

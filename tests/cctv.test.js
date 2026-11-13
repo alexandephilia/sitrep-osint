@@ -471,17 +471,22 @@ test('River and flood monitoring cameras: Kali Ciliwung, BKB, Cengkareng Drain &
   const alamanda = riverCams.find(c => c.n.includes('Alamanda'));
   assert.ok(alamanda, 'Jembatan Alamanda (Kali Ledug) must exist in flood category');
 
-  const bkb = cams.find(c => c.n.includes('Bendungan Hilir') && c.c === 'Jakarta Pusat');
-  assert.ok(bkb, 'Bendungan Hilir relocated to Jakarta Pusat');
+  const bkb = cams.filter(c => /Bendungan Hilir/i.test(c.n) && c.c === 'Jakarta Pusat');
+  assert.ok(bkb.length >= 2, 'Bendungan Hilir relocated to Jakarta Pusat');
+  assert.equal(bkb.some(c => c.flood === true), false, 'Street Bendungan Hilir cams must not stay tagged flood:true');
 
-  const drain = cams.find(c => c.n.includes('Cengkareng Barat') && c.c === 'Jakarta Barat');
-  assert.ok(drain, 'Cengkareng Barat relocated to Jakarta Barat');
+  const drain = cams.find(c => c.n === 'Cengkareng Barat — Sudut 1' && c.c === 'Jakarta Barat');
+  assert.ok(drain && !drain.flood, 'Cengkareng Barat Sudut 1 relocated to Jakarta Barat without flood flag');
+  assert.equal(cams.some(c => c.n === 'Cengkareng Barat — Sudut 2'), false, 'Broken downward sidewalk cam Cengkareng Barat Sudut 2 must be removed');
 
   const cisadane = cams.find(c => c.n.includes('Jembatan Cisadane') && c.c === 'Tangerang');
-  assert.ok(cisadane, 'Jembatan Cisadane relocated to Tangerang');
+  assert.ok(cisadane && !cisadane.flood, 'Jembatan Cisadane relocated to Tangerang without flood flag');
 
-  const cikoko = cams.find(c => c.n.includes('Jembatan MT Haryono / Cikoko') && c.c === 'Jakarta Selatan');
-  assert.ok(cikoko, 'Cikoko / MT Haryono relocated to Jakarta Selatan');
+  const cikoko = cams.find(c => c.n === 'Jembatan MT Haryono / Cikoko (Tebet) — Sudut 3' && c.c === 'Jakarta Selatan');
+  assert.ok(cikoko && !cikoko.flood, 'Cikoko / MT Haryono Sudut 3 relocated to Jakarta Selatan without flood flag');
+  assert.equal(cams.some(c => /Cikoko-006-705651_(?:1|2)\b/.test(c.s)), false, 'Broken downward sidewalk cams Cikoko Sudut 1 and 2 must be removed');
+
+  assert.equal(/\/Kali\|Pintu Air\|Bendungan\|Drain\/i\.test\(c\.n\)/.test(html), false, 'Map cam classification must use camIsFlood instead of naive name regex matching street names');
 
   assert.notEqual(C.streamKey(sarakan.s), C.streamKey(sabi.s), 'dpuprkotang.info cameras must have distinct streamKey per ?src=');
   const kotangCams = riverCams.filter(c => c.s.includes('dpuprkotang.info'));
