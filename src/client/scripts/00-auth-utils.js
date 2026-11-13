@@ -70,8 +70,27 @@ const cityLabel = s => {
   if (t === t.toUpperCase()) t = t.toLowerCase().replace(/(^|\s)(\S)/g, (m, a, b) => a + b.toUpperCase());
   return t.replace(/^Kota\s+/i, '');
 };
+const camSubLabel = c => (c && (c.sub || c.region || c.rawC || c.c)) || 'Lainnya';
+const camIsFlood = c => Boolean(c && (c.flood === true || /^pantau\s+banjir/i.test(c.rawC || c.c || '')));
+const camPrimaryCity = c => cityLabel((c && (c.region || c.rawC || c.c)) || '');
+const camInDistrict = (c, dist) => {
+  if (!c) return false;
+  if (dist === 'Semua') return true;
+  if (dist === 'Pantau Banjir') return camIsFlood(c);
+  if (camPrimaryCity(c) === dist || cityLabel(c.c) === dist) return true;
+  if (dist === 'Kota Jakarta' && /^(?:kota\s+)?jakarta/i.test(c.region || c.sub || c.rawC || c.c || '')) return true;
+  return false;
+};
+const initCamTags = c => {
+  if (!c) return c;
+  if (!c.rawC) c.rawC = c.c || '';
+  if (!c.sub && /^jakarta\s+/i.test(c.rawC)) c.sub = c.rawC;
+  if (camIsFlood(c)) c.flood = true;
+  c.c = cityLabel(c.c);
+  return c;
+};
 const CAMS = JSON.parse(document.getElementById('cam-data').textContent);
-CAMS.forEach(c => { c.c = cityLabel(c.c); });
+CAMS.forEach(initCamTags);
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s == null ? '' : s)

@@ -203,6 +203,14 @@ function createGateway(d) {
         const src = (u.searchParams.get('src') || '').toLowerCase();
         return 'kt:' + u.pathname.toLowerCase() + ':' + src;
       }
+      if (/(^|\.)tangerangkab\.go\.id$/i.test(u.hostname)) {
+        const m = u.pathname.match(/\/video\/([^/]+)\//i);
+        return 'tk:' + (m ? m[1].toLowerCase() : u.pathname.toLowerCase());
+      }
+      if (/(^|\.)baliprov\.go\.id$/i.test(u.hostname)) {
+        const m = u.pathname.match(/\/cctv\/([^/]+)\//i);
+        return 'bali:' + (m ? m[1].toLowerCase() : u.pathname.toLowerCase());
+      }
     } catch {}
     return raw;
   }

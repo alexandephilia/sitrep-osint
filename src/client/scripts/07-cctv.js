@@ -37,6 +37,11 @@ hostMode.set('dki-jkt.balitower.co.id:7028', 'proxy');
 hostMode.set('cctv.molecool.id', 'proxy');
 hostMode.set('proxycctv.dsdajakarta.id', 'proxy');
 hostMode.set('pantaucctv.com', 'proxy');
+hostMode.set('cctv-dishub.tangerangkab.go.id', 'proxy');
+hostMode.set('transcode.baliprov.go.id', 'proxy');
+hostMode.set('pelindung.bandung.go.id:3443', 'proxy');
+hostMode.set('atcs-dishub.bandung.go.id:1990', 'proxy');
+hostMode.set('livepantau.semarangkota.go.id', 'proxy');
 const proxyIdx = steps => steps.findIndex(u => API != null && u.indexOf(API + '/hls?') === 0);
 const rumQ = [];
 function rumPush(e){ if (rumQ.length < 200) rumQ.push(e); }
@@ -868,17 +873,18 @@ function wantList(){
   for (let i = 0; i < CAMS.length; i++) {
     const c = CAMS[i];
     if (c._hide === true) continue;
-    const inDist = district === 'Semua' || c.c === district || cityLabel(c.c) === district ||
-      (district === 'Pantau Banjir' && /^pantau\s+banjir/i.test(c.c)) ||
-      (district === 'Kota Jakarta' && /^(?:kota\s+)?jakarta/i.test(c.c));
-    if (!inDist) continue;
-    if (q && !c.n.toLowerCase().includes(q)) continue;
+    if (!camInDistrict(c, district)) continue;
+    if (q) {
+      const hay = ((c.n || '') + ' ' + (c.sub || '') + ' ' + (c.region || '') + ' ' + (c.rawC || '') + ' ' + (c.c || '')).toLowerCase();
+      if (!hay.includes(q)) continue;
+    }
     const isSrvOff = Boolean(aliveMap && aliveMap[i] === false);
     if (isSrvOff && !showOfflineCams) { srvOff++; continue; }
     list.push({ ...c, _i: i, _srvOff: isSrvOff });
   }
   wantList.srvOff = srvOff;
-  if (aliveMap) list.sort((a, b) => (a._srvOff ? 1 : 0) - (b._srvOff ? 1 : 0));
+  const isToll = x => Boolean(x && (x.src === 'bpjt' || x.road === 'toll'));
+  list.sort((a, b) => ((a._srvOff ? 1 : 0) - (b._srvOff ? 1 : 0)) || ((isToll(a) ? 1 : 0) - (isToll(b) ? 1 : 0)) || (a._i - b._i));
   return list;
 }
 let camsRenderQueued = false;
@@ -940,7 +946,12 @@ function renderCams(){
 }
 function drawCityBar(){
   const cnt = {};
-  CAMS.forEach(c => { const k = cityLabel(c.c); cnt[k] = (cnt[k] || 0) + 1; });
+  CAMS.forEach(c => {
+    if (c._hide === true) return;
+    if (camIsFlood(c)) cnt['Pantau Banjir'] = (cnt['Pantau Banjir'] || 0) + 1;
+    const pk = camPrimaryCity(c);
+    if (pk !== 'Pantau Banjir') cnt[pk] = (cnt[pk] || 0) + 1;
+  });
   const otherCities = Object.keys(cnt)
     .filter(k => k !== 'Pantau Banjir' && k !== 'Kota Jakarta')
     .sort((a, b) => cnt[b] - cnt[a]);
@@ -949,7 +960,7 @@ function drawCityBar(){
   if (cnt['Kota Jakarta']) ds.push('Kota Jakarta');
   ds.push(...otherCities);
   $('#citybar').innerHTML = ds.map((d, idx) => {
-    const n = CAMS.filter(c => d === 'Semua' || cityLabel(c.c) === d).length;
+    const n = CAMS.filter(c => c._hide !== true && camInDistrict(c, d)).length;
     const num = String(idx).padStart(2, '0');
     return `<button class="cb" type="button" data-city="${esc(d)}" role="tab" aria-selected="${d === district}">` +
       `<span class="cb-idx">${num}</span>` +
@@ -975,13 +986,13 @@ camGrid.addEventListener('mouseleave', () => { if (orderDeferred) orderCams(); }
 new ResizeObserver(debounce(() => { layout(); refreshCamVis(); }, 120)).observe(camGrid);
 camGrid.addEventListener('click', e => {
   const cell = e.target.closest('.cam'); if (!cell) return;
-  const c = camList[+cell.dataset.i]; openLightbox(camStream(c), c.n, c.c, c.e, camSteps(c), cell);
+  const c = camList[+cell.dataset.i]; openLightbox(camStream(c), c.n, camSubLabel(c), c.e, camSteps(c), cell);
 });
 camGrid.addEventListener('keydown', e => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
   const cell = e.target.closest('.cam'); if (!cell) return;
   e.preventDefault();
-  const c = camList[+cell.dataset.i]; openLightbox(camStream(c), c.n, c.c, c.e, camSteps(c), cell);
+  const c = camList[+cell.dataset.i]; openLightbox(camStream(c), c.n, camSubLabel(c), c.e, camSteps(c), cell);
 });
 let glbHls = null, glbSteps = [], glbStep = 0, glbErr = 0, glbEmbed = '', glbSnapUrl = '', glbSnapProxy = false, glbSnapTimer = 0, glbSnapLoadTimer = 0, glbSnapState = 'idle', glbMp4Timer = 0, lbTrigger = null, glbUrl = '';
 function glbSetOffline(on, msg){
@@ -1296,7 +1307,7 @@ async function pullCctv(){
       }
       const add = list.filter(c => c && c.s && c.n && !pullCctv.have.has(c.s) && !pullCctv.keys.has(CctvCore.streamKey(c.s))).map(CctvCore.sanitizeFb);
       if (add.length || revived) {
-        add.forEach(c => { c.c = cityLabel(c.c); pullCctv.have.add(c.s); pullCctv.keys.add(CctvCore.streamKey(c.s)); pullCctv.byS.set(c.s, c); });
+        add.forEach(c => { initCamTags(c); pullCctv.have.add(c.s); pullCctv.keys.add(CctvCore.streamKey(c.s)); pullCctv.byS.set(c.s, c); });
         if (add.length) CAMS.push(...add);
         drawCityBar(); renderCams();
       }

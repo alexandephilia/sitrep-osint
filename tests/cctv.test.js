@@ -721,3 +721,91 @@ test('progressive cctv catalog cold start, memoization, disk persistence, and ta
   assert.ok(cctvSrc.includes('clearTimeout(tvLoadT); tvLoadT = null;'), 'visibilitychange hidden handler must clear active TV load timer');
   assert.ok(cctvSrc.includes("if ((tvSt === 'load' && (!tvLoadT || Date.now() - tvLoadAt > 12000)) || (tvSt === 'fail' && !tvRetryT)) tvPlay();"), 'kickCams must avoid cancelling healthy in-flight TV loads and recover stale fail states');
 });
+
+test('non-toll regional expansion and multi-tag Pantau Banjir + Tangerang / Jakarta taxonomy', async () => {
+  const html = fs.readFileSync('public/index.html', 'utf8');
+  const m = html.match(/<script type="application\/json" id="cam-data">([\s\S]*?)<\/script>/);
+  assert.ok(m, 'cam-data script tag must exist');
+  const cams = JSON.parse(m[1]);
+
+  const tangerangKab = cams.filter(c => c.sub === 'Kab. Tangerang');
+  assert.ok(tangerangKab.length >= 20, 'Must include Kabupaten Tangerang Dishub non-toll cameras');
+  assert.ok(tangerangKab.some(c => /Jayanti/i.test(c.n) && c.s.includes('tangerangkab.go.id')), 'Jayanti cam must be included');
+  assert.ok(tangerangKab.some(c => /Cisauk/i.test(c.n) && c.snap && c.snap.includes('thumbnail.jpg')), 'Cisauk cam must include snapshot');
+
+  const bali = cams.filter(c => c.c === 'Bali');
+  assert.ok(bali.length >= 15, 'Must include verified live Bali Satu Data non-toll cameras');
+  assert.ok(bali.every(c => c.d === 0 && c.s.includes('transcode.baliprov.go.id')), 'Bali cameras must route via backend proxy (d:0)');
+
+  const bandung = cams.filter(c => c.c === 'Bandung');
+  assert.ok(bandung.length >= 5, 'Must include Kota Bandung non-toll cameras');
+  const semarang = cams.filter(c => c.c === 'Semarang');
+  assert.ok(semarang.length >= 5, 'Must include Kota Semarang non-toll cameras');
+
+  const jkb = cams.filter(c => c.sub === 'Jakarta Barat' || c.c === 'Jakarta Barat');
+  assert.ok(jkb.length >= 10, 'Jakarta Barat must be properly populated');
+  const jkp = cams.filter(c => c.sub === 'Jakarta Pusat' || c.c === 'Jakarta Pusat');
+  assert.ok(jkp.length >= 30, 'Jakarta Pusat must be properly populated');
+
+  const authSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'scripts', '00-auth-utils.js'), 'utf8');
+  const cctvSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'scripts', '07-cctv.js'), 'utf8');
+  assert.ok(authSrc.includes('camInDistrict') && authSrc.includes('camPrimaryCity') && authSrc.includes('camIsFlood'), '00-auth-utils must expose multi-tag district helpers');
+  assert.ok(cctvSrc.includes('camInDistrict(c, district)') && cctvSrc.includes("isToll(a)"), 'wantList must filter with camInDistrict and sort non-toll ahead of toll');
+
+  const authCtx = {
+    window: {},
+    document: {
+      getElementById: id => id === 'cam-data' ? { textContent: m[1] } : null,
+      querySelector: () => null,
+    },
+  };
+  const fn = new Function('window', 'document', authSrc.slice(0, authSrc.indexOf('const $  =')) + '\nreturn { CAMS, camInDistrict, camPrimaryCity, camIsFlood, camSubLabel };');
+  const exported = fn(authCtx.window, authCtx.document);
+  const sarakan = exported.CAMS.find(c => /Sarakan/i.test(c.n));
+  assert.ok(sarakan, 'Sarakan must exist in initialized CAMS');
+  assert.equal(exported.camInDistrict(sarakan, 'Pantau Banjir'), true, 'Sarakan must appear in Pantau Banjir tab');
+  assert.equal(exported.camInDistrict(sarakan, 'Tangerang'), true, 'Sarakan must ALSO appear in Tangerang tab');
+  assert.equal(exported.camSubLabel(sarakan), 'Kota Tangerang', 'Sarakan sub-label must be Kota Tangerang');
+
+  const durenVilla = exported.CAMS.find(c => /Duren Villa/i.test(c.n));
+  if (durenVilla) {
+    assert.equal(exported.camInDistrict(durenVilla, 'Pantau Banjir'), true, 'New Kota Tangerang river cam must appear in Pantau Banjir');
+    assert.equal(exported.camInDistrict(durenVilla, 'Tangerang'), true, 'New Kota Tangerang river cam must appear in Tangerang');
+  }
+
+  const { EventEmitter } = require('events');
+  const fakeJpegA = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(256, 0x41)]);
+  const fakeJpegB = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(256, 0x42)]);
+  const gw = createGateway({
+    ffmpeg: '/nonexistent/ffmpeg-binary',
+    hostAllowed: u => /(tangerangkab|baliprov)\.go\.id$/i.test(new URL(u).hostname),
+    headersFor: () => ({}),
+    rewriteUrl: async u => u,
+    px: u => u,
+    getRaw: async u => ({
+      url: u,
+      r: {
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'image/jpeg']]),
+        arrayBuffer: async () => (u.includes('01aaa') ? fakeJpegA : fakeJpegB),
+      },
+    }),
+  });
+  const runSnap = url => new Promise(resolve => {
+    const req = new EventEmitter(); req.headers = {}; req.socket = { remoteAddress: '127.0.0.1' };
+    const chunks = [];
+    const res = new EventEmitter(); res.status = 0; res.hdrs = {};
+    res.writeHead = (code, h) => { res.status = code; res.hdrs = h || {}; };
+    res.write = b => { chunks.push(Buffer.from(b)); return true; };
+    res.end = b => { if (b) chunks.push(Buffer.from(b)); res.writableEnded = true; resolve({ status: res.status, body: Buffer.concat(chunks) }); };
+    gw.snap(url, req, res);
+  });
+  const s1 = await runSnap('https://cctv-dishub.tangerangkab.go.id/storage/video/01aaa/thumbnail.jpg');
+  const s2 = await runSnap('https://cctv-dishub.tangerangkab.go.id/storage/video/01bbb/thumbnail.jpg');
+  assert.equal(s1.status, 200);
+  assert.equal(s2.status, 200);
+  assert.notDeepEqual(s1.body, s2.body, 'tangerangkab.go.id snap cache must stay isolated per ULID');
+  const gwSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'cctv-gateway.js'), 'utf8');
+  assert.ok(gwSrc.includes("return 'tk:'") && gwSrc.includes("return 'bali:'"), 'cctv-gateway must compute distinct canonicalKey for tangerangkab and baliprov');
+});

@@ -564,7 +564,7 @@ if (require.main === module) {
   FATAL.install(process);
 }
 
-const cctvHostList = () => (CFG.cctv_hosts || ['balitower.co.id', 'jakarta.go.id', 'molecool.id', 'pantaucctv.com', 'ptbtu.com', 'dpuprkotang.info']).concat(CFG.tv_hosts || []);
+const cctvHostList = () => (CFG.cctv_hosts || ['balitower.co.id', 'jakarta.go.id', 'molecool.id', 'pantaucctv.com', 'ptbtu.com', 'dpuprkotang.info', 'tangerangkab.go.id', 'baliprov.go.id', 'bandung.go.id', 'semarangkota.go.id']).concat(CFG.tv_hosts || []);
 const SHARED_CDN_SUFFIX = /^(?:cloudfront\.net|akamaized\.net|edgesuite\.net|edgespeed\.net|cloudflarestream\.com|tenbytecdn\.com|bytecdn\.cn|hwcdn\.net|cdngslb\.com|llnwd\.net|edgesuite\.net)$/i;
 const catalogHosts = new Set();
 const catalogHostAdd = h => {
@@ -598,6 +598,10 @@ function cctvHeaders(u) {
   if (/(^|\.)jakarta\.go\.id$|(^|\.)balitower\.co\.id$/i.test(mh)) return { 'user-agent': UA, referer: 'https://smartcity.jakarta.go.id/', origin: 'https://smartcity.jakarta.go.id' };
   if (/(^|\.)dpuprkotang\.info$/i.test(mh)) return { 'user-agent': UA, referer: 'https://cctv.dpuprkotang.info/' };
   if (/(^|\.)dsdajakarta\.id$|(^|\.)dsdadki\.web\.id$/i.test(mh)) return { 'user-agent': UA, referer: 'https://poskobanjirdsda.jakarta.go.id/' };
+  if (/(^|\.)tangerangkab\.go\.id$/i.test(mh)) return { 'user-agent': UA, referer: 'https://cctv-dishub.tangerangkab.go.id/' };
+  if (/(^|\.)baliprov\.go\.id$/i.test(mh)) return { 'user-agent': UA, referer: 'https://balisatudata.baliprov.go.id/' };
+  if (/(^|\.)bandung\.go\.id$/i.test(mh)) return { 'user-agent': UA, referer: 'https://pelindung.bandung.go.id/' };
+  if (/(^|\.)semarangkota\.go\.id$/i.test(mh)) return { 'user-agent': UA, referer: 'https://pantausemar.semarangkota.go.id/' };
   return { 'user-agent': UA };
 }
 
@@ -665,7 +669,7 @@ const alive = () => memo('alive', 150000, async () => {
   const cams = camList(), res = new Array(cams.length).fill(false); let i = 0;
   await Promise.all(Array.from({ length: 12 }, async () => { while (i < cams.length) { const k = i++;
     if (/(jakcctv\.jakarta\.go\.id|pantaucctv\.com|molecool\.id|dpuprkotang\.info|dsdajakarta\.id|balitower\.co\.id|\.mp4(\?|$))/i.test(cams[k].s)) { res[k] = true; continue; }
-    try { const r = await get(cams[k].s, { headers: { referer: 'https://smartcity.jakarta.go.id/' } }, 6000);
+    try { const r = await get(cams[k].s, { headers: cctvHeaders(cams[k].s) }, 6000);
       res[k] = r.ok && (await r.text()).includes('#EXTM3U'); } catch (e) {} } }));
   return { alive: res, at: Date.now() };
 });

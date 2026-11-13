@@ -96,9 +96,9 @@ function createCctvCatalog({
   const CCTV_HIST_FILE = (fs && path && HIST_DIR) ? path.join(HIST_DIR, 'cctv-history.json') : '';
   let lastGoodCams = [];
   let cctvHistDirty = false, cctvHistSaveAt = 0, cctvHistInflight = false;
-  const srcCams = { bpjt: [], bekasi: [], jogja: [], molecool: [] };
-  const srcDone = { bpjt: false, bekasi: false, jogja: false, molecool: false };
-  const srcInflight = { bpjt: null, bekasi: null, jogja: null, molecool: null };
+  const srcCams = { bpjt: [], bekasi: [], jogja: [], molecool: [], tangkab: [], bali: [] };
+  const srcDone = { bpjt: false, bekasi: false, jogja: false, molecool: false, tangkab: false, bali: false };
+  const srcInflight = { bpjt: null, bekasi: null, jogja: null, molecool: null, tangkab: null, bali: null };
   const cctvProbe = { alive: new Set(), done: new Set(), running: false, last: 0 };
   const hostCors = new Map();
 
@@ -239,6 +239,88 @@ function createCctvCatalog({
     }));
   }
   const cctvJogja = () => refreshSource('jogja', () => memo('cctv:jogja', 1800000, cctvJogjaFetch, v => Array.isArray(v) && v.length > 0));
+  async function cctvTangerangKabFetch() {
+    let html = '';
+    try { html = await cctvFetch('https://cctv-dishub.tangerangkab.go.id/cctv', 8000, { referer: 'https://cctv-dishub.tangerangkab.go.id/' }); } catch (e) {}
+    if (!html) return [];
+    const seen = new Set(), candidates = [];
+    const re = /storage\/video\/([0-9a-z]+)\/\1\.m3u8/gi;
+    let m;
+    while ((m = re.exec(html)) !== null) {
+      const id = m[1];
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const ctx = html.slice(Math.max(0, m.index - 600), m.index + 600);
+      const tm = ctx.match(/fi-ta-text-item-label[^>]*>\s*([^<]{3,80}?)\s*</i) || ctx.match(/data-title="([^"]{3,80})"/i);
+      const name = tm ? tm[1].replace(/\s+/g, ' ').trim() : ('Kab. Tangerang ' + id.slice(-6));
+      candidates.push({
+        n: name,
+        s: `https://cctv-dishub.tangerangkab.go.id/storage/video/${id}/${id}.m3u8`,
+        snap: `https://cctv-dishub.tangerangkab.go.id/storage/video/${id}/thumbnail.jpg`,
+        e: 'https://cctv-dishub.tangerangkab.go.id/cctv',
+        la: -6.26, lo: 106.49, c: 'Tangerang', sub: 'Kab. Tangerang', d: 0, src: 'pemda',
+      });
+    }
+    const live = [];
+    let i = 0;
+    await Promise.all(Array.from({ length: 8 }, async () => {
+      while (i < candidates.length && !isDraining()) {
+        const cam = candidates[i++];
+        try {
+          const { r } = await mediaGetRaw(cam.s, 4000, { 'user-agent': UA, referer: 'https://cctv-dishub.tangerangkab.go.id/' }, null);
+          if (r.ok && (await mediaText(r, 1 << 20)).includes('#EXTM3U')) {
+            registerCamAllowlist(cam);
+            live.push(cam);
+          }
+        } catch (e) {}
+      }
+    }));
+    return live;
+  }
+  const cctvTangerangKab = () => refreshSource('tangkab', () => memo('cctv:tangkab', 1800000, cctvTangerangKabFetch, v => Array.isArray(v) && v.length > 0));
+  async function cctvBaliFetch() {
+    let d = null;
+    try { d = JSON.parse(await cctvFetch('https://balisatudata.baliprov.go.id/api/v1/report-cctv', 10000, { referer: 'https://balisatudata.baliprov.go.id/' })); } catch (e) {}
+    const rows = d && d.data ? Object.values(d.data) : [];
+    if (!rows.length) return [];
+    const candidates = [];
+    const seen = new Set();
+    for (const x of rows) {
+      if (!x) continue;
+      let ch = x.ch_id ? String(x.ch_id).trim() : '';
+      if (!ch && x.streaming_url) {
+        const qm = String(x.streaming_url).match(/[?&]id=([^&]+)/);
+        if (qm) ch = decodeURIComponent(qm[1]).trim();
+      }
+      if (!ch || seen.has(ch)) continue;
+      seen.add(ch);
+      const la = parseFloat(x.lat), lo = parseFloat(x.lng);
+      candidates.push({
+        n: String(x.ch_name || ch).replace(/\s+/g, ' ').trim(),
+        s: `https://transcode.baliprov.go.id/cctv/${encodeURIComponent(ch)}/index.m3u8`,
+        e: 'https://balisatudata.baliprov.go.id/',
+        la: Number.isFinite(la) ? la : -8.6705,
+        lo: Number.isFinite(lo) ? lo : 115.2126,
+        c: 'Bali', sub: 'Bali', d: 0, src: 'pemda',
+      });
+    }
+    const live = [];
+    let i = 0;
+    await Promise.all(Array.from({ length: 12 }, async () => {
+      while (i < candidates.length && !isDraining()) {
+        const cam = candidates[i++];
+        try {
+          const { r } = await mediaGetRaw(cam.s, 4000, { 'user-agent': UA, referer: 'https://balisatudata.baliprov.go.id/' }, null);
+          if (r.ok && (await mediaText(r, 1 << 20)).includes('#EXTM3U')) {
+            registerCamAllowlist(cam);
+            live.push(cam);
+          }
+        } catch (e) {}
+      }
+    }));
+    return live;
+  }
+  const cctvBali = () => refreshSource('bali', () => memo('cctv:bali', 1800000, cctvBaliFetch, v => Array.isArray(v) && v.length > 0));
   const MOLE_UA = { 'user-agent': UA, referer: 'https://molecool.id/' };
   const MOLE_SEEDS = ['3DIoRg7','4bsalqw','6Ty5BM3','6oxwbjQ','8JD739Y','AIpWgQ6','CDOd8lH','Ds39keN','FscOWio','GOQqdkB','Gj9Db3K','Jc0KvBZ','Og41dpx','PwQ1zRN','amhRiVY','fKJ9W4y','g7iu58b','lIXKVas','lKOitqX','lqAw39p','mtPwzYo','ucKlag3','wLeQ437'];
   const moleReg = new Map();
@@ -372,28 +454,32 @@ function createCctvCatalog({
   }
   const cctvReportedDead = s => GW.reportedDead(s);
   const cctvCatalog = () => memo('cctvcat', 300000, async () => {
-    const allBefore = srcDone.bpjt && srcDone.bekasi && srcDone.jogja && srcDone.molecool;
+    const allBefore = srcDone.bpjt && srcDone.bekasi && srcDone.jogja && srcDone.molecool && srcDone.tangkab && srcDone.bali;
     const pAll = Promise.allSettled([
       cctvBpjt(),
       cctvBekasi(),
       cctvJogja(),
       cctvMolecool(),
+      cctvTangerangKab(),
+      cctvBali(),
     ]);
     if (!cctvProbe.done.size && !cctvProbe.running) warmCctv().catch(() => {});
-    const hasSeed = lastGoodCams.length > 0 || srcCams.bpjt.length > 0 || srcCams.bekasi.length > 0 || srcCams.jogja.length > 0 || srcCams.molecool.length > 0;
+    const hasSeed = lastGoodCams.length > 0 || srcCams.bpjt.length > 0 || srcCams.bekasi.length > 0 || srcCams.jogja.length > 0 || srcCams.molecool.length > 0 || srcCams.tangkab.length > 0 || srcCams.bali.length > 0;
     if (!(allBefore && hasSeed)) {
       await Promise.race([pAll, new Promise(r => setTimeout(r, hasSeed ? 3500 : 7500))]);
     }
     const bpjt = srcCams.bpjt;
     const jogja = srcCams.jogja;
-    const other = [...srcCams.bekasi, ...srcCams.molecool];
-    const probeable = [...bpjt, ...jogja].filter(c =>
+    const other = [...srcCams.tangkab, ...srcCams.bali, ...srcCams.bekasi, ...srcCams.molecool];
+    const probeable = [...jogja, ...bpjt].filter(c =>
       cctvProbe.done.has(c.s) ? cctvProbe.alive.has(c.s) : (cctvProbe.alive.size < 24)
     );
     const verified = probeable.filter(c => !cctvReportedDead(c.s));
+    const verifiedNonToll = verified.filter(c => c.src !== 'bpjt');
+    const verifiedToll = verified.filter(c => c.src === 'bpjt');
     for (const c of [...bpjt, ...jogja, ...other]) registerCamAllowlist(c);
     for (const c of camList()) registerCamAllowlist(c);
-    let cams = CCTVCORE.dedupe([...other.filter(c => !cctvReportedDead(c.s)), ...verified]).map(c => {
+    let cams = CCTVCORE.dedupe([...other.filter(c => !cctvReportedDead(c.s)), ...verifiedNonToll, ...verifiedToll]).map(c => {
       try { if (hostCors.get(new URL(c.s).host) === false) return { ...c, d: 0 }; } catch (e) {}
       return c;
     });
@@ -404,7 +490,7 @@ function createCctvCatalog({
       lastGoodCams = CCTVCORE.dedupe(cams);
       saveCctvHist(false);
     }
-    const allSourcesDone = srcDone.bpjt && srcDone.bekasi && srcDone.jogja && srcDone.molecool;
+    const allSourcesDone = srcDone.bpjt && srcDone.bekasi && srcDone.jogja && srcDone.molecool && srcDone.tangkab && srcDone.bali;
     const warming = !allSourcesDone || (cctvProbe.running && cctvProbe.alive.size < 24);
     return {
       ok: true,
