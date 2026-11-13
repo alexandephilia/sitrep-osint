@@ -161,4 +161,6 @@ test('cleanTitle: strips uncleaned source domains and suffixes without cutting c
 
   assert.equal(cleanTitle('Berita Video - Evakuasi Korban Longsor Berlanjut - Kompas.com', 'kompas.com'), 'Evakuasi Korban Longsor Berlanjut');
   assert.equal(cleanTitle('Breaking News - Gunung Merapi Luncurkan Awan Panas - CNN Indonesia', 'cnn indonesia'), 'Gunung Merapi Luncurkan Awan Panas');
+  assert.equal(cleanTitle('Cek Jadwal Pemadaman Listrik di Maros Hari Ini, 12 Zona Terdampak hingga Malam - Tribun-timur.com', 'Tribunnews'), 'Cek Jadwal Pemadaman Listrik di Maros Hari Ini, 12 Zona Terdampak hingga Malam');
+  assert.equal(cleanTitle('Cek Jadwal Pemadaman Listrik di Maros Hari Ini, 12 Zona Terdampak hingga Malam -- Tribun-timur.com', 'Tribun-timur.com'), 'Cek Jadwal Pemadaman Listrik di Maros Hari Ini, 12 Zona Terdampak hingga Malam');
 });

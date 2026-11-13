@@ -51,6 +51,10 @@
     'liputan6.com': 'Liputan6',
     'republika.co.id': 'Republika',
     'tribunnews.com': 'Tribunnews',
+    'tribun-timur.com': 'Tribun Timur',
+    'tribun-bali.com': 'Tribun Bali',
+    'tribun-medan.com': 'Tribun Medan',
+    'tribun-video.com': 'Tribun Video',
     'kumparan.com': 'Kumparan',
     'sindonews.com': 'Sindonews',
     'okezone.com': 'Okezone',
@@ -107,7 +111,13 @@
     const s = String(rawSite || '').trim();
     if (s) {
       const h = hostOfSite(s);
-      if (h) return brandOfHost(h) || h;
+      if (h) {
+        const mapped = brandOfHost(h);
+        if (mapped) return mapped;
+        const tm = h.match(/^tribun-([a-z0-9-]+)\.[a-z.]+$/i);
+        if (tm) return 'Tribun ' + tm[1].split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        return h;
+      }
       return s;
     }
     const fh = hostOfSite(fallbackUrl);

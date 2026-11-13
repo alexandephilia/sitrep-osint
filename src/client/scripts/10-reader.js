@@ -380,7 +380,7 @@ function rdArticle(d, url) {
   }
   rdStopMedia();
   $('#rd-body').innerHTML = `<article class="rd-art">
-    <h1>${esc(d.title || 'Tanpa judul')}</h1>
+    <h1>${esc(cleanTitle(d.title || 'Tanpa judul', cleanSite || d.site))}</h1>
     <div class="rd-meta">${meta.map(x => `<span>${esc(x)}</span>`).join('')}</div>
     ${img}${hasBlocks ? note : ''}${flow}
   </article>`;

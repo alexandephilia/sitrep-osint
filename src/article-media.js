@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 const EXTRACT = require('./article-extract');
 
-const PIPELINE_VERSION = 3;
+const PIPELINE_VERSION = 4;
 
 const TRACKING_PARAM_RE = /^(?:utm_[a-z0-9_]+|fbclid|gclid|dclid|msclkid|yclid|twclid|igshid|mc_cid|mc_eid|_ga|_gl|ga_[a-z_]+|guce_referrer(?:_sig)?|ns_[a-z_]+|oc|ved|usg|sa|spm|fb_action_ids|fb_action_types|fb_source|ref_src|ref_url)$/i;
 
@@ -67,8 +67,10 @@ function upgradeImage(u) {
   if (/(^|\.)antaranews\.com$/i.test(h) && /\/cache\/\d+x\d+\//.test(x.pathname)) {
     return u.replace(/\/cache\/\d+x\d+\//, '/cache/1200x800/');
   }
-  if (/(^|\.)tribunnews\.com$/i.test(h) && /\/\d+x\d+\//.test(x.pathname)) {
-    return u.replace(/\/\d+x\d+\//, '/1200x675/');
+  if (/(^|\.)tribunnews\.com$/i.test(h)) {
+    const tm = x.pathname.match(/^\/[^/]+=\/\d+x\d+\/(?:filters:[^/]+\/)?(.+)$/i)
+      || x.pathname.match(/^\/(?:\d+x\d+\/)?(?:filters:[^/]+\/)?((?:[a-z0-9_-]+\/)?foto\/bank\/.+)$/i);
+    if (tm && tm[1]) return `https://asset-2.tstatic.net/${tm[1]}`;
   }
   if (/(^|\.)cdn\.bsinews\.id$/i.test(h) || /(^|\.)bsinews\.id$/i.test(h)) {
     const w = parseInt(x.searchParams.get('width') || '0', 10);
@@ -85,6 +87,7 @@ function upgradeImage(u) {
 function imageKey(u) {
   let p = String(u || '').split('?')[0].split('#')[0].toLowerCase().replace(/\.\w{2,5}$/, '');
   p = p
+    .replace(/^https?:\/\/asset(?:-\d+)?\.(?:tribunnews\.com|tstatic\.net)\/(?:[^/]+=\/\d+x\d+\/)?(?:filters:[^/]+\/)?/, 'https://tribun-asset/')
     .replace(/\/(?:thumb|fill|fit|resize|crop|cache)\/?\d{2,4}(?:x|\/)\d{2,4}\//g, '/')
     .replace(/\/[^/]*\b(?:w_\d+|c_fill|c_scale|f_auto|q_auto[^/]*)[^/]*\//g, '/');
   const base = (p.split('/').pop() || '')
@@ -285,7 +288,8 @@ function validateImageMetrics({ role = 'hero', source = 'og', dim, bytes = 0, mi
       return { ok: false, reason: 'gif_asset_rejected', detail: `${dim.w}x${dim.h},${bytes}B` };
     }
   }
-  const minBytes = role === 'hero' ? 5000 : 4500;
+  const isLargeModern = (m === 'image/webp' || m === 'image/avif') && dim.w >= 600 && dim.h >= 315;
+  const minBytes = isLargeModern ? 3200 : (role === 'hero' ? 5000 : 4500);
   if (bytes > 0 && bytes < minBytes) {
     return { ok: false, reason: 'file_too_small', detail: `${bytes}B < ${minBytes}B` };
   }

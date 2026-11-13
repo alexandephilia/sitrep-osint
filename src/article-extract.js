@@ -829,7 +829,7 @@ function cleanArticleTitle(rawTitle, site, finalURL) {
     const tail = norm(dc[1]), s = norm(site);
     if (tail && (s.includes(tail) || tail.includes(s))) title = title.slice(0, dc.index).trim();
   }
-  const sep = title.match(/\s*[|–—]\s*([^|–—]{2,45})\s*$/) || title.match(/\s+-\s+([^-]{2,45})\s*$/);
+  const sep = title.match(/\s*[|–—]\s*([^|–—]{2,45})\s*$/) || title.match(/\s+[-–—]{1,2}\s+([^–—\s](?:(?!\s+[-–—]\s+).){1,45})\s*$/);
   if (sep) {
     const norm = x => x.toLowerCase().replace(/[^a-z0-9]+/g, '');
     const tail = norm(sep[1]);
@@ -839,7 +839,7 @@ function cleanArticleTitle(rawTitle, site, finalURL) {
       title = title.slice(0, sep.index).trim();
     }
   }
-  return title;
+  return FEEDTEXT.cleanTitle(title, site);
 }
 
 function rdExtract(html, finalURL, opts = {}) {

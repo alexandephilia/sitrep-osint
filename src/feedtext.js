@@ -335,14 +335,14 @@ function cleanTitle(t, pub) {
   if (pub) {
     const pk = String(pub).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     if (pk.length >= 3) {
-      s0 = s0.replace(new RegExp('(?:\\s+[-–—]\\s*|\\s*[-–—|•·]\\s*)' + pk + '\\s*$', 'i'), '').trim();
+      s0 = s0.replace(new RegExp('(?:\\s+[-–—]+\\s*|\\s*[-–—|•·]+\\s*)' + pk + '\\s*$', 'i'), '').trim();
     }
   }
 
-  let s = s0.replace(/\s+[-–—]\s*(?:https?:\/\/|www\.)\S+$/i, '').trim();
+  let s = s0.replace(/\s+[-–—]+\s*(?:https?:\/\/|www\.)\S+$/i, '').trim();
   for (let i = 0; i < 4; i++) {
 
-    const m = s.match(/^(.{8,}?)(?:\s+[-–—]\s*|\s*[|•·]\s*)([A-Za-z0-9][A-Za-z0-9.&'®™()_\-\s]{1,70})$/);
+    const m = s.match(/^(.{8,}?)(?:\s+[-–—]+\s*|\s*[|•·]\s*)([A-Za-z0-9][A-Za-z0-9.&'®™()_\-\s]{1,70})$/);
     if (!m) break;
     const tail = m[2].trim();
     const words = tail.split(/\s+/).map(w => w.replace(/[®™]/g, '')).filter(Boolean);

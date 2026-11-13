@@ -1031,3 +1031,55 @@ test('26. bsinews.id: extracts body lead image with width="100%", upgrades CDN i
   assert.equal(media.hero.source, 'body_lead');
   assert.ok(media.hero.caption.includes('Kasat Reskrim'));
 });
+
+test('27. tribun-timur.com: upgrades signed Thumbor URLs to unsigned tstatic origin, accepts compact large WebP hero, and strips single/double hyphen Tribun suffixes', async () => {
+  const url = 'https://makassar.tribunnews.com/maros/1857549/cek-jadwal-pemadaman-listrik-di-maros-hari-ini-12-zona-terdampak-hingga-malam';
+  const rssRaw = 'https://asset.tribunnews.com/FJ4RE0cIIJJhZh0IMBN8dPPGvT4=/148x99/filters:quality(30):format(webp):focal(0.5x0.5:0.5x0.5)/makassar/foto/bank/originals/MATI-LAMPU-Ilustrasi-pemadaman-listrik-bergilir.jpg';
+  const ogRaw = 'https://asset.tribunnews.com/d6B6H-4cRyU9ziN-ZLDjxOaoTCY=/1200x675/filters:upscale():quality(30):format(webp):focal(0.5x0.5:0.5x0.5)/makassar/foto/bank/originals/MATI-LAMPU-Ilustrasi-pemadaman-listrik-bergilir.jpg';
+  const originImg = 'https://asset-2.tstatic.net/makassar/foto/bank/originals/MATI-LAMPU-Ilustrasi-pemadaman-listrik-bergilir.jpg';
+
+  assert.equal(MEDIA.upgradeImage(rssRaw), originImg);
+  assert.equal(MEDIA.upgradeImage(ogRaw), originImg);
+  assert.equal(MEDIA.imageKey(rssRaw), MEDIA.imageKey(originImg));
+
+  assert.equal(MEDIA.validateImageMetrics({ role: 'hero', source: 'og', dim: { w: 1200, h: 675 }, bytes: 3898, mime: 'image/webp' }).ok, true);
+  assert.equal(MEDIA.validateImageMetrics({ role: 'hero', source: 'og', dim: { w: 1200, h: 675 }, bytes: 3898, mime: 'image/jpeg' }).ok, false);
+
+  assert.equal(
+    EXTRACT.cleanArticleTitle('Cek Jadwal Pemadaman Listrik di Maros Hari Ini, 12 Zona Terdampak hingga Malam - Tribun-timur.com', 'Tribun-timur.com', url),
+    'Cek Jadwal Pemadaman Listrik di Maros Hari Ini, 12 Zona Terdampak hingga Malam'
+  );
+  assert.equal(
+    EXTRACT.cleanArticleTitle('Cek Jadwal Pemadaman Listrik di Maros Hari Ini, 12 Zona Terdampak hingga Malam -- Tribun-timur.com', 'tribun-timur.com', url),
+    'Cek Jadwal Pemadaman Listrik di Maros Hari Ini, 12 Zona Terdampak hingga Malam'
+  );
+  assert.equal(EXTRACT.cleanSiteName('Tribun-timur.com', url), 'Tribun Timur');
+
+  const html = `<!DOCTYPE html><html><head>
+    <title>Cek Jadwal Pemadaman Listrik di Maros Hari Ini, 12 Zona Terdampak hingga Malam - Tribun-timur.com</title>
+    <meta property="og:site_name" content="Tribun-timur.com">
+    <meta property="og:image" content="${ogRaw}">
+  </head><body><article>
+    <h1>Cek Jadwal Pemadaman Listrik di Maros Hari Ini, 12 Zona Terdampak hingga Malam -- Tribun-timur.com</h1>
+    <p>Jadwal pemadaman listrik bergilir di Kabupaten Maros mencakup dua belas zona layanan distribusi mulai pagi hingga malam hari.</p>
+    <p>Pelanggan diimbau menyiapkan cadangan daya untuk kebutuhan rumah tangga dan usaha selama pekerjaan pemeliharaan jaringan berlangsung.</p>
+  </article></body></html>`;
+
+  const ext = EXTRACT.rdExtract(html, url);
+  assert.equal(ext.title, 'Cek Jadwal Pemadaman Listrik di Maros Hari Ini, 12 Zona Terdampak hingga Malam');
+  assert.equal(ext.site, 'Tribun Timur');
+
+  const media = await MEDIA.resolveArticleMedia({
+    requestedUrl: url,
+    canonicalUrl: url,
+    html,
+    rssImgs: [rssRaw],
+    title: ext.title,
+    mode: 'full',
+    probeFn: inspectAndMakeProbe({
+      [originImg]: { buf: makeJpegBuffer(700, 393, 11237, 81), ct: 'image/jpeg' },
+    }),
+  });
+  assert.equal(media.hero.verified, true);
+  assert.equal(media.hero.url, originImg);
+});
