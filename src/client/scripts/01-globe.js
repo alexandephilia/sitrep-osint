@@ -912,35 +912,50 @@ function renderMapLegend(st){
   }
 }
 let globeTopoDone = false, globeLoadDone = false, globeLoadForced = false;
-let globeNoiseTimer = 0, globeLoadWatchTimer = 0, globeLoadFailTimer = 0;
-let globeNoiseImg = null, globeNoiseSeed = (Date.now() ^ 0x9e3779b9) >>> 0;
+let globeNoiseRaf = 0, globeNoiseLast = 0, globeLoadWatchTimer = 0, globeLoadFailTimer = 0;
+let globeNoiseImg = null, globeNoiseBuf32 = null, globeNoiseSeed = (Date.now() ^ 0x9e3779b9) >>> 0;
+const GLOBE_IS_LE = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
 
 function drawGlobeNoiseFrame(){
   const cv = $('#sgl-noise');
   if (!cv) return;
+  const wrap = $('.sit-mapwrap');
+  const tw = Math.min(720, Math.max(220, (wrap && wrap.clientWidth) || cv.clientWidth || 440));
+  const th = Math.min(540, Math.max(200, (wrap && wrap.clientHeight) || cv.clientHeight || 460));
+  if (cv.width !== tw || cv.height !== th) {
+    cv.width = tw;
+    cv.height = th;
+    globeNoiseImg = null;
+    globeNoiseBuf32 = null;
+  }
   const ctx = cv.getContext('2d');
   if (!ctx) return;
   const w = cv.width, h = cv.height;
-  if (!globeNoiseImg || globeNoiseImg.width !== w || globeNoiseImg.height !== h) {
+  if (!globeNoiseImg) {
     globeNoiseImg = ctx.createImageData(w, h);
+    globeNoiseBuf32 = new Uint32Array(globeNoiseImg.data.buffer);
   }
-  const d = globeNoiseImg.data;
+  const buf = globeNoiseBuf32;
   let s = globeNoiseSeed || 0x13579bdf;
   s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
-  const bandY = Math.abs(s) % h;
-  const hasBand = (s & 7) === 0;
+  const bandA = Math.abs(s) % h;
+  const bandB = (bandA + 7 + (s & 31)) % h;
+  const hasTear = (s & 3) !== 0;
   for (let y = 0; y < h; y++) {
-    const bandBoost = (hasBand && Math.abs(y - bandY) <= 1) ? 46 : 0;
-    const rowOff = y * w;
-    for (let x = 0; x < w; x++) {
+    const tear = hasTear && (y === bandA || y === bandB) ? 55 : 0;
+    let i = y * w;
+    const end = i + w;
+    for (; i < end; i++) {
       s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
       const u = s >>> 24;
-      const i = (rowOff + x) * 4;
-      const v = Math.min(255, ((u * u) >> 9) + bandBoost);
-      d[i] = v;
-      d[i + 1] = Math.min(255, v + (bandBoost ? 14 : 6));
-      d[i + 2] = Math.min(255, v + (bandBoost ? 18 : 10));
-      d[i + 3] = u > 180 ? 150 : 64;
+      const hot = u > 236 ? 215 : u > 186 ? 128 : u > 110 ? 54 : 14;
+      const v = Math.min(255, hot + tear);
+      const g = Math.min(255, v + 8);
+      const b = Math.min(255, v + 14);
+      const a = tear ? 175 : (u > 195 ? 190 : u > 110 ? 108 : 42);
+      buf[i] = GLOBE_IS_LE
+        ? ((a << 24) | (b << 16) | (g << 8) | v) >>> 0
+        : ((v << 24) | (g << 16) | (b << 8) | a) >>> 0;
     }
   }
   globeNoiseSeed = s;
@@ -948,24 +963,34 @@ function drawGlobeNoiseFrame(){
 }
 
 function stopGlobeNoise(){
-  if (globeNoiseTimer) { clearInterval(globeNoiseTimer); globeNoiseTimer = 0; }
+  if (globeNoiseRaf) { cancelAnimationFrame(globeNoiseRaf); globeNoiseRaf = 0; }
   if (globeLoadWatchTimer) { clearInterval(globeLoadWatchTimer); globeLoadWatchTimer = 0; }
   if (globeLoadFailTimer) { clearTimeout(globeLoadFailTimer); globeLoadFailTimer = 0; }
   globeNoiseImg = null;
+  globeNoiseBuf32 = null;
+}
+
+function globeNoiseLoop(now){
+  globeNoiseRaf = 0;
+  if (globeLoadDone || document.hidden) return;
+  if (!globeNoiseLast || now - globeNoiseLast >= 32) {
+    globeNoiseLast = now;
+    drawGlobeNoiseFrame();
+    syncGlobeLoadState();
+  }
+  if (!globeLoadDone && !document.hidden) {
+    globeNoiseRaf = requestAnimationFrame(globeNoiseLoop);
+  }
 }
 
 function startGlobeNoise(){
   if (globeLoadDone || document.hidden) return;
+  if (!globeLoadFailTimer) {
+    globeLoadFailTimer = setTimeout(() => { globeLoadForced = true; syncGlobeLoadState(); }, 18000);
+  }
   drawGlobeNoiseFrame();
-  if (!REDUCED && !globeNoiseTimer) {
-    globeNoiseTimer = setInterval(() => {
-      if (globeLoadDone || document.hidden) {
-        if (globeNoiseTimer) { clearInterval(globeNoiseTimer); globeNoiseTimer = 0; }
-        return;
-      }
-      drawGlobeNoiseFrame();
-      syncGlobeLoadState();
-    }, 75);
+  if (!REDUCED) {
+    if (!globeNoiseRaf) globeNoiseRaf = requestAnimationFrame(globeNoiseLoop);
   } else if (!globeLoadWatchTimer) {
     globeLoadWatchTimer = setInterval(() => {
       if (globeLoadDone) {
@@ -1005,9 +1030,6 @@ function sitInitMap(){
   bindGlobeEvents();
   startGlobeNoise();
   syncGlobeLoadState();
-  if (!globeLoadFailTimer) {
-    globeLoadFailTimer = setTimeout(() => { globeLoadForced = true; syncGlobeLoadState(); }, 18000);
-  }
   fetchGlobe().then(ok => {
     globeReady = ok;
     globeTopoDone = true;
@@ -1020,12 +1042,14 @@ function sitInitMap(){
 document.addEventListener('visibilitychange', () => {
   if (globeLoadDone) return;
   if (document.hidden) {
-    if (globeNoiseTimer) { clearInterval(globeNoiseTimer); globeNoiseTimer = 0; }
+    if (globeNoiseRaf) { cancelAnimationFrame(globeNoiseRaf); globeNoiseRaf = 0; }
   } else {
     startGlobeNoise();
     syncGlobeLoadState();
   }
 });
+startGlobeNoise();
+syncGlobeLoadState();
 const smlgBox = $('#sit-map-legend');
 smlgBox.addEventListener('click', e => {
   const it = e.target.closest('.smlg-it');

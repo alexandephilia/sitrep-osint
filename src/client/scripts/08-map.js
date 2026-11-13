@@ -982,7 +982,6 @@ function ensureMap(){
   checkTomTom();
   paintMap();
 }
-let GEO_NODES_CACHE = null, geoIncLoaded = false, geoDisLoaded = false, geoIncOk = false;
 const GEO_SHINGLE_ORDER = ['demo','fire','flood','disaster','insiden','kriminal','kesehatan','politik','ekonomi','siber'];
 function renderGeoTelemetry(){
   const specEl = $('#geo-spec');

@@ -629,36 +629,46 @@ a{color:inherit;text-decoration:none;text-underline-offset:2px}
 }
 .sgl-noise{
   position:absolute;inset:0;width:100%;height:100%;display:block;
-  opacity:.24;mix-blend-mode:screen;image-rendering:pixelated;
-  -webkit-mask-image:radial-gradient(ellipse 84% 76% at 50% 48%, #000 32%, rgba(0,0,0,.45) 68%, transparent 98%);
-  mask-image:radial-gradient(ellipse 84% 76% at 50% 48%, #000 32%, rgba(0,0,0,.45) 68%, transparent 98%);
+  opacity:.58;mix-blend-mode:screen;
+  -webkit-mask-image:radial-gradient(ellipse 88% 82% at 50% 48%, #000 38%, rgba(0,0,0,.55) 72%, transparent 99%);
+  mask-image:radial-gradient(ellipse 88% 82% at 50% 48%, #000 38%, rgba(0,0,0,.55) 72%, transparent 99%);
 }
 .sgl-scan{
-  position:absolute;inset:0;pointer-events:none;
-  background:repeating-linear-gradient(to bottom, rgba(255,255,255,.045) 0 1px, transparent 1px 3px);
-  opacity:.55;
+  position:absolute;inset:0;pointer-events:none;overflow:hidden;
+  background:repeating-linear-gradient(to bottom, rgba(255,255,255,.05) 0 1px, transparent 1px 3px);
+  opacity:.72;
+}
+.sgl-scan::after{
+  content:"";position:absolute;left:0;right:0;top:-22%;height:22%;
+  background:linear-gradient(to bottom, transparent 0%, rgba(114,216,200,.06) 45%, rgba(255,255,255,.11) 50%, rgba(114,216,200,.05) 55%, transparent 100%);
+  animation:sglSweep 2.4s linear infinite;will-change:transform;
+}
+@keyframes sglSweep{
+  0%{transform:translateY(0)}
+  100%{transform:translateY(560%)}
 }
 .sgl-hud{
-  position:relative;z-index:1;display:inline-flex;align-items:center;gap:10px;
-  padding:8px 13px;border-radius:4px;
-  background:rgba(12,12,16,.82);border:1px solid rgba(255,255,255,.12);
+  position:relative;z-index:1;display:inline-flex;align-items:center;gap:8px;
+  padding:6px 10px;border-radius:3px;
+  background:rgba(12,12,16,.84);border:1px solid rgba(255,255,255,.13);
   box-shadow:0 8px 24px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
   backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
 }
-.sgl-bars{display:inline-flex;align-items:flex-end;gap:2px;height:14px}
-.sgl-bars i{display:block;width:2px;height:4px;background:var(--text3);border-radius:1px;animation:sglBar 1.05s ease-in-out infinite}
+.sgl-bars{display:inline-flex;align-items:flex-end;gap:2px;height:12px}
+.sgl-bars i{display:block;width:2px;height:3px;background:var(--text3);border-radius:1px;animation:sglBar 1.05s ease-in-out infinite}
 .sgl-bars i:nth-child(2){animation-delay:.16s}
 .sgl-bars i:nth-child(3){animation-delay:.32s}
 .sgl-bars i:nth-child(4){animation-delay:.48s}
 @keyframes sglBar{
-  0%,100%{height:4px;background:var(--text3);opacity:.45}
-  45%{height:14px;background:#72d8c8;opacity:1}
+  0%,100%{height:3px;background:var(--text3);opacity:.45}
+  45%{height:12px;background:#72d8c8;opacity:1}
 }
-.sgl-tx{display:flex;flex-direction:column;gap:2px;min-width:138px}
-.sgl-k{font:600 9px/1 var(--mono,monospace);letter-spacing:.14em;color:var(--text);text-transform:uppercase}
-.sgl-msg{font:400 10px/1.2 var(--mono,monospace);letter-spacing:.03em;color:var(--text2);white-space:nowrap}
+.sgl-tx{display:flex;flex-direction:column;gap:2px}
+.sgl-k{font:600 8.5px/1 var(--mono,monospace);letter-spacing:.14em;color:var(--text);text-transform:uppercase}
+.sgl-msg{font:400 9.5px/1.2 var(--mono,monospace);letter-spacing:.03em;color:var(--text2);white-space:nowrap}
 @media (prefers-reduced-motion: reduce){
-  .sgl-bars i{animation:none;height:9px;background:#72d8c8;opacity:.75}
+  .sgl-bars i{animation:none;height:8px;background:#72d8c8;opacity:.75}
+  .sgl-scan::after{animation:none;display:none}
   .sit-globe-load{transition:opacity .15s ease, visibility 0s linear .15s}
 }
 .sit-globe-kpi{
@@ -2905,7 +2915,7 @@ button.mp-src{background:none;border-top:0;border-left:0;border-right:0;cursor:p
       <div class="sit-mapwrap is-loading">
         <canvas id="sit-globe" role="img" aria-label="Globe dunia dengan titik insiden live, bisa di-drag dan di-zoom"></canvas>
         <div id="sit-globe-load" class="sit-globe-load" aria-live="polite" aria-hidden="false">
-          <canvas id="sgl-noise" class="sgl-noise" width="160" height="96"></canvas>
+          <canvas id="sgl-noise" class="sgl-noise" width="440" height="460"></canvas>
           <div class="sgl-scan" aria-hidden="true"></div>
           <div class="sgl-hud">
             <span class="sgl-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
@@ -3626,6 +3636,7 @@ let SIT = null, SIT_STALE = false;
 let openCluster = '', openAlert = '', SIG_GROUPS = [];
 const clToastQ = new Map(), clToastOrder = []; let clToastActiveEl = null;
 let PULSE = [], DIS_PULSE = [], globeReady = false, globeCtx = null, globeIdn = null, globeProv = null, globeRaf = 0, globeLast = 0, globePoints = [], globeNodePoints = [], globeProj = null, globeCenter = [118, 0];
+let GEO_NODES_CACHE = null, geoIncLoaded = false, geoDisLoaded = false, geoIncOk = false;
 let globeActInc = '', globeActNode = '';
 let globeShakeX = 0, globeShakeY = 0;
 let activeGlobeQuake = null;
@@ -4669,35 +4680,50 @@ function renderMapLegend(st){
   }
 }
 let globeTopoDone = false, globeLoadDone = false, globeLoadForced = false;
-let globeNoiseTimer = 0, globeLoadWatchTimer = 0, globeLoadFailTimer = 0;
-let globeNoiseImg = null, globeNoiseSeed = (Date.now() ^ 0x9e3779b9) >>> 0;
+let globeNoiseRaf = 0, globeNoiseLast = 0, globeLoadWatchTimer = 0, globeLoadFailTimer = 0;
+let globeNoiseImg = null, globeNoiseBuf32 = null, globeNoiseSeed = (Date.now() ^ 0x9e3779b9) >>> 0;
+const GLOBE_IS_LE = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
 
 function drawGlobeNoiseFrame(){
   const cv = $('#sgl-noise');
   if (!cv) return;
+  const wrap = $('.sit-mapwrap');
+  const tw = Math.min(720, Math.max(220, (wrap && wrap.clientWidth) || cv.clientWidth || 440));
+  const th = Math.min(540, Math.max(200, (wrap && wrap.clientHeight) || cv.clientHeight || 460));
+  if (cv.width !== tw || cv.height !== th) {
+    cv.width = tw;
+    cv.height = th;
+    globeNoiseImg = null;
+    globeNoiseBuf32 = null;
+  }
   const ctx = cv.getContext('2d');
   if (!ctx) return;
   const w = cv.width, h = cv.height;
-  if (!globeNoiseImg || globeNoiseImg.width !== w || globeNoiseImg.height !== h) {
+  if (!globeNoiseImg) {
     globeNoiseImg = ctx.createImageData(w, h);
+    globeNoiseBuf32 = new Uint32Array(globeNoiseImg.data.buffer);
   }
-  const d = globeNoiseImg.data;
+  const buf = globeNoiseBuf32;
   let s = globeNoiseSeed || 0x13579bdf;
   s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
-  const bandY = Math.abs(s) % h;
-  const hasBand = (s & 7) === 0;
+  const bandA = Math.abs(s) % h;
+  const bandB = (bandA + 7 + (s & 31)) % h;
+  const hasTear = (s & 3) !== 0;
   for (let y = 0; y < h; y++) {
-    const bandBoost = (hasBand && Math.abs(y - bandY) <= 1) ? 46 : 0;
-    const rowOff = y * w;
-    for (let x = 0; x < w; x++) {
+    const tear = hasTear && (y === bandA || y === bandB) ? 55 : 0;
+    let i = y * w;
+    const end = i + w;
+    for (; i < end; i++) {
       s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
       const u = s >>> 24;
-      const i = (rowOff + x) * 4;
-      const v = Math.min(255, ((u * u) >> 9) + bandBoost);
-      d[i] = v;
-      d[i + 1] = Math.min(255, v + (bandBoost ? 14 : 6));
-      d[i + 2] = Math.min(255, v + (bandBoost ? 18 : 10));
-      d[i + 3] = u > 180 ? 150 : 64;
+      const hot = u > 236 ? 215 : u > 186 ? 128 : u > 110 ? 54 : 14;
+      const v = Math.min(255, hot + tear);
+      const g = Math.min(255, v + 8);
+      const b = Math.min(255, v + 14);
+      const a = tear ? 175 : (u > 195 ? 190 : u > 110 ? 108 : 42);
+      buf[i] = GLOBE_IS_LE
+        ? ((a << 24) | (b << 16) | (g << 8) | v) >>> 0
+        : ((v << 24) | (g << 16) | (b << 8) | a) >>> 0;
     }
   }
   globeNoiseSeed = s;
@@ -4705,24 +4731,34 @@ function drawGlobeNoiseFrame(){
 }
 
 function stopGlobeNoise(){
-  if (globeNoiseTimer) { clearInterval(globeNoiseTimer); globeNoiseTimer = 0; }
+  if (globeNoiseRaf) { cancelAnimationFrame(globeNoiseRaf); globeNoiseRaf = 0; }
   if (globeLoadWatchTimer) { clearInterval(globeLoadWatchTimer); globeLoadWatchTimer = 0; }
   if (globeLoadFailTimer) { clearTimeout(globeLoadFailTimer); globeLoadFailTimer = 0; }
   globeNoiseImg = null;
+  globeNoiseBuf32 = null;
+}
+
+function globeNoiseLoop(now){
+  globeNoiseRaf = 0;
+  if (globeLoadDone || document.hidden) return;
+  if (!globeNoiseLast || now - globeNoiseLast >= 32) {
+    globeNoiseLast = now;
+    drawGlobeNoiseFrame();
+    syncGlobeLoadState();
+  }
+  if (!globeLoadDone && !document.hidden) {
+    globeNoiseRaf = requestAnimationFrame(globeNoiseLoop);
+  }
 }
 
 function startGlobeNoise(){
   if (globeLoadDone || document.hidden) return;
+  if (!globeLoadFailTimer) {
+    globeLoadFailTimer = setTimeout(() => { globeLoadForced = true; syncGlobeLoadState(); }, 18000);
+  }
   drawGlobeNoiseFrame();
-  if (!REDUCED && !globeNoiseTimer) {
-    globeNoiseTimer = setInterval(() => {
-      if (globeLoadDone || document.hidden) {
-        if (globeNoiseTimer) { clearInterval(globeNoiseTimer); globeNoiseTimer = 0; }
-        return;
-      }
-      drawGlobeNoiseFrame();
-      syncGlobeLoadState();
-    }, 75);
+  if (!REDUCED) {
+    if (!globeNoiseRaf) globeNoiseRaf = requestAnimationFrame(globeNoiseLoop);
   } else if (!globeLoadWatchTimer) {
     globeLoadWatchTimer = setInterval(() => {
       if (globeLoadDone) {
@@ -4762,9 +4798,6 @@ function sitInitMap(){
   bindGlobeEvents();
   startGlobeNoise();
   syncGlobeLoadState();
-  if (!globeLoadFailTimer) {
-    globeLoadFailTimer = setTimeout(() => { globeLoadForced = true; syncGlobeLoadState(); }, 18000);
-  }
   fetchGlobe().then(ok => {
     globeReady = ok;
     globeTopoDone = true;
@@ -4777,12 +4810,14 @@ function sitInitMap(){
 document.addEventListener('visibilitychange', () => {
   if (globeLoadDone) return;
   if (document.hidden) {
-    if (globeNoiseTimer) { clearInterval(globeNoiseTimer); globeNoiseTimer = 0; }
+    if (globeNoiseRaf) { cancelAnimationFrame(globeNoiseRaf); globeNoiseRaf = 0; }
   } else {
     startGlobeNoise();
     syncGlobeLoadState();
   }
 });
+startGlobeNoise();
+syncGlobeLoadState();
 const smlgBox = $('#sit-map-legend');
 smlgBox.addEventListener('click', e => {
   const it = e.target.closest('.smlg-it');
@@ -10150,7 +10185,6 @@ function ensureMap(){
   checkTomTom();
   paintMap();
 }
-let GEO_NODES_CACHE = null, geoIncLoaded = false, geoDisLoaded = false, geoIncOk = false;
 const GEO_SHINGLE_ORDER = ['demo','fire','flood','disaster','insiden','kriminal','kesehatan','politik','ekonomi','siber'];
 function renderGeoTelemetry(){
   const specEl = $('#geo-spec');

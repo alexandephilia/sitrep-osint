@@ -365,6 +365,7 @@ let SIT = null, SIT_STALE = false;
 let openCluster = '', openAlert = '', SIG_GROUPS = [];
 const clToastQ = new Map(), clToastOrder = []; let clToastActiveEl = null;
 let PULSE = [], DIS_PULSE = [], globeReady = false, globeCtx = null, globeIdn = null, globeProv = null, globeRaf = 0, globeLast = 0, globePoints = [], globeNodePoints = [], globeProj = null, globeCenter = [118, 0];
+let GEO_NODES_CACHE = null, geoIncLoaded = false, geoDisLoaded = false, geoIncOk = false;
 let globeActInc = '', globeActNode = '';
 let globeShakeX = 0, globeShakeY = 0;
 let activeGlobeQuake = null;

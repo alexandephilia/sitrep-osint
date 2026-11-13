@@ -1397,7 +1397,15 @@ test('globe stage renders initial static-noise loading overlay, single reticle g
   assert.match(situasiCss, /\.sit-mapwrap:not\(\.is-loading\) \.sit-globe-load/);
 
   assert.match(globeJs, /function drawGlobeNoiseFrame\(/);
+  assert.match(globeJs, /function globeNoiseLoop\(/);
+  assert.match(globeJs, /Uint32Array/);
   assert.match(globeJs, /function syncGlobeLoadState\(/);
   assert.match(globeJs, /globeTopoDone && \(incDone \|\| offlineReady\)/);
   assert.match(bootUtilJs, /apiProbed = true/);
+  assert.doesNotMatch(situasiCss, /image-rendering:\s*pixelated/, 'static noise must use crisp 1:1 grain instead of pixelated blocks');
+
+  const compiledHtml = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
+  const geoDeclIdx = compiledHtml.indexOf('let GEO_NODES_CACHE = null, geoIncLoaded = false');
+  const startNoiseIdx = compiledHtml.indexOf('startGlobeNoise();\nsyncGlobeLoadState();');
+  assert.ok(geoDeclIdx !== -1 && startNoiseIdx !== -1 && geoDeclIdx < startNoiseIdx, 'geoIncLoaded must be initialized before startGlobeNoise/syncGlobeLoadState runs to avoid TDZ ReferenceError');
 });
