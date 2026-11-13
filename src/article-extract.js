@@ -75,6 +75,19 @@ function rdAbs(u, base) {
 const BOT_CHALLENGE_RE = /captcha|recaptcha|lsrecaptcha|cf-chl|cf-turnstile|challenge-platform|just a moment|one moment,?\s*please|attention required|access denied|verify you are|are you a robot|human verification|checking your browser|please wait while we verify|enable javascript and cookies|bot verification|ddos-guard|pardon our interruption|security check|sorry, you have been blocked|situs ini mungkin memblokir|requiring captcha/i;
 const ERROR_PAGE_RE = /^(?:404\s*(?:not\s*found|error)?|page\s*not\s*found|error\s*40[34]|403\s*forbidden|50[0234]\s*(?:bad gateway|service unavailable|gateway time-?out)?|halaman\s+tidak\s+ditemukan|artikel\s+tidak\s+ditemukan|maaf,?\s+halaman\s+yang\s+anda\s+cari\s+tidak\s+ditemukan|oops!?\s*that\s+page\s+can'?t\s+be\s+found)$/i;
 
+function isChallengeHtml(html, title = '', desc = '') {
+  if (BOT_CHALLENGE_RE.test(String(title || '') + ' ' + String(desc || ''))) return true;
+  const sHtml = String(html || '');
+  if (!sHtml) return false;
+  const visible = sHtml
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ');
+  if (visible.length < 45000 && BOT_CHALLENGE_RE.test(visible)) return true;
+  const text = visible.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return text.length < 160 && BOT_CHALLENGE_RE.test(sHtml);
+}
+
 function rdMeta(html) {
   const out = {};
   for (const m of String(html || '').matchAll(/<meta\b[^>]*>/gi)) {
@@ -865,7 +878,7 @@ function rdExtract(html, finalURL, opts = {}) {
   const byline = meta.author || meta['article:author'] || rdName(art.author) || '';
   const time = meta['article:published_time'] || meta['datepublished'] || art.datePublished || '';
 
-  if (BOT_CHALLENGE_RE.test(title + ' ' + rawDesc) || (sHtml.length < 45000 && BOT_CHALLENGE_RE.test(sHtml))) {
+  if (isChallengeHtml(sHtml, title, rawDesc)) {
     return {
       ok: false, url: finalURL, final: finalURL, title: title || rdHost(finalURL), site,
       byline, time: time ? String(time) : '', img: '', desc: '', paras: [], thin: true,
@@ -1143,6 +1156,7 @@ function rdJinaMd(text, url, opts = {}) {
 module.exports = {
   BOT_CHALLENGE_RE,
   ERROR_PAGE_RE,
+  isChallengeHtml,
   decodeEntities,
   rdClean,
   rdInline,

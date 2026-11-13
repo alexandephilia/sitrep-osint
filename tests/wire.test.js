@@ -1409,3 +1409,110 @@ test('globe stage renders initial static-noise loading overlay, single reticle g
   const startNoiseIdx = compiledHtml.indexOf('startGlobeNoise();\nsyncGlobeLoadState();');
   assert.ok(geoDeclIdx !== -1 && startNoiseIdx !== -1 && geoDeclIdx < startNoiseIdx, 'geoIncLoaded must be initialized before startGlobeNoise/syncGlobeLoadState runs to avoid TDZ ReferenceError');
 });
+
+test('reader ignores passive Cloudflare jsd challenge-platform scripts in <45KB articles, prioritizes social bots on polri.go.id WAF hosts, and cools down exhausted 402 Firecrawl/Jina keys', async () => {
+  const { createReaderService } = require('../src/reader-service');
+  const SEC = require('../src/security');
+  const EXTRACT = require('../article-extract');
+  const MEDIA = require('../article-media');
+  const prevFcKey = process.env.FIRECRAWL_API_KEY;
+  const prevJinaKey = process.env.JINA_API_KEY;
+  process.env.FIRECRAWL_API_KEY = 'fc-dead-402';
+  process.env.JINA_API_KEY = 'jina-dead-402';
+
+  try {
+    const shortCfArticle = `<!doctype html><html><head><title>Sat Samapta Polres Mesuji Gelar Patroli SPBU</title><meta property="og:description" content="Sat Samapta Polres Mesuji melaksanakan kegiatan patroli dan monitoring antrean kendaraan di sejumlah SPBU wilayah hukum Polres Mesuji."></head><body><article class="detail-post"><p>Mesuji - Satuan Samapta Polres Mesuji menggelar patroli rutin di sejumlah SPBU guna memastikan distribusi BBM bersubsidi berjalan tertib dan aman bagi masyarakat.</p><p>Petugas turut berkoordinasi dengan pengelola SPBU agar stok bahan bakar tetap mencukupi kebutuhan harian serta mengantisipasi potensi antrean panjang kendaraan.</p></article><script>(function(){var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a59cf4e2';})();</script></body></html>`;
+    assert.ok(shortCfArticle.length < 45000);
+    assert.equal(EXTRACT.isChallengeHtml(shortCfArticle, 'Sat Samapta Polres Mesuji Gelar Patroli SPBU', ''), false);
+    assert.equal(EXTRACT.isChallengeHtml('<html><body><script>window._cf_chl_opt={};/* challenge-platform */</script></body></html>'), true);
+
+    const cache = new Map();
+    const bodyCache = new Map();
+    const uasSeen = [];
+    let jinaAuthCalls = 0;
+    let jinaFreeCalls = 0;
+    let fcCalls = 0;
+
+    const makeRes = (status, headersObj, bodyStr) => {
+      const hdrs = new Map(Object.entries(headersObj || {}).map(([k, v]) => [k.toLowerCase(), String(v)]));
+      const buf = Buffer.from(String(bodyStr || ''), 'utf8');
+      return {
+        ok: status >= 200 && status < 300,
+        status,
+        headers: { get: k => hdrs.get(String(k || '').toLowerCase()) || null },
+        arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+        text: async () => buf.toString('utf8'),
+        json: async () => JSON.parse(buf.toString('utf8')),
+      };
+    };
+
+    const mesujiUrl = 'https://tribratanews-resmesuji.lampung.polri.go.id/detail-post/patroli-spbu-test';
+    const secondWafUrl = 'https://waf-blocked-example.id/berita/second';
+
+    const svc = createReaderService({
+      CFG: {},
+      AUTH: { publicMode: true },
+      API_TOKEN: '',
+      SEC: { ...SEC, rdAssertPublic: async () => true },
+      MEDIA,
+      EXTRACT,
+      FEEDTEXT,
+      PIPELINE_VERSION: 'test-polri-waf',
+      assetReuse: new MEDIA.AssetReuseTracker(),
+      cache,
+      bodyCache,
+      lruCap: (m, cap) => { while (m.size > cap) m.delete(m.keys().next().value); },
+      memo: (_k, _ttl, fn) => fn(),
+      makeSem: () => fn => fn(),
+      get: async (url, opt = {}) => {
+        const u = String(url);
+        const h = opt.headers || {};
+        if (u.startsWith('https://api.firecrawl.dev/v1/scrape')) {
+          fcCalls++;
+          return makeRes(402, { 'content-type': 'application/json' }, '{"error":"Insufficient credits"}');
+        }
+        if (u.startsWith('https://r.jina.ai/')) {
+          if (h.authorization) { jinaAuthCalls++; return makeRes(402, { 'content-type': 'text/plain' }, 'InsufficientBalanceError'); }
+          jinaFreeCalls++;
+          return makeRes(403, { 'content-type': 'text/html', server: 'cloudflare' }, '<title>Attention Required! | Cloudflare</title>');
+        }
+        if (u.startsWith('https://tribratanews-resmesuji.lampung.polri.go.id/')) {
+          const ua = h['user-agent'] || '';
+          if (u.includes('/detail-post/')) uasSeen.push(ua || 'direct');
+          if (/^TelegramBot/i.test(ua)) return makeRes(200, { 'content-type': 'text/html; charset=utf-8', server: 'cloudflare' }, shortCfArticle);
+          if (/WhatsApp|facebookexternalhit/i.test(ua)) {
+            return makeRes(403, { 'content-type': 'text/html', server: 'cloudflare' }, '<title>Attention Required! | Cloudflare</title>');
+          }
+          return makeRes(403, { 'content-type': 'text/html', server: 'cloudflare' }, '<title>Attention Required! | Cloudflare</title>');
+        }
+        if (u.startsWith('https://waf-blocked-example.id/')) {
+          return makeRes(403, { 'content-type': 'text/html', server: 'cloudflare' }, '<title>Attention Required! | Cloudflare</title>');
+        }
+        return makeRes(502, { 'content-type': 'text/plain' }, 'upstream error');
+      },
+      sleep: ms => new Promise(r => setTimeout(r, Math.min(ms, 2))),
+      openCors: () => true,
+      isBannedHostUrl: () => false,
+    });
+
+    assert.equal(svc.isWafHostUrl(mesujiUrl), true, 'polri.go.id hosts must be treated as Cloudflare WAF hosts');
+    const out = await svc.rdRead(mesujiUrl, false, false);
+    assert.equal(out.via, 'bot', 'TelegramBot fallback inside 3-bot WAF race must resolve protected polri.go.id article');
+    assert.ok(out.paras.length >= 2);
+    assert.ok(uasSeen.some(ua => /^TelegramBot/i.test(ua)), 'WAF host read must race TelegramBot instead of wasting a slot on blocked Googlebot');
+    assert.ok(!uasSeen.some(ua => /Googlebot/i.test(ua)), 'WAF host read must skip Googlebot in top-3 social bot race');
+
+    const desc = await svc.descForUrl(mesujiUrl);
+    assert.match(desc, /Patroli|Satuan Samapta Polres Mesuji/i, 'descForUrl on polri.go.id must resolve cleanly without failing on JSD script');
+
+    await assert.rejects(() => svc.rdRead(secondWafUrl, false, false));
+    await assert.rejects(() => svc.rdRead(secondWafUrl + '-2', false, false));
+    assert.equal(fcCalls, 1, 'HTTP 402 from Firecrawl must trigger global quota cooldown instead of hammering Firecrawl on subsequent URLs');
+    assert.ok(jinaAuthCalls <= 1 && jinaFreeCalls >= 1, 'HTTP 402 from Jina key must cool down broken Authorization header and fall back to keyless fetch');
+  } finally {
+    if (prevFcKey === undefined) delete process.env.FIRECRAWL_API_KEY;
+    else process.env.FIRECRAWL_API_KEY = prevFcKey;
+    if (prevJinaKey === undefined) delete process.env.JINA_API_KEY;
+    else process.env.JINA_API_KEY = prevJinaKey;
+  }
+});

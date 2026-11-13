@@ -24,6 +24,7 @@ function createReaderService({
   const upgradeImage = u => MEDIA.upgradeImage(u);
   const rdImgKey = u => MEDIA.imageKey(u);
   const BOT_CHALLENGE_RE = EXTRACT.BOT_CHALLENGE_RE;
+  const isChallengeHtml = EXTRACT.isChallengeHtml || ((h, t = '', d = '') => BOT_CHALLENGE_RE.test(String(t || '') + ' ' + String(d || '')) || (String(h || '').length < 45000 && BOT_CHALLENGE_RE.test(String(h || ''))));
 
   const thumbCache = new Map();
   const urlToCanon = new Map();
@@ -90,7 +91,7 @@ function createReaderService({
     'Wget/1.21',
     'curl/8.7.1',
   ];
-  const CF_WAF_HOST_RE = /(?:^|\.)(?:tempo\.co|cnnindonesia\.com|cnbcindonesia\.com|jpnn\.com|pikiran-rakyat\.com|mediaindonesia\.com|tribunnews\.com|bisnis\.com|kontan\.co\.id|kompasiana\.com|suara\.com|sindonews\.com|okezone\.com|inews\.id)$/i;
+  const CF_WAF_HOST_RE = /(?:^|\.)(?:tempo\.co|cnnindonesia\.com|cnbcindonesia\.com|jpnn\.com|pikiran-rakyat\.com|mediaindonesia\.com|tribunnews\.com|bisnis\.com|kontan\.co\.id|kompasiana\.com|suara\.com|sindonews\.com|okezone\.com|inews\.id|polri\.go\.id)$/i;
   const WAF_SERVER_RE = /\b(?:hcdn|cloudflare|ddos-guard|sucuri|akamaighost)\b/i;
   const LEARNED_WAF_TTL = 30 * 60000;
   const learnedWafHosts = new Map();
@@ -118,7 +119,7 @@ function createReaderService({
     const status = r && Number(r.status);
     const srv = (r && r.headers && r.headers.get && (r.headers.get('server') || '')) || '';
     const hdrWaf = (status === 403 || status === 503 || status === 429) && WAF_SERVER_RE.test(srv);
-    const bodyChallenge = Boolean(htmlSnippet && BOT_CHALLENGE_RE.test(String(htmlSnippet).slice(0, 30000)));
+    const bodyChallenge = Boolean(htmlSnippet && isChallengeHtml(htmlSnippet));
     return (hdrWaf || bodyChallenge) ? markWafHost(u) : false;
   }
   async function raceBotUas(targetUrl, totalMs, parentSignal, handler, uas = RD_BOT_UAS.slice(0, 3)) {
@@ -458,9 +459,10 @@ function createReaderService({
     return url;
   }
 
-  let jinaChain = Promise.resolve(), jinaLast = 0, jinaPending = 0, jinaSkipUntil = 0;
+  let jinaChain = Promise.resolve(), jinaLast = 0, jinaPending = 0, jinaSkipUntil = 0, jinaKeyBadUntil = 0;
   const jinaQP = [], jinaQN = [];
   const JINA_KEY = process.env.JINA_API_KEY || '';
+  const jinaHasActiveKey = () => Boolean(JINA_KEY && Date.now() >= jinaKeyBadUntil);
   const jinaPump = () => {
     const job = jinaQP.shift() || jinaQN.shift();
     if (!job) return;
@@ -468,14 +470,24 @@ function createReaderService({
     const p = jinaChain.then(async () => {
       if (job.alive && !job.alive()) throw new Error('jina dibatalkan');
       if (job.signal && job.signal.aborted) throw new Error('jina dibatalkan');
-      if (!JINA_KEY && Date.now() < jinaSkipUntil) throw new Error('jina 402/429 cooldown');
+      const useKey = jinaHasActiveKey();
+      if (!useKey && Date.now() < jinaSkipUntil) throw new Error('jina 402/429 cooldown');
       const wait = Math.max(0, jinaLast + 2500 - Date.now());
       if (wait) await sleep(wait);
       if (job.alive && !job.alive()) throw new Error('jina dibatalkan');
       if (job.signal && job.signal.aborted) throw new Error('jina dibatalkan');
       jinaLast = Date.now();
-      const res = await mediaGet(job.u, job.ms, job.h, undefined, job.prio, job.signal);
-      if (res && res.r && res.r.status === 402 && !JINA_KEY) jinaSkipUntil = Date.now() + 300000;
+      const hdrs = { ...(job.h || {}) };
+      if (useKey && !hdrs['authorization']) hdrs['authorization'] = 'Bearer ' + JINA_KEY;
+      let res = await mediaGet(job.u, job.ms, hdrs, undefined, job.prio, job.signal);
+      if (res && res.r && (res.r.status === 402 || res.r.status === 401) && useKey) {
+        try { if (res.r.body && res.r.body.cancel) await res.r.body.cancel(); } catch {}
+        jinaKeyBadUntil = Date.now() + 15 * 60000;
+        if (Date.now() >= jinaSkipUntil && !(job.alive && !job.alive()) && !(job.signal && job.signal.aborted)) {
+          res = await mediaGet(job.u, job.ms, job.h, undefined, job.prio, job.signal);
+        }
+      }
+      if (res && res.r && res.r.status === 402 && !jinaHasActiveKey()) jinaSkipUntil = Date.now() + 300000;
       else if (res && res.r && res.r.status === 429) jinaSkipUntil = Date.now() + 30000;
       return res;
     });
@@ -484,10 +496,9 @@ function createReaderService({
            e => { jinaPending--; job.reject(e); jinaPump(); });
   };
   const jinaGet = (u, ms, h, alive, prio, signal) => {
-    if (!JINA_KEY && Date.now() < jinaSkipUntil) return Promise.reject(new Error('jina 402/429 cooldown'));
+    if (!jinaHasActiveKey() && Date.now() < jinaSkipUntil) return Promise.reject(new Error('jina 402/429 cooldown'));
     if (jinaPending + jinaQP.length + jinaQN.length >= 12) return Promise.reject(new Error('jina queue penuh'));
     const hdrs = { ...(h || {}) };
-    if (JINA_KEY && !hdrs['authorization']) hdrs['authorization'] = 'Bearer ' + JINA_KEY;
     return new Promise((resolve, reject) => {
       (prio ? jinaQP : jinaQN).push({ u, ms, h: hdrs, alive, prio: !!prio, signal: signal || null, resolve, reject });
       jinaPump();
@@ -542,7 +553,11 @@ function createReaderService({
 
   const fcFailUntil = new Map();
   const FC_FAIL_TTL = 10 * 60000;
+  let fcQuotaBlockedUntil = 0;
+  const isFcEnabled = () => Boolean((process.env.FIRECRAWL_API_KEY || '') && Date.now() >= fcQuotaBlockedUntil);
+  const fcMarkQuotaExhausted = () => { fcQuotaBlockedUntil = Date.now() + 15 * 60000; };
   const fcBlocked = u => {
+    if (Date.now() < fcQuotaBlockedUntil) return true;
     const t = fcFailUntil.get(u) || 0;
     if (t > Date.now()) return true;
     if (t) fcFailUntil.delete(u);
@@ -746,7 +761,7 @@ function createReaderService({
       if (ct && !/text\/html|application\/xhtml|text\/plain/i.test(ct)) { try { if (r.body && r.body.cancel) await r.body.cancel(); } catch (e) {} throw new Error('bukan HTML'); }
       const html = await mediaText(r, 3 << 20);
       if (!html || html.length < 400) throw new Error('html tipis');
-      if (BOT_CHALLENGE_RE.test(html.slice(0, 30000))) {
+      if (isChallengeHtml(html)) {
         if (!fromProxy) noteWafResponse(finalUrl || targetUrl, r, html);
         throw new Error('halaman challenge');
       }
@@ -780,16 +795,17 @@ function createReaderService({
         try { thumbAc.abort(); } catch {}
       } else {
         const jobs = [directP, fastBotP];
+        const fallbackBotUas = isWafHost ? [RD_BOT_UAS[1], RD_BOT_UAS[3], RD_BOT_UAS[2]] : RD_BOT_UAS.slice(1, 4);
         jobs.push(raceBotUas(article, isWafHost ? 4000 : 4800, thumbAc.signal, async (r, finalUrl) => {
           if (!r.ok) { try { if (r.body && r.body.cancel) await r.body.cancel(); } catch (e) {} throw new Error('HTTP ' + r.status); }
           const ct = r.headers.get('content-type') || '';
           if (ct && !/text\/html|application\/xhtml|text\/plain/i.test(ct)) { try { if (r.body && r.body.cancel) await r.body.cancel(); } catch (e) {} throw new Error('bukan HTML'); }
           const html = await mediaText(r, 3 << 20);
           if (!html || html.length < 400) throw new Error('html tipis');
-          if (BOT_CHALLENGE_RE.test(html.slice(0, 30000))) { noteWafResponse(finalUrl || article, r, html); throw new Error('halaman challenge'); }
+          if (isChallengeHtml(html)) { noteWafResponse(finalUrl || article, r, html); throw new Error('halaman challenge'); }
           if (isHijackedThumbHtml(article, finalUrl, html, false)) throw new Error('redirect mencurigakan');
           return { html, finalUrl, via: 'bot' };
-        }, RD_BOT_UAS.slice(1, 4)));
+        }, fallbackBotUas));
         for (const av of rdAmpVariants(article).slice(0, 2)) {
           jobs.push(tryDocFetch(av, 4500, { 'user-agent': RD_BOT_UAS[0] }, false, 'amp'));
         }
@@ -811,7 +827,7 @@ function createReaderService({
         } catch (e) {}
       }
       const FC_KEY = process.env.FIRECRAWL_API_KEY || '';
-      if (!doc && !jinaMd && FC_KEY && !fcBlocked(article)) {
+      if (!doc && !jinaMd && isFcEnabled() && !fcBlocked(article)) {
         let fcOk = false;
         try {
           const r = await get('https://api.firecrawl.dev/v1/scrape', {
@@ -823,12 +839,14 @@ function createReaderService({
             const j = await r.json();
             let html = j && j.data && j.data.html;
             const md = (j && j.data && j.data.metadata) || {};
-            if (html && String(html).length > 500 && !BOT_CHALLENGE_RE.test(String(html).slice(0, 30000))) {
+            if (html && String(html).length > 500 && !isChallengeHtml(html)) {
               html = injectSyntheticHead(String(html), md);
               doc = { html: html.slice(0, 3e6), finalUrl: article, via: 'firecrawl' };
               markWafHost(article);
               fcOk = true;
             }
+          } else if (r.status === 402 || r.status === 401) {
+            fcMarkQuotaExhausted();
           }
         } catch (e) {}
         if (!fcOk) fcFailMark(article);
@@ -1004,7 +1022,7 @@ function createReaderService({
 
   async function cctvFirecrawl(url) {
     const FC_KEY = process.env.FIRECRAWL_API_KEY || '';
-    if (!FC_KEY || fcBlocked(url)) return '';
+    if (!isFcEnabled() || fcBlocked(url)) return '';
     let ok = false;
     try {
       const r = await get('https://api.firecrawl.dev/v1/scrape', {
@@ -1016,6 +1034,8 @@ function createReaderService({
         const j = await r.json();
         const h = (j && j.data && j.data.html) || '';
         if (h) { ok = true; return h; }
+      } else if (r.status === 402 || r.status === 401) {
+        fcMarkQuotaExhausted();
       }
     } catch (e) {}
     if (!ok) fcFailMark(url);
@@ -1526,7 +1546,7 @@ function createReaderService({
 
       const isWafHost = isWafHostUrl(target);
       const FC_KEY = process.env.FIRECRAWL_API_KEY || '';
-      const hasFc = Boolean(FC_KEY && !fcBlocked(target));
+      const hasFc = Boolean(isFcEnabled() && !fcBlocked(target));
       const raceMs = cap => Math.min(cap, Math.max(2000, hasFc ? remMs() - 15000 : remMs()));
 
       if (!forceFresh) {
@@ -1573,6 +1593,7 @@ function createReaderService({
         return { d, html, jinaTxt: null, url };
       })() });
 
+      const readBotUas = isWafHost ? [RD_BOT_UAS[0], RD_BOT_UAS[1], RD_BOT_UAS[3]] : RD_BOT_UAS.slice(0, 3);
       jobs.push({ via: 'bot', p: raceBotUas(target, raceMs(isWafHost ? 4000 : 5500), raceAc.signal, async (r, url) => {
         if (!r.ok) {
           if (r.status === 403 || r.status === 429 || r.status >= 500) sawTransientUpstream = true;
@@ -1584,7 +1605,7 @@ function createReaderService({
         if (html.length > 3e6) html = html.slice(0, 3e6);
         const d = evaluateHtml(html, url);
         return { d, html, jinaTxt: null, url };
-      }) });
+      }, readBotUas) });
 
       let raceSettled = false;
       jobs.push({ via: 'jina', p: (async () => {
@@ -1665,6 +1686,10 @@ function createReaderService({
               return await fin(d, target, html, null, 'firecrawl');
             }
           } else {
+            if (r.status === 402 || r.status === 401) {
+              fcMarkQuotaExhausted();
+              sawTransientUpstream = true;
+            }
             attempts.push({ via: 'firecrawl', err: 'HTTP ' + r.status });
           }
         } catch (e) { lastErr = e; attempts.push({ via: 'firecrawl', err: String(e && e.message || e).slice(0, 90) }); }
@@ -1917,22 +1942,24 @@ function createReaderService({
           : { 'accept-language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7' };
         const { r } = await mediaGet(u, Math.min(timeoutMs, leftMs()), { ...baseHdrs, ...langHdr, ...extraHdrs });
         if (!r.ok) {
+          noteWafResponse(target, r);
           if (r.status === 403 || r.status === 429 || r.status >= 500) sawTransient = true;
           throw new Error('HTTP ' + r.status);
         }
         const ct = r.headers.get('content-type') || '';
         if (ct && !/text\/html|application\/xhtml|text\/plain/i.test(ct)) throw new Error('bukan halaman HTML');
         const h = await mediaDesc(r);
-        if (h.length < 45000 && BOT_CHALLENGE_RE.test(h)) {
+        if (isChallengeHtml(h)) {
+          noteWafResponse(target, null, h);
           sawTransient = true;
           throw new Error('halaman challenge/captcha');
         }
         return h;
       };
-      const isWaf = CF_WAF_HOST_RE.test(host);
+      const isWaf = isWafHostUrl(target);
       const hdrSequence = isWaf
-        ? [{ 'user-agent': RD_BOT_UAS[0] }, { 'user-agent': RD_BOT_UAS[2] }, { 'user-agent': RD_BOT_UAS[1] }, {}]
-        : [{}, { 'user-agent': RD_BOT_UAS[0] }, { 'user-agent': RD_BOT_UAS[2] }];
+        ? [{ 'user-agent': RD_BOT_UAS[0] }, { 'user-agent': RD_BOT_UAS[1] }, { 'user-agent': RD_BOT_UAS[3] }, {}]
+        : [{}, { 'user-agent': RD_BOT_UAS[0] }, { 'user-agent': RD_BOT_UAS[1] }, { 'user-agent': RD_BOT_UAS[3] }];
 
       for (const hTry of hdrSequence) {
         if (Date.now() >= deadline - 800) break;
