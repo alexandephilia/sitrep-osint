@@ -631,6 +631,8 @@ test('adaptive grid priority: camTier, camOrderValue, health-aware pickLiveKeys,
   const cctvSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'scripts', '07-cctv.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   assert.ok(html.includes('id="cam-off-tog"'), 'must render #cam-off-tog offline inspector toggle button');
+  assert.ok(html.includes('class="tools cam-tools"'), 'must embed CCTV offline toggle flush inside .tools.cam-tools bar');
+  assert.ok(html.includes('.cam-off-btn[hidden]{display:none !important}') && html.includes('border:0;border-radius:0;') && html.includes('clip-path:polygon(var(--cant) 0, 100% 0, 100% 100%, 0 100%)'), 'must render .cam-off-btn as flush right-corner diagonal blade with zero border-radius');
   assert.ok(html.includes('.camgrid.show-offline .cam.is-offline'), 'must allow toggling .is-offline visibility via .show-offline');
   assert.ok(!cctvSrc.includes("mode: 'no-cors'"), 'offline probe must never use fake no-cors fetch reviver');
   assert.ok(cctvSrc.includes('function probeOfflineCell(cell)') && cctvSrc.includes("camGrid.matches(':hover')"), 'must validate offline revival and defer grid reorder while hovering');
