@@ -1176,3 +1176,88 @@ test('social cold-start guard: warming/empty streaks delay "no data" and "error"
 
   assert.ok(!html.includes("Server tidak merespons. Jalankan node server.js.</div>');"), 'unconditional server-down copy must be removed');
 });
+
+test('startup auto-hydration, disk news prewarm, incidents:nonodes cache, and tab-wake recovery contracts', async () => {
+  const os = require('node:os');
+  const { createNewsService } = require('../src/news-service');
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sitrep-news-seed-'));
+  try {
+    const now = Date.now();
+    fs.writeFileSync(path.join(tmpDir, 'news-history.json'), JSON.stringify({
+      at: now - 60000,
+      posts: [{
+        src: 'ANTARA',
+        title: 'Banjir merendam permukiman warga di Jakarta Selatan',
+        url: 'https://www.antaranews.com/berita/999001/banjir-jaksel',
+        pub: 'Antara',
+        desc: 'Banjir setinggi 80 cm merendam kawasan Jakarta Selatan.',
+        ts: now - 120000,
+      }]
+    }));
+
+    const cache = new Map();
+    const bodyCache = new Map();
+    const memo = (key, ttl, fn, okFn) => {
+      const hit = cache.get(key);
+      if (hit && Date.now() - hit.at < ttl) return Promise.resolve(hit.v);
+      return Promise.resolve().then(fn).then(v => {
+        if (!okFn || okFn(v)) cache.set(key, { at: Date.now(), v });
+        return v;
+      });
+    };
+    const svc = createNewsService({
+      fs,
+      path,
+      HIST_DIR: tmpDir,
+      CFG: {},
+      SOC,
+      ASSESS,
+      FEEDTEXT,
+      MEDIA: require('../article-media'),
+      GEO,
+      EVM: EVMERGE,
+      PIPELINE_VERSION: 'test-seed',
+      assetReuse: () => '',
+      cache,
+      bodyCache,
+      memo,
+      makeSem: () => (fn => fn()),
+      get: async () => ({ ok: false, status: 599, text: async () => '' }),
+      sleep: () => Promise.resolve(),
+      yieldTick: () => new Promise(r => setImmediate(r)),
+      registerNewsUrl: () => {},
+      recordUpstream: () => {},
+      urlToCanon: new Map(),
+      mediaCacheGet: () => null,
+      persistHist: false,
+    });
+
+    const seeded = svc.seedFromDiskHistory();
+    assert.ok(seeded >= 1, 'seedFromDiskHistory must seed feeds present in news-history.json');
+    const antaraHit = cache.get('n:ANTARA');
+    assert.ok(antaraHit && antaraHit.v.ok && antaraHit.v.items.length === 1, 'seeded feed must hydrate cache immediately');
+    assert.ok(Date.now() - antaraHit.at >= 48000 && Date.now() - antaraHit.at < 55000, 'seeded cache age must resolve disk prewarm immediately while expiring for live fetch');
+    assert.equal(cache.size, svc.NEWS.length, 'seedFromDiskHistory must cover all configured feeds so boot prewarm never blocks on empty feeds');
+
+    const inc = await svc.incidents();
+    assert.ok(inc && inc.ok && inc.total >= 1, 'incidents() must build pins immediately from disk-seeded history');
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+
+  const serverSrc = readBackendSrc();
+  assert.ok(serverSrc.includes("prewarmJson('incidents:nonodes'"), 'server must prewarm incidents:nonodes alongside incidents:all');
+  assert.ok(serverSrc.includes('const warmDelay = seededFeeds > 0 ? 6200 : 100;'), 'server must stagger heavy upstream boot warmers when disk history already prewarms origin');
+
+  const tvSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'scripts', '09-tv-footer.js'), 'utf8');
+  const mapSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'scripts', '08-map.js'), 'utf8');
+  const readerSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'scripts', '10-reader.js'), 'utf8');
+  const socialSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'scripts', '04-social.js'), 'utf8');
+
+  assert.ok(tvSrc.includes('if (hasItems) mediaLoaded = true;') && tvSrc.includes('if (hasRssItems) mediaLoaded = true;'), 'pullMedia must only mark mediaLoaded when at least one feed returned items');
+  assert.ok(mapSrc.includes('geoIncOk') && mapSrc.includes('Promise.all(['), 'pullIncidents must track geoIncOk and fetch nodes + incidents in parallel');
+  assert.ok(socialSrc.includes('tRetryT = 0; if (!document.hidden) pullThreads();'), 'pullThreads must clear tRetryT before gating on document.hidden');
+  assert.ok(readerSrc.includes('async function onTabWake(fromOnline)') && readerSrc.includes('function needsColdRecovery()') && readerSrc.includes('function scheduleColdRecovery()'), '10-reader.js must implement unified tab wake and cold recovery');
+  assert.ok(readerSrc.includes("window.addEventListener('focus',") && readerSrc.includes("window.addEventListener('pageshow',") && readerSrc.includes("window.addEventListener('online',"), 'must recover on focus, pageshow, and online events');
+  assert.ok(readerSrc.indexOf('trackBg(pullIncidents(manual))') < readerSrc.indexOf('await Promise.all([pullMedia(manual)'), 'refreshAll must start background panel pulls without blocking on slow media/situation');
+});

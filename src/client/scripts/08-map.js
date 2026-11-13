@@ -982,7 +982,7 @@ function ensureMap(){
   checkTomTom();
   paintMap();
 }
-let GEO_NODES_CACHE = null, geoIncLoaded = false, geoDisLoaded = false;
+let GEO_NODES_CACHE = null, geoIncLoaded = false, geoDisLoaded = false, geoIncOk = false;
 const GEO_SHINGLE_ORDER = ['demo','fire','flood','disaster','insiden','kriminal','kesehatan','politik','ekonomi','siber'];
 function renderGeoTelemetry(){
   const specEl = $('#geo-spec');
@@ -1098,17 +1098,18 @@ async function pullIncidents(fresh){
   }
   mapBusy = true;
   try {
-    if (!GEO_NODES_CACHE) {
-      try {
-        const nr = await getJson(API + '/api/nodes', 15000);
-        if (nr && nr.ok && Array.isArray(nr.items)) GEO_NODES_CACHE = nr.items;
-      } catch (e) {}
-    }
-    const qs = (GEO_NODES_CACHE ? 'nodes=0' : 'nodes=1') + (fresh && SITREP_CAN_FRESH ? '&fresh=1' : '');
-    const d = await getJson(API + '/api/incidents?' + qs, 30000);
+    const qs = 'nodes=0' + (fresh && SITREP_CAN_FRESH ? '&fresh=1' : '');
+    const [nr, d] = await Promise.all([
+      GEO_NODES_CACHE ? Promise.resolve(null) : getJson(API + '/api/nodes', 15000).catch(() => null),
+      getJson(API + '/api/incidents?' + qs, 30000),
+    ]);
+    if (nr && nr.ok && Array.isArray(nr.items)) GEO_NODES_CACHE = nr.items;
     if (d && d.ok) {
+      geoIncOk = true;
       mapData = d.items || [];
-      if (d.nodesOmitted && GEO_NODES_CACHE) mapData = mapData.concat(GEO_NODES_CACHE);
+      if ((d.nodesOmitted || !GEO_NODES_CACHE || GEO_NODES_CACHE.length) && GEO_NODES_CACHE) {
+        mapData = mapData.filter(i => !i.fixed).concat(GEO_NODES_CACHE);
+      }
       const GEMPA_SKIP = /aman gempa|tahan gempa|resisten gempa|anti[- ]?gempa|gempa resistant/i;
       const GEMPA_AID = /bantuan|relief|kemanusiaan|donasi|salurkan|penyintas|pemulihan|posko|logistik|pengungsian|rehabilitasi|rekonstruksi|bansos/i;
       const GEMPA_SIG = /\b(?:m|mag)\.?\s*[:=]?\s*\d+[.,]\d|magnitudo|richter|gempa tektonik|gempa susulan|aftershock|diguncang|guncang|berpusat|episenter|tsunami/i;
@@ -1129,11 +1130,15 @@ async function pullIncidents(fresh){
       drawGlobe(performance.now());
       if (mapOpen && typeof L !== 'undefined') { ensureMap(); paintMap(); }
       if (layerOn.peringatan && mapOpen) pullAlerts();
-    } else if (!geoIncLoaded) {
-      geoIncLoaded = true;
-      renderGeoTelemetry();
+    } else {
+      geoIncOk = false;
+      if (!geoIncLoaded) {
+        geoIncLoaded = true;
+        renderGeoTelemetry();
+      }
     }
   } catch (e) {
+    geoIncOk = false;
     geoIncLoaded = true;
     renderGeoTelemetry();
     $('#map-meta').textContent = 'peta gagal';

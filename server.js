@@ -373,6 +373,7 @@ const {
   parseFeed,
   feedSig,
   loadNewsHist,
+  seedFromDiskHistory,
   mergeNewsHist,
   newsHistByFeed,
   saveNewsHist,
@@ -516,6 +517,7 @@ const histFlushAll = () => {
   saveNewsHist(true);
   saveIncidentHist(true);
   if (typeof saveMktCloses === 'function') saveMktCloses(true);
+  if (typeof saveCctvHist === 'function') saveCctvHist(true);
 };
 
 const histFlushTimer = setInterval(() => {
@@ -673,7 +675,12 @@ const {
   cctvCatalog,
   warmCctv,
   hostCors,
+  saveCctvHist,
 } = require('./src/cctv-catalog').createCctvCatalog({
+  fs,
+  path,
+  HIST_DIR,
+  persistHist: require.main === module || Boolean(process.env.SITREP_DATA_DIR),
   UA,
   CFG,
   GW,
@@ -1239,7 +1246,8 @@ const SITREP_SERVER = http.createServer(async (req, res) => {
       }
       if (sendCached(nrKey, 25000, 200, newsCC)) return;
       const payload = await buildNewsPayload();
-      return json(payload, 200, nrKey, 25000, newsCC, { stableAt: true });
+      const hasNews = Boolean(payload && Array.isArray(payload.sources) && payload.sources.some(s => s.ok && Array.isArray(s.items) && s.items.length));
+      return json(payload, 200, nrKey, hasNews ? 25000 : 2000, hasNews ? newsCC : pubCC(2, 5, 0), { stableAt: true });
     }
     if (u.pathname === '/api/breaking') {
       const cc = pubCC(15, 30, 5);
@@ -1248,12 +1256,16 @@ const SITREP_SERVER = http.createServer(async (req, res) => {
         if (!c.p && Date.now() - c.at > 25000) breaking().catch(() => {});
         return json(c.v, 200, 'breaking', 12000, cc);
       }
-      return json(await breaking(), 200, 'breaking', 12000, cc);
+      const brRes = await breaking();
+      const hasBr = Boolean(brRes && Array.isArray(brRes.items) && brRes.items.length);
+      return json(brRes, 200, 'breaking', hasBr ? 12000 : 2500, hasBr ? cc : pubCC(2, 5, 0));
     }
     if (u.pathname === '/api/x') {
       const cc = pubCC(25, 60, 10);
       if (sendCached('x', 12000, 200, cc)) return;
-      return json(socialResponse(await warmSocial('x', xposts, xHist), xHist, SOC.socKeepX), 200, 'x', 12000, cc, { stableAt: true });
+      const xRes = socialResponse(await warmSocial('x', xposts, xHist), xHist, SOC.socKeepX);
+      const xWarming = Boolean(xRes.warming || !(xRes.posts && xRes.posts.length));
+      return json(xRes, 200, 'x', xWarming ? 2000 : 12000, xWarming ? pubCC(2, 5, 0) : cc, { stableAt: true });
     }
     if (u.pathname === '/api/xdiag') {
       if (!AUTH.hasRole(principal, 'admin')) return json({ ok: false, err: 'akses ditolak (butuh role admin)' }, 403);
@@ -1300,7 +1312,9 @@ const SITREP_SERVER = http.createServer(async (req, res) => {
     if (u.pathname === '/api/threads') {
       const cc = pubCC(25, 60, 10);
       if (sendCached('threads', 12000, 200, cc)) return;
-      return json(socialResponse(await warmSocial('threads', threads, tHist), tHist, SOC.socKeepTh), 200, 'threads', 12000, cc, { stableAt: true });
+      const thRes = socialResponse(await warmSocial('threads', threads, tHist), tHist, SOC.socKeepTh);
+      const thWarming = Boolean(thRes.warming || !(thRes.posts && thRes.posts.length));
+      return json(thRes, 200, 'threads', thWarming ? 2000 : 12000, thWarming ? pubCC(2, 5, 0) : cc, { stableAt: true });
     }
     if (u.pathname === '/api/social/diagnostics') {
       const cc = pubCC(20, 40, 10);
@@ -1361,8 +1375,11 @@ const SITREP_SERVER = http.createServer(async (req, res) => {
       const bKey = noNodes ? 'incidents:nonodes' : 'incidents:all';
       if (sendCached(bKey, 12000, 200, incCC)) return;
       const data = await incidents();
-      if (noNodes) return json({ ...data, items: data.items.filter(i => !i.fixed), nodesOmitted: true }, 200, bKey, 12000, incCC);
-      return json(data, 200, bKey, 12000, incCC);
+      const hasInc = Boolean(data && data.total > 0);
+      const rTtl = hasInc ? 12000 : 2500;
+      const rCC = hasInc ? incCC : pubCC(2, 5, 0);
+      if (noNodes) return json({ ...data, items: data.items.filter(i => !i.fixed), nodesOmitted: true }, 200, bKey, rTtl, rCC);
+      return json(data, 200, bKey, rTtl, rCC);
     }
     if (u.pathname === '/api/situation') {
       const sitCC = pubCC(15, 45, 5);
@@ -1373,12 +1390,16 @@ const SITREP_SERVER = http.createServer(async (req, res) => {
         bodyCache.delete('situation');
       }
       if (sendCached('situation', 12000, 200, sitCC)) return;
-      return json(await situation(), 200, 'situation', 12000, sitCC);
+      const sitData = await situation();
+      const hasSit = Boolean(sitData && sitData.total > 0);
+      return json(sitData, 200, 'situation', hasSit ? 12000 : 2500, hasSit ? sitCC : pubCC(2, 5, 0));
     }
     if (u.pathname === '/api/market') {
       const mktCC = pubCC(15, 45, 5);
       if (sendCached('market', 12000, 200, mktCC)) return;
-      return json(await market(), 200, 'market', 12000, mktCC);
+      const mktData = await market();
+      const hasMkt = Boolean(mktData && ((mktData.stocks && mktData.stocks.items && mktData.stocks.items.length) || (mktData.ihsg && mktData.ihsg.price)));
+      return json(mktData, 200, 'market', hasMkt ? 12000 : 2500, hasMkt ? mktCC : pubCC(2, 5, 0));
     }
     if (u.pathname === '/api/closes') {
       let list = (u.searchParams.get('list') || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -1455,12 +1476,16 @@ const SITREP_SERVER = http.createServer(async (req, res) => {
     if (u.pathname === '/api/cams') {
       const cc = pubCC(60, 120, 15);
       if (sendCached('cams', 30000, 200, cc)) return;
-      return json(await alive(), 200, 'cams', 30000, cc);
+      const camsData = await alive();
+      const hasCams = Boolean(camsData && Array.isArray(camsData.alive) && camsData.alive.some(Boolean));
+      return json(camsData, 200, 'cams', hasCams ? 30000 : 3000, hasCams ? cc : pubCC(2, 5, 0));
     }
     if (u.pathname === '/api/cctv') {
       const cc = pubCC(60, 120, 15);
       if (sendCached('cctv', 30000, 200, cc)) return;
-      return json(await cctvCatalog(), 200, 'cctv', 30000, cc);
+      const catData = await cctvCatalog();
+      const catCold = Boolean(catData && (catData.warming || catData.probing || !(catData.cams && catData.cams.length)));
+      return json(catData, 200, 'cctv', catCold ? 3000 : 30000, catCold ? pubCC(2, 5, 0) : cc);
     }
     if (u.pathname === '/api/tma' || u.pathname === '/api/pintu-air') {
       const cc = pubCC(60, 180, 20);
@@ -1704,7 +1729,10 @@ async function warmNewsSnapshots() {
   await yieldTick();
   if (newsData) prewarmJson('newsresp:v' + PIPELINE_VERSION, newsData, { stableAt: true });
   await yieldTick();
-  if (incData) prewarmJson('incidents:all', incData);
+  if (incData) {
+    prewarmJson('incidents:all', incData);
+    prewarmJson('incidents:nonodes', { ...incData, items: (incData.items || []).filter(x => !x.fixed) });
+  }
   await yieldTick();
   if (sitData) prewarmJson('situation', sitData);
   if (brData) prewarmJson('breaking', brData);
@@ -1728,30 +1756,57 @@ if (require.main === module) {
     const modeLbl = AUTH.userMode ? ' [session-auth]' : (AUTH.publicMode ? ' [public-osint]' : ' [local-token]');
     const hostLbl = BIND_HOST === '0.0.0.0' ? 'localhost' : BIND_HOST;
     console.log('SITREP jalan di http://' + hostLbl + ':' + PORT + modeLbl + (xHas() ? ' (X pool: ' + xPool.size() + ' akun)' : '  (X: cookie belum diisi)'));
+    const seededFeeds = seedFromDiskHistory();
     const diskIntelBoot = Promise.allSettled([newsTopicHeat(), adhocRefresh()]);
-    SEC.runIsolated('threadsWarm', async () => {
-      await diskIntelBoot;
-      const r = await threads();
-      if (r) prewarmJson('threads', socialResponse(r, tHist, SOC.socKeepTh), { stableAt: true });
-      console.log('Threads warm: ' + r.posts.length + ' post');
-    });
-    SEC.runIsolated('newsWarm', async () => {
-      const p = runNewsCollectOnce();
-      const res = p ? await p : null;
-      if (!res) return;
-      const { rs, incData, sitData } = res;
-      console.log('News warm: ' + rs.filter(s => s.ok).length + '/' + rs.length + ' feed' +
-        (incData ? ' · peta ' + incData.items.length + ' titik' : '') +
-        (sitData ? ' · situasi ' + sitData.total : ''));
-    });
-    SEC.runIsolated('xpostsWarm', async () => {
-      await diskIntelBoot;
-      const r = await xposts();
-      if (r) prewarmJson('x', socialResponse(r, xHist, SOC.socKeepX), { stableAt: true });
-      console.log('X warm: ' + r.posts.length + ' post' + (r.err ? ' | err: ' + String(r.err).slice(0, 160) : ''));
-    });
-    SEC.runIsolated('disasterWarm', async () => { const r = await disaster(); if (r) prewarmJson('disaster', r); });
-    SEC.runIsolated('marketWarm', async () => { const r = await market(); if (r) prewarmJson('market', r); });
+    if (seededFeeds > 0) {
+      SEC.runIsolated('newsDiskPrewarm', async () => {
+        const [incData, sitData, brData, newsData] = await Promise.all([
+          incidents().catch(() => null),
+          situation().catch(() => null),
+          breaking().catch(() => null),
+          buildNewsPayload().catch(() => null),
+        ]);
+        if (newsData) prewarmJson('newsresp:v' + PIPELINE_VERSION, newsData, { stableAt: true });
+        if (incData) {
+          prewarmJson('incidents:all', incData);
+          prewarmJson('incidents:nonodes', { ...incData, items: (incData.items || []).filter(x => !x.fixed) });
+        }
+        if (sitData) prewarmJson('situation', sitData);
+        if (brData) prewarmJson('breaking', brData);
+      });
+    }
+    const warmDelay = seededFeeds > 0 ? 6200 : 100;
+    setTimeout(() => {
+      SEC.runIsolated('threadsWarm', async () => {
+        await diskIntelBoot;
+        const r = await threads();
+        if (r) prewarmJson('threads', socialResponse(r, tHist, SOC.socKeepTh), { stableAt: true });
+        console.log('Threads warm: ' + r.posts.length + ' post');
+      });
+      SEC.runIsolated('newsWarm', async () => {
+        const p = runNewsCollectOnce();
+        const res = p ? await p : null;
+        if (!res) return;
+        const { rs, incData, sitData } = res;
+        console.log('News warm: ' + rs.filter(s => s.ok).length + '/' + rs.length + ' feed' +
+          (incData ? ' · peta ' + incData.items.length + ' titik' : '') +
+          (sitData ? ' · situasi ' + sitData.total : ''));
+      });
+      SEC.runIsolated('xpostsWarm', async () => {
+        await diskIntelBoot;
+        const r = await xposts();
+        if (r) prewarmJson('x', socialResponse(r, xHist, SOC.socKeepX), { stableAt: true });
+        console.log('X warm: ' + r.posts.length + ' post' + (r.err ? ' | err: ' + String(r.err).slice(0, 160) : ''));
+      });
+      SEC.runIsolated('disasterWarm', async () => { const r = await disaster(); if (r) prewarmJson('disaster', r); });
+      SEC.runIsolated('marketWarm', async () => { const r = await market(); if (r) prewarmJson('market', r); });
+      SEC.runIsolated('cctvCatalogWarm', async () => {
+        const cat = await cctvCatalog().catch(() => null);
+        if (cat && !cat.warming) prewarmJson('cctv', cat);
+        const al = await alive().catch(() => null);
+        if (al && Array.isArray(al.alive) && al.alive.some(Boolean)) prewarmJson('cams', al);
+      });
+    }, warmDelay).unref();
 
     setInterval(() => SEC.runIsolated('newsCollect', () => runNewsCollectOnce()), 50000).unref();
     setInterval(() => SEC.runIsolated('marketCollect', async () => { const r = await market(); if (r) prewarmJson('market', r); }), 45000).unref();
@@ -1761,7 +1816,7 @@ if (require.main === module) {
       if (tr.status === 'fulfilled' && tr.value) prewarmJson('threads', socialResponse(tr.value, tHist, SOC.socKeepTh), { stableAt: true });
     }), 240000).unref();
     setInterval(() => SEC.runIsolated('disasterCollect', async () => { const r = await disaster(); if (r) prewarmJson('disaster', r); }), 120000).unref();
-    setTimeout(() => SEC.runIsolated('warmCctvInit', () => warmCctv()), 20000).unref();
+    setTimeout(() => SEC.runIsolated('warmCctvInit', () => warmCctv()), seededFeeds > 0 ? 8000 : 1500).unref();
     setInterval(() => SEC.runIsolated('warmCctvTick', () => warmCctv()), 1800000).unref();
   });
 }
@@ -1778,6 +1833,7 @@ module.exports = {
   situation,
   mergeNewsHist,
   loadNewsHist,
+  seedFromDiskHistory,
   newsHistByFeed,
   incidentHistByEid,
   loadIncidentHist,
@@ -1842,4 +1898,5 @@ module.exports = {
   ttTileCache,
   knownNewsUrls,
   knownVhsUrls,
+  cctvCatalog,
 };

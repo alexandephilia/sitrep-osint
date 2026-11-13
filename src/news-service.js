@@ -344,6 +344,34 @@ function createNewsService({
   }
   loadNewsHist();
 
+  function seedFromDiskHistory() {
+    let seeded = 0;
+    const now = Date.now();
+    for (const [id] of NEWS) {
+      if (cache.has('n:' + id)) continue;
+      const hm = newsHistByFeed.get(id);
+      if (!hm || !hm.size) continue;
+      const items = [...hm.values()].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, NEWS_FEED_CAP);
+      if (!items.length) continue;
+      cache.set('n:' + id, { at: now - 49000, v: { id, ok: true, stale: false, items, at: now } });
+      feedSigMap.set(id, feedSig(items));
+      seeded++;
+    }
+    if (seeded > 0) {
+      for (const [id] of NEWS) {
+        if (!cache.has('n:' + id)) {
+          cache.set('n:' + id, { at: now - 49000, v: { id, ok: false, stale: true, items: [], at: now } });
+        }
+      }
+      NEWS_REV++;
+      newsHeatRev++;
+      assessedRev = -1;
+      assessedCacheMap = null;
+      assessedInflight = null;
+    }
+    return seeded;
+  }
+
   function mergeNewsHist(id, liveItems, now, opts = {}) {
     let m = newsHistByFeed.get(id);
     if (!m) { m = new Map(); newsHistByFeed.set(id, m); }
@@ -702,7 +730,7 @@ function createNewsService({
           const fr = foreignOf(it.title, a);
           const pl = cat ? placeOf(it.title) : null;
           rows[i] = { a, cat, fr, pl };
-          if (++batch >= 250) { batch = 0; await yieldTick(); }
+          if (++batch >= 25) { batch = 0; await yieldTick(); }
         }
         bySource.set(s.id, rows);
       }
@@ -739,11 +767,12 @@ function createNewsService({
   const breaking = () => memo('breaking', 25000, async () => {
     const rawSrcs = await news(), now = Date.now(), srcs = hydrateFailedSources(rawSrcs, now);
     const seen = new Set(), items = [], assessed = await assessedNewsFor(srcs);
-    let matched = 0;
+    let matched = 0, brBatch = 0;
     for (const s of srcs) {
       if (!s.ok && !s._fromHist) continue;
       const rows = assessed.get(s.id) || [];
       for (let idx = 0; idx < s.items.length; idx++) {
+        if (++brBatch >= 40) { brBatch = 0; await yieldTick(); }
         const it = s.items[idx], ev = rows[idx];
         const a = ev.a;
         const cat = ev.cat;
@@ -807,10 +836,12 @@ function createNewsService({
   const incidents = () => memo('incidents', 55000, async () => {
     const rawSrcs = await news(), now = Date.now(), srcs = hydrateFailedSources(rawSrcs, now);
     const out = [], seen = new Set(), assessed = await assessedNewsFor(srcs);
+    let incBatch = 0;
     for (const s of srcs) {
       if (!s.ok && !s._fromHist) continue;
       const rows = assessed.get(s.id) || [];
       for (let idx = 0; idx < s.items.length; idx++) {
+        if (++incBatch >= 40) { incBatch = 0; await yieldTick(); }
         const it = s.items[idx], ev = rows[idx];
         const a = ev.a;
         const cat = ev.cat;
@@ -862,6 +893,7 @@ function createNewsService({
       if (!prevByEid.has(eid) && now - p.ts <= GEO_WINDOW) prevByEid.set(eid, p);
     }
     const prevPins = [...prevByEid.values()];
+    await yieldTick();
     const merged = EVM.mergeEvents(out, prevPins, {
       normPlace: s => GEO.norm(s),
       retainPrevMs: GEO_WINDOW,
@@ -869,6 +901,7 @@ function createNewsService({
       filterPrev: p => !isBannedNewsItem(p) && plotOk(p.title, p.kind),
       onCarry: recalcPinWeight,
     });
+    await yieldTick();
     merged.sort((a, b) => (b.ts || 0) - (a.ts || 0));
     const active = merged.slice(0, INCIDENT_API_CAP);
 
@@ -951,11 +984,12 @@ function createNewsService({
     const items = [], seen = new Set(), assessed = await assessedNewsFor(srcs);
     const stats = {}; for (const c of CATS) stats[c.id] = 0;
     const regions = new Map();
-    let foreignN = 0;
+    let foreignN = 0, sitBatch = 0;
     for (const s of srcs) {
       if (!s.ok && !s._fromHist) continue;
       const rows = assessed.get(s.id) || [];
       for (let idx = 0; idx < s.items.length; idx++) {
+        if (++sitBatch >= 40) { sitBatch = 0; await yieldTick(); }
         const it = s.items[idx], ev = rows[idx];
         const a = ev.a;
         const cat = ev.cat;
@@ -976,7 +1010,9 @@ function createNewsService({
         if (!fr) stats[cat]++;
       }
     }
+    let incSitBatch = 0;
     for (const p of (inc && inc.items) || []) {
+      if (++incSitBatch >= 40) { incSitBatch = 0; await yieldTick(); }
       if (!p || p.fixed || !p.title || !p.kind) continue;
       const age = p.ts ? Math.max(0, now - p.ts) : 12 * 3600e3;
       if (!Number.isFinite(p.ts) || p.ts <= 0 || age > GEO_WINDOW) continue;
@@ -1114,6 +1150,7 @@ function createNewsService({
     parseFeed,
     feedSig,
     loadNewsHist,
+    seedFromDiskHistory,
     mergeNewsHist,
     newsHistByFeed,
     saveNewsHist,

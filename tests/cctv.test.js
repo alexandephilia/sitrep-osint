@@ -636,3 +636,88 @@ test('adaptive grid priority: camTier, camOrderValue, health-aware pickLiveKeys,
   assert.ok(cctvSrc.includes('function probeOfflineCell(cell)') && cctvSrc.includes("camGrid.matches(':hover')"), 'must validate offline revival and defer grid reorder while hovering');
   assert.ok(!cctvSrc.includes("district === 'Semua' && aliveMap"), 'aliveMap offline filter must apply across all city tabs when offline toggle is off');
 });
+
+test('progressive cctv catalog cold start, memoization, disk persistence, and tab lifecycle guards', async () => {
+  const os = require('os');
+  const { createCctvCatalog } = require('../src/cctv-catalog');
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sitrep-cctv-cat-'));
+  try {
+    const cache = new Map();
+    const bodyCache = new Map();
+    const memo = (key, ttl, fn, okFn) => {
+      const hit = cache.get(key);
+      if (hit && Date.now() - hit.at < ttl) return Promise.resolve(hit.v);
+      return Promise.resolve().then(fn).then(v => {
+        if (!okFn || okFn(v)) cache.set(key, { at: Date.now(), v });
+        return v;
+      });
+    };
+    let hits = { bpjt: 0, bekasi: 0, jogja: 0 };
+    const mkDeps = (emptyUpstream) => ({
+      fs,
+      path,
+      HIST_DIR: tmpDir,
+      persistHist: true,
+      UA: 'sitrep-test/1.0',
+      CFG: {},
+      GW: { reportedDead: () => false, detectFfmpeg: async () => false },
+      cache,
+      bodyCache,
+      memo,
+      mediaGet: async (u) => {
+        if (emptyUpstream || /molecool\.id/i.test(u)) return { r: { ok: true, status: 200, url: u } };
+        return { r: { ok: true, status: 200, url: u } };
+      },
+      mediaGetRaw: async () => ({ r: { ok: false, status: 503 } }),
+      mediaText: async (r) => {
+        if (emptyUpstream) return '';
+        const u = r.url || '';
+        if (/bpjt\.pu\.go\.id/i.test(u)) {
+          hits.bpjt++;
+          return 'const allStreams = {"ruas":[{"streamhls":"https://bpjt.pu.go.id/cam1/index.m3u8","status":"online","lat":-6.21,"lon":106.85,"nama_km":"KM 10","nama_ruas":"Jagorawi"}]};\n';
+        }
+        if (/bekasikota\.go\.id/i.test(u)) {
+          hits.bekasi++;
+          return JSON.stringify([{ name: 'Simpang_Kayuringin', path: 'kayuringin/index.m3u8' }]);
+        }
+        if (/jogjakota\.go\.id/i.test(u)) {
+          hits.jogja++;
+          return JSON.stringify([{ cctv_title: 'Malioboro', cctv_link: 'https://cctv.jogjakota.go.id/malio/index.m3u8', cctv_latitude: -7.79, cctv_longitude: 110.36 }]);
+        }
+        return '';
+      },
+      mediaBody: async () => Buffer.alloc(0),
+      rdAssertPublic: async () => {},
+      cctvFirecrawl: async () => '',
+      camList: () => [],
+      cctvKnown: new Set(),
+      catalogHostAdd: () => {},
+      isDraining: () => false,
+    });
+
+    const cat1 = createCctvCatalog(mkDeps(false));
+    const r1 = await cat1.cctvCatalog();
+    assert.equal(r1.ok, true);
+    assert.ok(r1.cams.some(c => c.s.includes('bpjt.pu.go.id')), 'cold start must include unprobed BPJT streams when <24 alive');
+    assert.ok(r1.cams.some(c => c.s.includes('jogjakota.go.id')), 'cold start must include unprobed Jogja streams when <24 alive');
+    assert.ok(r1.cams.some(c => c.s.includes('bekasikota.go.id')), 'cold start must include Bekasi streams');
+    const prevHits = { ...hits };
+    await cat1.cctvCatalog();
+    assert.equal(hits.bekasi, prevHits.bekasi, 'cctvBekasi must be memoized across catalog builds');
+    assert.equal(hits.jogja, prevHits.jogja, 'cctvJogja must be memoized across catalog builds');
+    cat1.saveCctvHist(true);
+    assert.ok(fs.existsSync(path.join(tmpDir, 'cctv-history.json')), 'saveCctvHist(true) must persist cctv-history.json');
+
+    cache.clear();
+    const cat2 = createCctvCatalog(mkDeps(true));
+    const r2 = await cat2.cctvCatalog();
+    assert.equal(r2.cams.length, r1.cams.length, 'second boot with failing upstream must fall back to persisted cctv-history.json');
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+
+  const cctvSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'scripts', '07-cctv.js'), 'utf8');
+  assert.ok(cctvSrc.includes("const stillWarm = Boolean(d && (d.warming || !list.length || (d.probing && list.length < 24)));"), 'pullCctv must treat probing with >=24 cameras as hydrated');
+  assert.ok(cctvSrc.includes('clearTimeout(tvLoadT); tvLoadT = null;'), 'visibilitychange hidden handler must clear active TV load timer');
+  assert.ok(cctvSrc.includes("if ((tvSt === 'load' && (!tvLoadT || Date.now() - tvLoadAt > 12000)) || (tvSt === 'fail' && !tvRetryT)) tvPlay();"), 'kickCams must avoid cancelling healthy in-flight TV loads and recover stale fail states');
+});

@@ -410,9 +410,12 @@ async function thLazy(q){
     renderThreads();
   } catch (e) { thqTried.delete(q); }
 }
+let tRetryT = 0, tColdTries = 0;
 async function pullThreads(){
   if (tBusy) return;
   if (API == null) { renderThreads(); return; }
+  clearTimeout(tRetryT);
+  tRetryT = 0;
   tBusy = true;
   $('#tmeta').textContent = 'menarik…';
   try {
@@ -422,10 +425,14 @@ async function pullThreads(){
     tNewestTs = d && Number.isFinite(d.newestTs) ? d.newestTs : 0;
     const acc = acceptSocialSnapshot('th', d);
     tCold = !tPosts.length && !!d.warming;
-    if (tPosts.length) tEmptyStreak = 0; else if (!tCold) tEmptyStreak++;
+    if (tPosts.length) { tEmptyStreak = 0; tColdTries = 0; }
+    else if (!tCold) tEmptyStreak++;
     if (acc || d.queries) socApply(d);
     renderAllQchips();
     renderThreads();
+    if ((tCold || (!tPosts.length && d.warming)) && ++tColdTries <= 12) {
+      tRetryT = setTimeout(() => { tRetryT = 0; if (!document.hidden) pullThreads(); }, 4500);
+    }
   } catch (e) {
     tSignalCurrent = false; updateDistress();
     tErrStreak++; tCold = false;
@@ -433,9 +440,13 @@ async function pullThreads(){
     if (!tPosts.length) {
       renderThreads();
       $('#tmeta').textContent = tErrStreak >= 3 ? 'gagal' : 'mencoba lagi…';
+      if (tErrStreak < 4) {
+        tRetryT = setTimeout(() => { tRetryT = 0; if (!document.hidden) pullThreads(); }, 4500);
+      }
     }
   } finally { tBusy = false; }
 }
+schedulePoll(() => pullThreads(), 90000, { dedupGlobalMs: 20000 });
 function setSocTab(t){
   socTab = t;
   $$('.soc-tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false'));

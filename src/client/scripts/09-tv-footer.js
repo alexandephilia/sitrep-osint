@@ -392,6 +392,7 @@ async function getJson(url, ms, retries = 1){
   }
 }
 async function detectApi(){
+  if (API != null) return true;
   const rawQp = new URLSearchParams(location.search).get('api');
   const local = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(location.hostname);
   let qp = null;
@@ -402,9 +403,15 @@ async function detectApi(){
     } catch (e) {}
   }
   const c = [qp, '', local ? 'http://localhost:8787' : null].filter(x => x != null);
-  try {
-    API = await Promise.any(c.map(async b => { const d = await getJson(b + '/api/ping', 4000); if (d && d.ok) return b; throw 0; }));
-  } catch (e) {}
+  const waits = [0, 900, 2000];
+  for (let i = 0; i < waits.length; i++) {
+    if (waits[i]) await new Promise(r => setTimeout(r, waits[i]));
+    try {
+      API = await Promise.any(c.map(async b => { const d = await getJson(b + '/api/ping', 5000); if (d && d.ok) return b; throw 0; }));
+      if (API != null) return true;
+    } catch (e) {}
+  }
+  return API != null;
 }
 
 function updateFoot(){
@@ -441,11 +448,15 @@ async function pullMedia(fresh){
       }
       if (Array.isArray(d.sources)) {
         SRC_IDS = d.sources.map(x => x.id);
+        let hasItems = false;
         d.sources.forEach(x => {
-          if (x.ok) { lastGood.set(x.id, { items:x.items, via:'langsung', at:Date.now() }); srcState.set(x.id, { ok:true, via:'langsung', stale:!!x.stale }); }
-          else srcState.set(x.id, { ok:false });
+          if (x.ok) {
+            if (Array.isArray(x.items) && x.items.length) hasItems = true;
+            lastGood.set(x.id, { items:x.items, via:'langsung', at:Date.now() });
+            srcState.set(x.id, { ok:true, via:'langsung', stale:!!x.stale });
+          } else srcState.set(x.id, { ok:false });
         });
-        mediaLoaded = true;
+        if (hasItems) mediaLoaded = true;
         markFresh();
         renderNews();
         noteWire(d);
@@ -464,14 +475,16 @@ async function pullMedia(fresh){
     }
   };
   await Promise.all(Array.from({ length: Math.min(5, RSS_SOURCES.length) }, worker));
+  let hasRssItems = false;
   RSS_SOURCES.forEach((s, i) => {
     const x = rs[i];
     if (x && x.ok) {
+      if (Array.isArray(x.r.items) && x.r.items.length) hasRssItems = true;
       lastGood.set(s.id, { items:x.r.items, via:x.r.via, at:Date.now() });
       srcState.set(s.id, { ok:true, via:x.r.via });
     } else srcState.set(s.id, { ok:false });
   });
-  mediaLoaded = true;
+  if (hasRssItems) mediaLoaded = true;
   markFresh();
   renderNews();
 }

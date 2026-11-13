@@ -1,6 +1,8 @@
-let xBusy = false;
+let xBusy = false, xRetryT = 0, xColdTries = 0;
 async function pullX(){
   if (xBusy) return;
+  clearTimeout(xRetryT);
+  xRetryT = 0;
   if (API == null) {
     $('#xlist').innerHTML = '<div class="empty">Butuh server untuk feed X.</div>';
     $('#xmeta').textContent = 'offline';
@@ -16,7 +18,8 @@ async function pullX(){
       const acc = acceptSocialSnapshot('x', d);
 
       xCold = !xPosts.length && !!d.warming;
-      if (xPosts.length) xEmptyStreak = 0; else if (!xCold) xEmptyStreak++;
+      if (xPosts.length) { xEmptyStreak = 0; xColdTries = 0; }
+      else if (!xCold) xEmptyStreak++;
       if (acc) {
         socApply(d);
         if (xShown > xPosts.length) xShown = Math.max(30, xPosts.length);
@@ -24,7 +27,11 @@ async function pullX(){
         renderX();
         $('#xmeta').textContent = xPosts.length + ' post' + (d.err ? ' · sebagian gagal' : '');
       } else renderX();
+      if ((xCold || (!xPosts.length && d.warming)) && !xRetryT && ++xColdTries <= 12) {
+        xRetryT = setTimeout(() => { xRetryT = 0; if (!document.hidden) pullX(); }, 4500);
+      }
     } else if (xPosts.length) {
+      xColdTries = 0;
       if (d.warming) { xCold = false; xErrStreak = 0; }
       else xErrStreak++;
       if (d.queries) { socApply(d); renderAllQchips(); }
@@ -36,6 +43,9 @@ async function pullX(){
       if (d.queries) { socApply(d); renderAllQchips(); }
       renderX();
       $('#xmeta').textContent = xCold ? 'kolektor berjalan…' : (xErrStreak >= 3 ? 'gagal' : 'mencoba lagi…');
+      if ((xCold || xErrStreak < 4) && !xRetryT && ++xColdTries <= 12) {
+        xRetryT = setTimeout(() => { xRetryT = 0; if (!document.hidden) pullX(); }, 4500);
+      }
     }
   } catch (e) {
     xSignalCurrent = false; updateDistress();
@@ -44,16 +54,49 @@ async function pullX(){
     if (!xPosts.length) {
       renderX();
       $('#xmeta').textContent = xErrStreak >= 3 ? 'gagal' : 'mencoba lagi…';
+      if (xErrStreak < 4 && !xRetryT && ++xColdTries <= 12) {
+        xRetryT = setTimeout(() => { xRetryT = 0; if (!document.hidden) pullX(); }, 4500);
+      }
     }
   } finally { xBusy = false; }
 }
+schedulePoll(() => pullX(), 75000, { dedupGlobalMs: 20000 });
 
-let busy = false, bgPending = 0, lastSyncAt = 0, lastRefreshDone = 0;
+let busy = false, bgPending = 0, lastSyncAt = 0, lastRefreshDone = 0, coldTimer = 0, coldTries = 0;
 const paintSync = () => {
   const el = $('#lastsync');
   if (el) el.textContent = 'sync ' + (lastSyncAt ? wibTime(lastSyncAt) : '—') + ' WIB' + (bgPending ? ' · ' + bgPending + ' latar' : '');
 };
 const trackBg = p => { bgPending++; const d = () => { bgPending--; paintSync(); }; Promise.resolve(p).then(d, d); };
+function needsColdRecovery(){
+  return API == null || !mediaLoaded || !newsList.length || !SIT || !SIT.total || !geoIncOk || !STK || !pullCctv.hydrated || pullCctv.warming || xCold || (!xPosts.length && xErrStreak < 4) || tCold || (!tPosts.length && tErrStreak < 4);
+}
+function scheduleColdRecovery(){
+  if (!needsColdRecovery()) {
+    coldTries = 0;
+    clearTimeout(coldTimer);
+    coldTimer = 0;
+    return;
+  }
+  if (coldTimer || coldTries >= 12 || document.hidden) return;
+  coldTries++;
+  coldTimer = setTimeout(async () => {
+    coldTimer = 0;
+    if (document.hidden) return;
+    if (API == null) await detectApi();
+    if (API == null) { scheduleColdRecovery(); return; }
+    const jobs = [];
+    if (!mediaLoaded || !newsList.length) jobs.push(pullMedia(false));
+    if (!SIT || !SIT.total) jobs.push(pullSituation(false));
+    if (!STK) jobs.push(pullStocks());
+    if (!geoIncOk) jobs.push(pullIncidents(false));
+    if ((!pullCctv.hydrated || pullCctv.warming) && !pullCctv.retryT) jobs.push(pullCctv());
+    if ((xCold || (!xPosts.length && xErrStreak < 4)) && !xRetryT && !xBusy) jobs.push(pullX());
+    if ((tCold || (!tPosts.length && tErrStreak < 4)) && !tRetryT && !tBusy) jobs.push(pullThreads());
+    if (jobs.length) await Promise.allSettled(jobs);
+    scheduleColdRecovery();
+  }, 4500);
+}
 async function refreshAll(manual){
   if (busy) return;
   busy = true;
@@ -62,17 +105,19 @@ async function refreshAll(manual){
   if (syncBtn) syncBtn.dataset.state = 'sync';
   $('#countdown').textContent = 'Tarik…';
   try {
-    await Promise.all([pullMedia(manual), pullSituation(manual), pullStocks()]);
+    if (API == null) await detectApi();
     trackBg(pullIncidents(manual));
-    if (manual) trackBg(pullDisaster());
+    if (manual || !(DIS_PULSE && DIS_PULSE.length)) trackBg(pullDisaster());
     trackBg(pullAlive());
     trackBg(pullCctv());
     trackBg(pullX());
     trackBg(pullThreads());
+    if (manual || !breakAt) trackBg(pullBreaking());
     if (manual) {
       P.forEach((p, c) => { if (p.dead) { p.dead = false; p.tries = 0; clearTimeout(p.retry); badge(c, 'wait', 'Antre'); } });
       pump();
     }
+    await Promise.all([pullMedia(manual), pullSituation(manual), pullStocks()]);
     lastSyncAt = Date.now(); paintSync();
   } finally {
     busy = false;
@@ -80,23 +125,32 @@ async function refreshAll(manual){
     remain = CYCLE; paintCountdown();
     lastRefreshDone = Date.now();
     rdPrefetchVisible();
+    scheduleColdRecovery();
   }
   if (manual) {
     $('#countdown').textContent = 'OK';
     setTimeout(paintCountdown, 1200);
-    pullBreaking();
   }
 }
 $('#btn-refresh').addEventListener('click', () => refreshAll(true));
 
 let visRefreshTimer = 0;
-document.addEventListener('visibilitychange', () => {
+async function onTabWake(fromOnline){
   if (document.hidden) return;
   clearTimeout(visRefreshTimer);
+  visRefreshTimer = 0;
   const now = Date.now();
-  if (lastRefreshDone && now - lastRefreshDone > 30000) {
-    visRefreshTimer = setTimeout(() => { if (!document.hidden && !busy) refreshAll(false); }, 750);
-  } else if (lastRefreshDone) {
+  try { wakeGlobe(); drawGlobe(performance.now()); } catch (e) {}
+  if (typeof globeReady !== 'undefined' && !globeReady && typeof fetchGlobe === 'function') {
+    try { fetchGlobe().catch(() => {}); } catch (e) {}
+  }
+  if (STK) {
+    try { renderChips(); paintHeroes(); } catch (e) {}
+  }
+  if (typeof descHasWork === 'function' && descHasWork()) {
+    try { queueDescEnrich(); } catch (e) {}
+  }
+  if (lastRefreshDone) {
     const elapsed = Math.floor((now - lastRefreshDone) / 1000);
     remain = Math.max(0, CYCLE - elapsed);
     paintCountdown();
@@ -108,7 +162,47 @@ document.addEventListener('visibilitychange', () => {
     breakRemain = Math.max(0, BREAK_CYCLE - bElapsed);
     paintBreak();
   }
+  const stale = !lastRefreshDone || (lastRefreshDone && now - lastRefreshDone > 30000);
+  if (API == null || needsColdRecovery() || fromOnline || stale) {
+    if (API == null) await detectApi();
+    if (fromOnline || stale) {
+      coldTries = 0;
+      xColdTries = 0;
+      tColdTries = 0;
+      pullCctv.tries = 0;
+    }
+    visRefreshTimer = setTimeout(() => {
+      visRefreshTimer = 0;
+      if (!document.hidden && !busy) {
+        if (stale || fromOnline || !lastRefreshDone) refreshAll(false);
+        else scheduleColdRecovery();
+      }
+    }, fromOnline ? 250 : 650);
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    clearTimeout(visRefreshTimer);
+    visRefreshTimer = 0;
+    clearTimeout(coldTimer);
+    coldTimer = 0;
+    clearTimeout(xRetryT);
+    xRetryT = 0;
+    clearTimeout(tRetryT);
+    tRetryT = 0;
+    clearTimeout(pullCctv.retryT);
+    pullCctv.retryT = 0;
+    return;
+  }
+  coldTries = 0;
+  xColdTries = 0;
+  tColdTries = 0;
+  pullCctv.tries = 0;
+  onTabWake(false);
 });
+window.addEventListener('focus', () => onTabWake(false));
+window.addEventListener('pageshow', e => { coldTries = 0; xColdTries = 0; tColdTries = 0; pullCctv.tries = 0; onTabWake(!!(e && e.persisted)); });
+window.addEventListener('online', () => { coldTries = 0; xColdTries = 0; tColdTries = 0; pullCctv.tries = 0; onTabWake(true); });
 
 let rdOn = false, rdCurrent = '', rdTrigger = null, rdDrag = null, rdStack = [], rdCurrentView = null, rdHero = '';
 const rdCache = new Map();

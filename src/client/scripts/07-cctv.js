@@ -672,14 +672,15 @@ function refreshCamVis(){
 }
 
 const kickCams = () => setTimeout(() => {
+  if (document.hidden) return;
   if (camsRenderQueued) renderCams();
   const vr = camVisRect();
   P.forEach((p, c) => {
     p.vis = isCellVisible(c, vr);
     try { vio.unobserve(c); vio.observe(c); } catch (e) {}
     if (!p.vis) return;
+    if (p.stopped) return;
     const v = vid(c);
-    p.stopped = false;
     if (!p.loaded && !p.kickDone) { p.t0 = Date.now(); p.kickDone = true; }
     if (p.loading && Date.now() - p.t0 > 45000) { kill(c); return; }
     if (p.h && p.h !== 'native') {
@@ -707,8 +708,9 @@ const kickCams = () => setTimeout(() => {
         try { tvv.currentTime = tvHls.liveSyncPosition; } catch (e) {}
       }
     }
-    if (tvv && tvv.paused) tvv.play().catch(() => {});
-    else if ($('#tv-body').dataset.state === 'load' && Date.now() - tvLoadAt > 20000) tvPlay();
+    const tvSt = $('#tv-body').dataset.state;
+    if ((tvSt === 'load' && (!tvLoadT || Date.now() - tvLoadAt > 12000)) || (tvSt === 'fail' && !tvRetryT)) tvPlay();
+    else if (tvv && tvv.paused) tvv.play().catch(() => {});
   }
   pump();
 }, 400);
@@ -716,10 +718,12 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     P.forEach((p, c) => {
       p.kickDone = false;
+      clearSnapTimer(p);
       if (p.loaded || p.playing) stopCell(c);
-      else if (p.loading && p.h && p.h !== 'native') { try { p.h.stopLoad(); } catch (e) {} }
+      else if (p.loading) dropLoadingCell(c);
     });
     if (tvOn) {
+      clearTimeout(tvLoadT); tvLoadT = null;
       if (tvHls) { try { tvHls.stopLoad(); } catch (e) {} }
       const tvv = $('#tv-video');
       if (tvv && !tvv.paused) { tvv._visPaused = true; try { tvv.pause(); } catch (e) {} }
@@ -1265,6 +1269,7 @@ async function pullAlive(){
   if (API == null) return;
   try {
     const a = await getJson(API + '/api/cams', 60000);
+    if (!a || !Array.isArray(a.alive)) return;
     const s = JSON.stringify(a.alive);
     if (s !== pullAlive.last) { pullAlive.last = s; aliveMap = a.alive; renderCams(); }
     else aliveMap = a.alive;
@@ -1272,25 +1277,46 @@ async function pullAlive(){
 }
 async function pullCctv(){
   if (API == null) return;
+  clearTimeout(pullCctv.retryT);
+  pullCctv.retryT = 0;
   try {
     const d = await getJson(API + '/api/cctv', 30000);
-    if (!d || !Array.isArray(d.cams) || !d.cams.length) return;
-    if (typeof d.snap === 'boolean') camSnapOK = d.snap;
-    pullCctv.have = pullCctv.have || new Set(CAMS.map(c => c.s));
-    pullCctv.keys = pullCctv.keys || new Set(CAMS.map(c => CctvCore.streamKey(c.s)));
-    pullCctv.byS = pullCctv.byS || new Map(CAMS.map(c => [c.s, c]));
-    let revived = false;
-    for (const c of d.cams) {
-      const ex = pullCctv.byS.get(c.s);
-      if (ex && ex._hide) { ex._hide = false; ex.fails = 0; revived = true; }
+    if (d && typeof d.snap === 'boolean') camSnapOK = d.snap;
+    const list = (d && Array.isArray(d.cams)) ? d.cams : [];
+    const stillWarm = Boolean(d && (d.warming || !list.length || (d.probing && list.length < 24)));
+    pullCctv.warming = stillWarm;
+    if (list.length) {
+      pullCctv.have = pullCctv.have || new Set(CAMS.map(c => c.s));
+      pullCctv.keys = pullCctv.keys || new Set(CAMS.map(c => CctvCore.streamKey(c.s)));
+      pullCctv.byS = pullCctv.byS || new Map(CAMS.map(c => [c.s, c]));
+      let revived = false;
+      for (const c of list) {
+        const ex = pullCctv.byS.get(c.s);
+        if (ex && ex._hide) { ex._hide = false; ex.fails = 0; revived = true; }
+      }
+      const add = list.filter(c => c && c.s && c.n && !pullCctv.have.has(c.s) && !pullCctv.keys.has(CctvCore.streamKey(c.s))).map(CctvCore.sanitizeFb);
+      if (add.length || revived) {
+        add.forEach(c => { c.c = cityLabel(c.c); pullCctv.have.add(c.s); pullCctv.keys.add(CctvCore.streamKey(c.s)); pullCctv.byS.set(c.s, c); });
+        if (add.length) CAMS.push(...add);
+        drawCityBar(); renderCams();
+      }
+      if (!stillWarm) {
+        pullCctv.hydrated = true;
+        pullCctv.tries = 0;
+      }
     }
-    const add = d.cams.filter(c => c && c.s && c.n && !pullCctv.have.has(c.s) && !pullCctv.keys.has(CctvCore.streamKey(c.s))).map(CctvCore.sanitizeFb);
-    if (!add.length && !revived) return;
-    add.forEach(c => { c.c = cityLabel(c.c); pullCctv.have.add(c.s); pullCctv.keys.add(CctvCore.streamKey(c.s)); pullCctv.byS.set(c.s, c); });
-    if (add.length) CAMS.push(...add);
-    drawCityBar(); renderCams();
-  } catch (e) {}
+    if (stillWarm && (pullCctv.tries = (pullCctv.tries || 0) + 1) <= 15) {
+      pullCctv.retryT = setTimeout(() => { pullCctv.retryT = 0; if (!document.hidden) pullCctv(); }, 4500);
+    }
+  } catch (e) {
+    pullCctv.warming = true;
+    if (!pullCctv.hydrated && (pullCctv.tries = (pullCctv.tries || 0) + 1) <= 15) {
+      pullCctv.retryT = setTimeout(() => { pullCctv.retryT = 0; if (!document.hidden) pullCctv(); }, 4500);
+    }
+  }
 }
+schedulePoll(() => pullCctv(), 90000);
+schedulePoll(() => pullAlive(), 120000);
 let offProbeCursor = 0;
 setInterval(() => {
   if (document.hidden) return;

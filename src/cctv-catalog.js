@@ -4,6 +4,10 @@ const CCTVCORE = require('../public/cctv-core');
 const { makeLane } = require('./cctv-gateway');
 
 function createCctvCatalog({
+  fs,
+  path,
+  HIST_DIR,
+  persistHist = false,
   UA,
   CFG,
   GW,
@@ -89,9 +93,108 @@ function createCctvCatalog({
     }
     throw new Error(lastErr || 'fetch gagal');
   }
+  const CCTV_HIST_FILE = (fs && path && HIST_DIR) ? path.join(HIST_DIR, 'cctv-history.json') : '';
+  let lastGoodCams = [];
+  let cctvHistDirty = false, cctvHistSaveAt = 0, cctvHistInflight = false;
+  const srcCams = { bpjt: [], bekasi: [], jogja: [], molecool: [] };
+  const srcDone = { bpjt: false, bekasi: false, jogja: false, molecool: false };
+  const srcInflight = { bpjt: null, bekasi: null, jogja: null, molecool: null };
+  const cctvProbe = { alive: new Set(), done: new Set(), running: false, last: 0 };
+  const hostCors = new Map();
+
+  function registerCamAllowlist(c) {
+    if (!c || !c.s) return;
+    try { catalogHostAdd(new URL(c.s).hostname); cctvKnown.add(c.s); } catch (e) {}
+    if (c.snap) { try { catalogHostAdd(new URL(c.snap).hostname); cctvKnown.add(c.snap); } catch (e) {} }
+    const fbs = Array.isArray(c.fb) ? c.fb : (c.fb ? [c.fb] : []);
+    for (const f of fbs) { try { catalogHostAdd(new URL(f).hostname); cctvKnown.add(f); } catch (e) {} }
+  }
+
+  function invalidateCctvRespCache() {
+    cache.delete('cctvcat');
+    if (bodyCache) bodyCache.delete('cctv');
+  }
+
+  function loadCctvHist() {
+    if (!CCTV_HIST_FILE || !fs) return;
+    try {
+      const j = JSON.parse(fs.readFileSync(CCTV_HIST_FILE, 'utf8'));
+      const age = Date.now() - (Number(j && j.at) || 0);
+      if (!j || !Array.isArray(j.cams) || age < 0 || age > 7 * 86400e3) return;
+      const loaded = [];
+      for (const c of j.cams) {
+        if (!c || typeof c.s !== 'string' || typeof c.n !== 'string' || !/^https?:\/\//i.test(c.s)) continue;
+        registerCamAllowlist(c);
+        loaded.push(c);
+      }
+      if (loaded.length) lastGoodCams = CCTVCORE.dedupe(loaded);
+      if (age <= 24 * 3600e3 && Array.isArray(j.alive)) {
+        for (const u of j.alive) if (typeof u === 'string' && u) cctvProbe.alive.add(u);
+      }
+      if (age <= 24 * 3600e3 && Array.isArray(j.done)) {
+        for (const u of j.done) if (typeof u === 'string' && u) cctvProbe.done.add(u);
+      }
+    } catch (e) {}
+  }
+
+  function saveCctvHist(force) {
+    if (!persistHist || !CCTV_HIST_FILE || !fs || !lastGoodCams.length) return;
+    if (!cctvHistDirty && !force) return;
+    const now = Date.now();
+    if (!force && (now - cctvHistSaveAt < 30000 || cctvHistInflight)) return;
+    cctvHistSaveAt = now;
+    cctvHistDirty = false;
+    const payload = JSON.stringify({
+      at: now,
+      cams: lastGoodCams,
+      alive: [...cctvProbe.alive],
+      done: [...cctvProbe.done],
+    });
+    if (force) {
+      try {
+        fs.mkdirSync(HIST_DIR, { recursive: true });
+        const tmp = CCTV_HIST_FILE + '.' + process.pid + '.tmp';
+        fs.writeFileSync(tmp, payload);
+        fs.renameSync(tmp, CCTV_HIST_FILE);
+      } catch (e) {}
+      return;
+    }
+    cctvHistInflight = true;
+    const tmp = CCTV_HIST_FILE + '.' + process.pid + '.' + Math.random().toString(36).slice(2, 7) + '.tmp';
+    fs.promises.mkdir(HIST_DIR, { recursive: true })
+      .then(() => fs.promises.writeFile(tmp, payload))
+      .then(() => fs.promises.rename(tmp, CCTV_HIST_FILE))
+      .catch(() => { cctvHistDirty = true; try { fs.unlinkSync(tmp); } catch {} })
+      .finally(() => { cctvHistInflight = false; });
+  }
+
+  loadCctvHist();
+
+  function refreshSource(key, memoFn) {
+    if (srcInflight[key]) return srcInflight[key];
+    const p = Promise.resolve().then(memoFn).then(list => {
+      srcDone[key] = true;
+      const clean = Array.isArray(list) ? list : [];
+      if (clean.length > 0 || !srcCams[key].length) {
+        const changed = clean.length !== srcCams[key].length;
+        srcCams[key] = clean;
+        for (const c of clean) registerCamAllowlist(c);
+        if (changed) invalidateCctvRespCache();
+      }
+      return srcCams[key];
+    }, () => {
+      srcDone[key] = true;
+      return srcCams[key];
+    }).finally(() => {
+      srcInflight[key] = null;
+    });
+    srcInflight[key] = p;
+    return p;
+  }
+
   async function cctvBpjtFetch() {
     let h = '';
-    try { h = await cctvFetch('https://bpjt.pu.go.id/cctv/', 30000); } catch (e) {}
+    try { h = await cctvFetch('https://bpjt.pu.go.id/cctv/', 12000); } catch (e) {}
     if (!h || !h.includes('allStreams')) h = await cctvFirecrawl('https://bpjt.pu.go.id/cctv/');
     if (!h || !h.includes('allStreams')) return [];
     const m = h.match(/const allStreams = (\{[\s\S]*?\});\s*\n/);
@@ -109,10 +212,10 @@ function createCctvCatalog({
     }
     return out;
   }
-  const cctvBpjt = () => memo('cctv:bpjt', 1800000, cctvBpjtFetch, v => v.length > 0);
-  async function cctvBekasi() {
+  const cctvBpjt = () => refreshSource('bpjt', () => memo('cctv:bpjt', 1800000, cctvBpjtFetch, v => v.length > 0));
+  async function cctvBekasiFetch() {
     let d = null;
-    try { d = JSON.parse(await cctvFetch('https://eofficev2.bekasikota.go.id/backupcctv/m3/list.json', 20000)); } catch (e) {}
+    try { d = JSON.parse(await cctvFetch('https://eofficev2.bekasikota.go.id/backupcctv/m3/list.json', 10000)); } catch (e) {}
     if (!Array.isArray(d)) return [];
     return d.filter(x => x && x.path).map(x => ({
       n: String(x.name || x.path).replace(/_/g, ' '),
@@ -120,9 +223,10 @@ function createCctvCatalog({
       e: '', la: null, lo: null, c: 'Kota Bekasi', src: 'pemda'
     }));
   }
-  async function cctvJogja() {
+  const cctvBekasi = () => refreshSource('bekasi', () => memo('cctv:bekasi', 1800000, cctvBekasiFetch, v => Array.isArray(v) && v.length > 0));
+  async function cctvJogjaFetch() {
     let d = null;
-    try { d = JSON.parse(await cctvFetch('https://cctv.jogjakota.go.id/home/getdata', 20000,
+    try { d = JSON.parse(await cctvFetch('https://cctv.jogjakota.go.id/home/getdata', 10000,
       { referer: 'https://cctv.jogjakota.go.id/', 'x-requested-with': 'XMLHttpRequest' })); } catch (e) {}
     if (!Array.isArray(d)) return [];
     return d.filter(x => x && x.cctv_link && /\.m3u8(\?|$)/i.test(x.cctv_link)).map(x => ({
@@ -134,12 +238,13 @@ function createCctvCatalog({
       c: 'Kota Yogyakarta', src: 'jogja'
     }));
   }
+  const cctvJogja = () => refreshSource('jogja', () => memo('cctv:jogja', 1800000, cctvJogjaFetch, v => Array.isArray(v) && v.length > 0));
   const MOLE_UA = { 'user-agent': UA, referer: 'https://molecool.id/' };
   const MOLE_SEEDS = ['3DIoRg7','4bsalqw','6Ty5BM3','6oxwbjQ','8JD739Y','AIpWgQ6','CDOd8lH','Ds39keN','FscOWio','GOQqdkB','Gj9Db3K','Jc0KvBZ','Og41dpx','PwQ1zRN','amhRiVY','fKJ9W4y','g7iu58b','lIXKVas','lKOitqX','lqAw39p','mtPwzYo','ucKlag3','wLeQ437'];
   const moleReg = new Map();
   const moleTok = new Map();
   const moleExp = t => { const m = /-(\d{10})-(\d{10})$/.exec(t || ''); return m ? Math.max(+m[1], +m[2]) * 1000 : 0; };
-  const molePage = async pagePath => { try { return await cctvFetch('https://molecool.id' + pagePath, 15000, MOLE_UA); } catch (e) { return ''; } };
+  const molePage = async pagePath => { try { return await cctvFetch('https://molecool.id' + pagePath, 8000, MOLE_UA); } catch (e) { return ''; } };
   const moleScan = html => {
     const out = [];
     for (const m of String(html).matchAll(/cctv\.molecool\.id\/([A-Za-z0-9._-]+)\/preview\.jpg\?token=([A-Za-z0-9._-]+)/g))
@@ -164,7 +269,7 @@ function createCctvCatalog({
     moleInflight.set(slug, p);
     return p;
   }
-  const cctvMolecool = () => memo('molecool', 2400000, async () => {
+  const cctvMolecool = () => refreshSource('molecool', () => memo('molecool', 2400000, async () => {
     const out = [], seen = new Set();
     const cityCase = s => String(s || '').trim().toLowerCase()
       .replace(/(^|\s)(\S)/g, (m, a, b) => a + b.toUpperCase()) || 'Jakarta';
@@ -173,8 +278,10 @@ function createCctvCatalog({
       seen.add(slug);
       moleReg.set(slug, { path: pagePath });
       moleTok.set(slug, { token, exp: moleExp(token) });
-      out.push({ n: name || slug, s: `https://cctv.molecool.id/${slug}/index.m3u8?token=${token}`,
-        e: 'https://molecool.id' + pagePath, la: null, lo: null, c: cityCase(city), src: 'molecool' });
+      const cam = { n: name || slug, s: `https://cctv.molecool.id/${slug}/index.m3u8?token=${token}`,
+        e: 'https://molecool.id' + pagePath, la: null, lo: null, c: cityCase(city), src: 'molecool' };
+      registerCamAllowlist(cam);
+      out.push(cam);
     };
     const idx = await molePage('/live-cctv');
     for (const blk of String(idx).split('wire:key="cctv-').slice(1)) {
@@ -183,6 +290,10 @@ function createCctvCatalog({
       const nm = /cctv__name">\s*([^<]+?)\s*<\/a>/.exec(blk);
       const ct = /text-card-city-name[\s\S]*?<\/i>\s*([^<]+?)\s*<\/p>/.exec(blk);
       if (pv && /^\d+$/.test(id)) push(nm && nm[1], ct && ct[1], pv[1], pv[2], '/live-cctv/' + id);
+    }
+    if (out.length) {
+      srcCams.molecool = out.slice();
+      invalidateCctvRespCache();
     }
     await Promise.all(MOLE_SEEDS.map(async code => {
       const h = await molePage('/cctv/' + code); if (!h) return;
@@ -193,9 +304,7 @@ function createCctvCatalog({
       if (im) push(nm && nm[1], city, im[1], im[2], '/cctv/' + code);
     }));
     return out;
-  });
-  const cctvProbe = { alive: new Set(), done: new Set(), running: false, last: 0 };
-  const hostCors = new Map();
+  }, v => Array.isArray(v) && v.length > 0));
   const probeLane = makeLane(8, 2);
   const probeGet = (url, ms, h) => probeLane.run(new URL(url).host, () => mediaGetRaw(url, ms, h, null));
   const HLS_UA = { 'user-agent': UA, referer: 'https://bpjt.pu.go.id/', origin: 'https://probe.invalid' };
@@ -224,14 +333,14 @@ function createCctvCatalog({
     } catch (e) { return false; }
   }
   async function warmCctv() {
-    if (isDraining() || cctvProbe.running || Date.now() - cctvProbe.last < 1500000) return;
+    if (isDraining() || cctvProbe.running || (cctvProbe.last && Date.now() - cctvProbe.last < 1500000)) return;
     cctvProbe.running = true; cctvProbe.last = Date.now();
     const next = { alive: new Set(), done: new Set() };
     try {
       let cams = await cctvBpjt().catch(() => []);
-      if (!cams.length) { await new Promise(s => setTimeout(s, 30000)); cams = await cctvBpjt().catch(() => []); }
+      if (!cams.length) { await new Promise(s => setTimeout(s, 15000)); cams = await cctvBpjt().catch(() => []); }
       if (!cams.length) { console.log('[cctv] bpjt fetch kosong, skip sweep'); cctvProbe.running = false; return; }
-      const jogja = await cctvJogja().catch(() => []);
+      const jogja = await refreshSource('jogja', cctvJogja).catch(() => []);
       const byHost = new Map();
       for (const c of cams.concat(jogja)) {
         let h = '_';
@@ -252,36 +361,69 @@ function createCctvCatalog({
         next.done.add(c.s);
         cctvProbe.done.add(c.s);
         if (ok) { next.alive.add(c.s); cctvProbe.alive.add(c.s); }
-        if (++completed % 30 === 0) { cache.delete('cctvcat'); if (bodyCache) bodyCache.delete('cctv'); }
+        if (++completed % 30 === 0) invalidateCctvRespCache();
       } }));
       cctvProbe.alive = next.alive; cctvProbe.done = next.done;
-      cache.delete('cctvcat');
-      if (bodyCache) bodyCache.delete('cctv');
+      invalidateCctvRespCache();
+      cctvHistDirty = true;
+      saveCctvHist(true);
       console.log('[cctv] probe selesai:', next.alive.size, '/', cams.length, 'cam playable');
     } catch (e) {} finally { cctvProbe.running = false; }
   }
   const cctvReportedDead = s => GW.reportedDead(s);
   const cctvCatalog = () => memo('cctvcat', 300000, async () => {
-    const rs = await Promise.allSettled([cctvBpjt(), cctvBekasi(), cctvJogja(), cctvMolecool()]);
-    const bpjt = [], jogja = [], other = [];
-    for (const r of rs) if (r.status === 'fulfilled') for (const c of r.value)
-      (c.src === 'bpjt' ? bpjt : c.src === 'jogja' ? jogja : other).push(c);
-    const probeable = cctvProbe.done.size ? [...bpjt, ...jogja].filter(c => cctvProbe.alive.has(c.s)) : [];
+    const allBefore = srcDone.bpjt && srcDone.bekasi && srcDone.jogja && srcDone.molecool;
+    const pAll = Promise.allSettled([
+      cctvBpjt(),
+      cctvBekasi(),
+      cctvJogja(),
+      cctvMolecool(),
+    ]);
+    if (!cctvProbe.done.size && !cctvProbe.running) warmCctv().catch(() => {});
+    const hasSeed = lastGoodCams.length > 0 || srcCams.bpjt.length > 0 || srcCams.bekasi.length > 0 || srcCams.jogja.length > 0 || srcCams.molecool.length > 0;
+    if (!(allBefore && hasSeed)) {
+      await Promise.race([pAll, new Promise(r => setTimeout(r, hasSeed ? 3500 : 7500))]);
+    }
+    const bpjt = srcCams.bpjt;
+    const jogja = srcCams.jogja;
+    const other = [...srcCams.bekasi, ...srcCams.molecool];
+    const probeable = [...bpjt, ...jogja].filter(c =>
+      cctvProbe.done.has(c.s) ? cctvProbe.alive.has(c.s) : (cctvProbe.alive.size < 24)
+    );
     const verified = probeable.filter(c => !cctvReportedDead(c.s));
-    for (const c of [...bpjt, ...jogja, ...other]) { try { catalogHostAdd(new URL(c.s).hostname); cctvKnown.add(c.s); if (c.snap) cctvKnown.add(c.snap); } catch (e) {} }
-    for (const c of camList()) { cctvKnown.add(c.s); if (c.snap) cctvKnown.add(c.snap); (Array.isArray(c.fb) ? c.fb : c.fb ? [c.fb] : []).forEach(f => cctvKnown.add(f)); try { catalogHostAdd(new URL(c.s).hostname); } catch (e) {} }
-    const cams = CCTVCORE.dedupe([...other.filter(c => !cctvReportedDead(c.s)), ...verified]).map(c => {
+    for (const c of [...bpjt, ...jogja, ...other]) registerCamAllowlist(c);
+    for (const c of camList()) registerCamAllowlist(c);
+    let cams = CCTVCORE.dedupe([...other.filter(c => !cctvReportedDead(c.s)), ...verified]).map(c => {
       try { if (hostCors.get(new URL(c.s).host) === false) return { ...c, d: 0 }; } catch (e) {}
       return c;
     });
-    return { ok: true, cams, bpjt_alive: cctvProbe.alive.size, bpjt_total: bpjt.length, probing: cctvProbe.running, snap: await GW.detectFfmpeg(), at: Date.now() };
-  });
+    if (!cams.length && lastGoodCams.length) {
+      cams = lastGoodCams.filter(c => !cctvReportedDead(c.s));
+    } else if (cams.length) {
+      if (cams.length !== lastGoodCams.length) cctvHistDirty = true;
+      lastGoodCams = CCTVCORE.dedupe(cams);
+      saveCctvHist(false);
+    }
+    const allSourcesDone = srcDone.bpjt && srcDone.bekasi && srcDone.jogja && srcDone.molecool;
+    const warming = !allSourcesDone || (cctvProbe.running && cctvProbe.alive.size < 24);
+    return {
+      ok: true,
+      cams,
+      bpjt_alive: cctvProbe.alive.size,
+      bpjt_total: bpjt.length,
+      probing: cctvProbe.running,
+      warming,
+      snap: await GW.detectFfmpeg(),
+      at: Date.now(),
+    };
+  }, v => Boolean(v && Array.isArray(v.cams) && v.cams.length >= 20 && !v.warming));
 
   return {
     moleFresh,
     cctvCatalog,
     warmCctv,
     hostCors,
+    saveCctvHist,
   };
 }
 

@@ -6213,9 +6213,12 @@ async function thLazy(q){
     renderThreads();
   } catch (e) { thqTried.delete(q); }
 }
+let tRetryT = 0, tColdTries = 0;
 async function pullThreads(){
   if (tBusy) return;
   if (API == null) { renderThreads(); return; }
+  clearTimeout(tRetryT);
+  tRetryT = 0;
   tBusy = true;
   $('#tmeta').textContent = 'menarik…';
   try {
@@ -6225,10 +6228,14 @@ async function pullThreads(){
     tNewestTs = d && Number.isFinite(d.newestTs) ? d.newestTs : 0;
     const acc = acceptSocialSnapshot('th', d);
     tCold = !tPosts.length && !!d.warming;
-    if (tPosts.length) tEmptyStreak = 0; else if (!tCold) tEmptyStreak++;
+    if (tPosts.length) { tEmptyStreak = 0; tColdTries = 0; }
+    else if (!tCold) tEmptyStreak++;
     if (acc || d.queries) socApply(d);
     renderAllQchips();
     renderThreads();
+    if ((tCold || (!tPosts.length && d.warming)) && ++tColdTries <= 12) {
+      tRetryT = setTimeout(() => { tRetryT = 0; if (!document.hidden) pullThreads(); }, 4500);
+    }
   } catch (e) {
     tSignalCurrent = false; updateDistress();
     tErrStreak++; tCold = false;
@@ -6236,9 +6243,13 @@ async function pullThreads(){
     if (!tPosts.length) {
       renderThreads();
       $('#tmeta').textContent = tErrStreak >= 3 ? 'gagal' : 'mencoba lagi…';
+      if (tErrStreak < 4) {
+        tRetryT = setTimeout(() => { tRetryT = 0; if (!document.hidden) pullThreads(); }, 4500);
+      }
     }
   } finally { tBusy = false; }
 }
+schedulePoll(() => pullThreads(), 90000, { dedupGlobalMs: 20000 });
 function setSocTab(t){
   socTab = t;
   $$('.soc-tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false'));
@@ -8223,14 +8234,15 @@ function refreshCamVis(){
 }
 
 const kickCams = () => setTimeout(() => {
+  if (document.hidden) return;
   if (camsRenderQueued) renderCams();
   const vr = camVisRect();
   P.forEach((p, c) => {
     p.vis = isCellVisible(c, vr);
     try { vio.unobserve(c); vio.observe(c); } catch (e) {}
     if (!p.vis) return;
+    if (p.stopped) return;
     const v = vid(c);
-    p.stopped = false;
     if (!p.loaded && !p.kickDone) { p.t0 = Date.now(); p.kickDone = true; }
     if (p.loading && Date.now() - p.t0 > 45000) { kill(c); return; }
     if (p.h && p.h !== 'native') {
@@ -8258,8 +8270,9 @@ const kickCams = () => setTimeout(() => {
         try { tvv.currentTime = tvHls.liveSyncPosition; } catch (e) {}
       }
     }
-    if (tvv && tvv.paused) tvv.play().catch(() => {});
-    else if ($('#tv-body').dataset.state === 'load' && Date.now() - tvLoadAt > 20000) tvPlay();
+    const tvSt = $('#tv-body').dataset.state;
+    if ((tvSt === 'load' && (!tvLoadT || Date.now() - tvLoadAt > 12000)) || (tvSt === 'fail' && !tvRetryT)) tvPlay();
+    else if (tvv && tvv.paused) tvv.play().catch(() => {});
   }
   pump();
 }, 400);
@@ -8267,10 +8280,12 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     P.forEach((p, c) => {
       p.kickDone = false;
+      clearSnapTimer(p);
       if (p.loaded || p.playing) stopCell(c);
-      else if (p.loading && p.h && p.h !== 'native') { try { p.h.stopLoad(); } catch (e) {} }
+      else if (p.loading) dropLoadingCell(c);
     });
     if (tvOn) {
+      clearTimeout(tvLoadT); tvLoadT = null;
       if (tvHls) { try { tvHls.stopLoad(); } catch (e) {} }
       const tvv = $('#tv-video');
       if (tvv && !tvv.paused) { tvv._visPaused = true; try { tvv.pause(); } catch (e) {} }
@@ -8816,6 +8831,7 @@ async function pullAlive(){
   if (API == null) return;
   try {
     const a = await getJson(API + '/api/cams', 60000);
+    if (!a || !Array.isArray(a.alive)) return;
     const s = JSON.stringify(a.alive);
     if (s !== pullAlive.last) { pullAlive.last = s; aliveMap = a.alive; renderCams(); }
     else aliveMap = a.alive;
@@ -8823,25 +8839,46 @@ async function pullAlive(){
 }
 async function pullCctv(){
   if (API == null) return;
+  clearTimeout(pullCctv.retryT);
+  pullCctv.retryT = 0;
   try {
     const d = await getJson(API + '/api/cctv', 30000);
-    if (!d || !Array.isArray(d.cams) || !d.cams.length) return;
-    if (typeof d.snap === 'boolean') camSnapOK = d.snap;
-    pullCctv.have = pullCctv.have || new Set(CAMS.map(c => c.s));
-    pullCctv.keys = pullCctv.keys || new Set(CAMS.map(c => CctvCore.streamKey(c.s)));
-    pullCctv.byS = pullCctv.byS || new Map(CAMS.map(c => [c.s, c]));
-    let revived = false;
-    for (const c of d.cams) {
-      const ex = pullCctv.byS.get(c.s);
-      if (ex && ex._hide) { ex._hide = false; ex.fails = 0; revived = true; }
+    if (d && typeof d.snap === 'boolean') camSnapOK = d.snap;
+    const list = (d && Array.isArray(d.cams)) ? d.cams : [];
+    const stillWarm = Boolean(d && (d.warming || !list.length || (d.probing && list.length < 24)));
+    pullCctv.warming = stillWarm;
+    if (list.length) {
+      pullCctv.have = pullCctv.have || new Set(CAMS.map(c => c.s));
+      pullCctv.keys = pullCctv.keys || new Set(CAMS.map(c => CctvCore.streamKey(c.s)));
+      pullCctv.byS = pullCctv.byS || new Map(CAMS.map(c => [c.s, c]));
+      let revived = false;
+      for (const c of list) {
+        const ex = pullCctv.byS.get(c.s);
+        if (ex && ex._hide) { ex._hide = false; ex.fails = 0; revived = true; }
+      }
+      const add = list.filter(c => c && c.s && c.n && !pullCctv.have.has(c.s) && !pullCctv.keys.has(CctvCore.streamKey(c.s))).map(CctvCore.sanitizeFb);
+      if (add.length || revived) {
+        add.forEach(c => { c.c = cityLabel(c.c); pullCctv.have.add(c.s); pullCctv.keys.add(CctvCore.streamKey(c.s)); pullCctv.byS.set(c.s, c); });
+        if (add.length) CAMS.push(...add);
+        drawCityBar(); renderCams();
+      }
+      if (!stillWarm) {
+        pullCctv.hydrated = true;
+        pullCctv.tries = 0;
+      }
     }
-    const add = d.cams.filter(c => c && c.s && c.n && !pullCctv.have.has(c.s) && !pullCctv.keys.has(CctvCore.streamKey(c.s))).map(CctvCore.sanitizeFb);
-    if (!add.length && !revived) return;
-    add.forEach(c => { c.c = cityLabel(c.c); pullCctv.have.add(c.s); pullCctv.keys.add(CctvCore.streamKey(c.s)); pullCctv.byS.set(c.s, c); });
-    if (add.length) CAMS.push(...add);
-    drawCityBar(); renderCams();
-  } catch (e) {}
+    if (stillWarm && (pullCctv.tries = (pullCctv.tries || 0) + 1) <= 15) {
+      pullCctv.retryT = setTimeout(() => { pullCctv.retryT = 0; if (!document.hidden) pullCctv(); }, 4500);
+    }
+  } catch (e) {
+    pullCctv.warming = true;
+    if (!pullCctv.hydrated && (pullCctv.tries = (pullCctv.tries || 0) + 1) <= 15) {
+      pullCctv.retryT = setTimeout(() => { pullCctv.retryT = 0; if (!document.hidden) pullCctv(); }, 4500);
+    }
+  }
 }
+schedulePoll(() => pullCctv(), 90000);
+schedulePoll(() => pullAlive(), 120000);
 let offProbeCursor = 0;
 setInterval(() => {
   if (document.hidden) return;
@@ -9837,7 +9874,7 @@ function ensureMap(){
   checkTomTom();
   paintMap();
 }
-let GEO_NODES_CACHE = null, geoIncLoaded = false, geoDisLoaded = false;
+let GEO_NODES_CACHE = null, geoIncLoaded = false, geoDisLoaded = false, geoIncOk = false;
 const GEO_SHINGLE_ORDER = ['demo','fire','flood','disaster','insiden','kriminal','kesehatan','politik','ekonomi','siber'];
 function renderGeoTelemetry(){
   const specEl = $('#geo-spec');
@@ -9953,17 +9990,18 @@ async function pullIncidents(fresh){
   }
   mapBusy = true;
   try {
-    if (!GEO_NODES_CACHE) {
-      try {
-        const nr = await getJson(API + '/api/nodes', 15000);
-        if (nr && nr.ok && Array.isArray(nr.items)) GEO_NODES_CACHE = nr.items;
-      } catch (e) {}
-    }
-    const qs = (GEO_NODES_CACHE ? 'nodes=0' : 'nodes=1') + (fresh && SITREP_CAN_FRESH ? '&fresh=1' : '');
-    const d = await getJson(API + '/api/incidents?' + qs, 30000);
+    const qs = 'nodes=0' + (fresh && SITREP_CAN_FRESH ? '&fresh=1' : '');
+    const [nr, d] = await Promise.all([
+      GEO_NODES_CACHE ? Promise.resolve(null) : getJson(API + '/api/nodes', 15000).catch(() => null),
+      getJson(API + '/api/incidents?' + qs, 30000),
+    ]);
+    if (nr && nr.ok && Array.isArray(nr.items)) GEO_NODES_CACHE = nr.items;
     if (d && d.ok) {
+      geoIncOk = true;
       mapData = d.items || [];
-      if (d.nodesOmitted && GEO_NODES_CACHE) mapData = mapData.concat(GEO_NODES_CACHE);
+      if ((d.nodesOmitted || !GEO_NODES_CACHE || GEO_NODES_CACHE.length) && GEO_NODES_CACHE) {
+        mapData = mapData.filter(i => !i.fixed).concat(GEO_NODES_CACHE);
+      }
       const GEMPA_SKIP = /aman gempa|tahan gempa|resisten gempa|anti[- ]?gempa|gempa resistant/i;
       const GEMPA_AID = /bantuan|relief|kemanusiaan|donasi|salurkan|penyintas|pemulihan|posko|logistik|pengungsian|rehabilitasi|rekonstruksi|bansos/i;
       const GEMPA_SIG = /\b(?:m|mag)\.?\s*[:=]?\s*\d+[.,]\d|magnitudo|richter|gempa tektonik|gempa susulan|aftershock|diguncang|guncang|berpusat|episenter|tsunami/i;
@@ -9984,11 +10022,15 @@ async function pullIncidents(fresh){
       drawGlobe(performance.now());
       if (mapOpen && typeof L !== 'undefined') { ensureMap(); paintMap(); }
       if (layerOn.peringatan && mapOpen) pullAlerts();
-    } else if (!geoIncLoaded) {
-      geoIncLoaded = true;
-      renderGeoTelemetry();
+    } else {
+      geoIncOk = false;
+      if (!geoIncLoaded) {
+        geoIncLoaded = true;
+        renderGeoTelemetry();
+      }
     }
   } catch (e) {
+    geoIncOk = false;
     geoIncLoaded = true;
     renderGeoTelemetry();
     $('#map-meta').textContent = 'peta gagal';
@@ -11423,6 +11465,7 @@ async function getJson(url, ms, retries = 1){
   }
 }
 async function detectApi(){
+  if (API != null) return true;
   const rawQp = new URLSearchParams(location.search).get('api');
   const local = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(location.hostname);
   let qp = null;
@@ -11433,9 +11476,15 @@ async function detectApi(){
     } catch (e) {}
   }
   const c = [qp, '', local ? 'http://localhost:8787' : null].filter(x => x != null);
-  try {
-    API = await Promise.any(c.map(async b => { const d = await getJson(b + '/api/ping', 4000); if (d && d.ok) return b; throw 0; }));
-  } catch (e) {}
+  const waits = [0, 900, 2000];
+  for (let i = 0; i < waits.length; i++) {
+    if (waits[i]) await new Promise(r => setTimeout(r, waits[i]));
+    try {
+      API = await Promise.any(c.map(async b => { const d = await getJson(b + '/api/ping', 5000); if (d && d.ok) return b; throw 0; }));
+      if (API != null) return true;
+    } catch (e) {}
+  }
+  return API != null;
 }
 
 function updateFoot(){
@@ -11472,11 +11521,15 @@ async function pullMedia(fresh){
       }
       if (Array.isArray(d.sources)) {
         SRC_IDS = d.sources.map(x => x.id);
+        let hasItems = false;
         d.sources.forEach(x => {
-          if (x.ok) { lastGood.set(x.id, { items:x.items, via:'langsung', at:Date.now() }); srcState.set(x.id, { ok:true, via:'langsung', stale:!!x.stale }); }
-          else srcState.set(x.id, { ok:false });
+          if (x.ok) {
+            if (Array.isArray(x.items) && x.items.length) hasItems = true;
+            lastGood.set(x.id, { items:x.items, via:'langsung', at:Date.now() });
+            srcState.set(x.id, { ok:true, via:'langsung', stale:!!x.stale });
+          } else srcState.set(x.id, { ok:false });
         });
-        mediaLoaded = true;
+        if (hasItems) mediaLoaded = true;
         markFresh();
         renderNews();
         noteWire(d);
@@ -11495,14 +11548,16 @@ async function pullMedia(fresh){
     }
   };
   await Promise.all(Array.from({ length: Math.min(5, RSS_SOURCES.length) }, worker));
+  let hasRssItems = false;
   RSS_SOURCES.forEach((s, i) => {
     const x = rs[i];
     if (x && x.ok) {
+      if (Array.isArray(x.r.items) && x.r.items.length) hasRssItems = true;
       lastGood.set(s.id, { items:x.r.items, via:x.r.via, at:Date.now() });
       srcState.set(s.id, { ok:true, via:x.r.via });
     } else srcState.set(s.id, { ok:false });
   });
-  mediaLoaded = true;
+  if (hasRssItems) mediaLoaded = true;
   markFresh();
   renderNews();
 }
@@ -11516,9 +11571,11 @@ function markFresh(){
   if (freshNews.size) syncGlobeSoon();
 }
 
-let xBusy = false;
+let xBusy = false, xRetryT = 0, xColdTries = 0;
 async function pullX(){
   if (xBusy) return;
+  clearTimeout(xRetryT);
+  xRetryT = 0;
   if (API == null) {
     $('#xlist').innerHTML = '<div class="empty">Butuh server untuk feed X.</div>';
     $('#xmeta').textContent = 'offline';
@@ -11534,7 +11591,8 @@ async function pullX(){
       const acc = acceptSocialSnapshot('x', d);
 
       xCold = !xPosts.length && !!d.warming;
-      if (xPosts.length) xEmptyStreak = 0; else if (!xCold) xEmptyStreak++;
+      if (xPosts.length) { xEmptyStreak = 0; xColdTries = 0; }
+      else if (!xCold) xEmptyStreak++;
       if (acc) {
         socApply(d);
         if (xShown > xPosts.length) xShown = Math.max(30, xPosts.length);
@@ -11542,7 +11600,11 @@ async function pullX(){
         renderX();
         $('#xmeta').textContent = xPosts.length + ' post' + (d.err ? ' · sebagian gagal' : '');
       } else renderX();
+      if ((xCold || (!xPosts.length && d.warming)) && !xRetryT && ++xColdTries <= 12) {
+        xRetryT = setTimeout(() => { xRetryT = 0; if (!document.hidden) pullX(); }, 4500);
+      }
     } else if (xPosts.length) {
+      xColdTries = 0;
       if (d.warming) { xCold = false; xErrStreak = 0; }
       else xErrStreak++;
       if (d.queries) { socApply(d); renderAllQchips(); }
@@ -11554,6 +11616,9 @@ async function pullX(){
       if (d.queries) { socApply(d); renderAllQchips(); }
       renderX();
       $('#xmeta').textContent = xCold ? 'kolektor berjalan…' : (xErrStreak >= 3 ? 'gagal' : 'mencoba lagi…');
+      if ((xCold || xErrStreak < 4) && !xRetryT && ++xColdTries <= 12) {
+        xRetryT = setTimeout(() => { xRetryT = 0; if (!document.hidden) pullX(); }, 4500);
+      }
     }
   } catch (e) {
     xSignalCurrent = false; updateDistress();
@@ -11562,16 +11627,49 @@ async function pullX(){
     if (!xPosts.length) {
       renderX();
       $('#xmeta').textContent = xErrStreak >= 3 ? 'gagal' : 'mencoba lagi…';
+      if (xErrStreak < 4 && !xRetryT && ++xColdTries <= 12) {
+        xRetryT = setTimeout(() => { xRetryT = 0; if (!document.hidden) pullX(); }, 4500);
+      }
     }
   } finally { xBusy = false; }
 }
+schedulePoll(() => pullX(), 75000, { dedupGlobalMs: 20000 });
 
-let busy = false, bgPending = 0, lastSyncAt = 0, lastRefreshDone = 0;
+let busy = false, bgPending = 0, lastSyncAt = 0, lastRefreshDone = 0, coldTimer = 0, coldTries = 0;
 const paintSync = () => {
   const el = $('#lastsync');
   if (el) el.textContent = 'sync ' + (lastSyncAt ? wibTime(lastSyncAt) : '—') + ' WIB' + (bgPending ? ' · ' + bgPending + ' latar' : '');
 };
 const trackBg = p => { bgPending++; const d = () => { bgPending--; paintSync(); }; Promise.resolve(p).then(d, d); };
+function needsColdRecovery(){
+  return API == null || !mediaLoaded || !newsList.length || !SIT || !SIT.total || !geoIncOk || !STK || !pullCctv.hydrated || pullCctv.warming || xCold || (!xPosts.length && xErrStreak < 4) || tCold || (!tPosts.length && tErrStreak < 4);
+}
+function scheduleColdRecovery(){
+  if (!needsColdRecovery()) {
+    coldTries = 0;
+    clearTimeout(coldTimer);
+    coldTimer = 0;
+    return;
+  }
+  if (coldTimer || coldTries >= 12 || document.hidden) return;
+  coldTries++;
+  coldTimer = setTimeout(async () => {
+    coldTimer = 0;
+    if (document.hidden) return;
+    if (API == null) await detectApi();
+    if (API == null) { scheduleColdRecovery(); return; }
+    const jobs = [];
+    if (!mediaLoaded || !newsList.length) jobs.push(pullMedia(false));
+    if (!SIT || !SIT.total) jobs.push(pullSituation(false));
+    if (!STK) jobs.push(pullStocks());
+    if (!geoIncOk) jobs.push(pullIncidents(false));
+    if ((!pullCctv.hydrated || pullCctv.warming) && !pullCctv.retryT) jobs.push(pullCctv());
+    if ((xCold || (!xPosts.length && xErrStreak < 4)) && !xRetryT && !xBusy) jobs.push(pullX());
+    if ((tCold || (!tPosts.length && tErrStreak < 4)) && !tRetryT && !tBusy) jobs.push(pullThreads());
+    if (jobs.length) await Promise.allSettled(jobs);
+    scheduleColdRecovery();
+  }, 4500);
+}
 async function refreshAll(manual){
   if (busy) return;
   busy = true;
@@ -11580,17 +11678,19 @@ async function refreshAll(manual){
   if (syncBtn) syncBtn.dataset.state = 'sync';
   $('#countdown').textContent = 'Tarik…';
   try {
-    await Promise.all([pullMedia(manual), pullSituation(manual), pullStocks()]);
+    if (API == null) await detectApi();
     trackBg(pullIncidents(manual));
-    if (manual) trackBg(pullDisaster());
+    if (manual || !(DIS_PULSE && DIS_PULSE.length)) trackBg(pullDisaster());
     trackBg(pullAlive());
     trackBg(pullCctv());
     trackBg(pullX());
     trackBg(pullThreads());
+    if (manual || !breakAt) trackBg(pullBreaking());
     if (manual) {
       P.forEach((p, c) => { if (p.dead) { p.dead = false; p.tries = 0; clearTimeout(p.retry); badge(c, 'wait', 'Antre'); } });
       pump();
     }
+    await Promise.all([pullMedia(manual), pullSituation(manual), pullStocks()]);
     lastSyncAt = Date.now(); paintSync();
   } finally {
     busy = false;
@@ -11598,23 +11698,32 @@ async function refreshAll(manual){
     remain = CYCLE; paintCountdown();
     lastRefreshDone = Date.now();
     rdPrefetchVisible();
+    scheduleColdRecovery();
   }
   if (manual) {
     $('#countdown').textContent = 'OK';
     setTimeout(paintCountdown, 1200);
-    pullBreaking();
   }
 }
 $('#btn-refresh').addEventListener('click', () => refreshAll(true));
 
 let visRefreshTimer = 0;
-document.addEventListener('visibilitychange', () => {
+async function onTabWake(fromOnline){
   if (document.hidden) return;
   clearTimeout(visRefreshTimer);
+  visRefreshTimer = 0;
   const now = Date.now();
-  if (lastRefreshDone && now - lastRefreshDone > 30000) {
-    visRefreshTimer = setTimeout(() => { if (!document.hidden && !busy) refreshAll(false); }, 750);
-  } else if (lastRefreshDone) {
+  try { wakeGlobe(); drawGlobe(performance.now()); } catch (e) {}
+  if (typeof globeReady !== 'undefined' && !globeReady && typeof fetchGlobe === 'function') {
+    try { fetchGlobe().catch(() => {}); } catch (e) {}
+  }
+  if (STK) {
+    try { renderChips(); paintHeroes(); } catch (e) {}
+  }
+  if (typeof descHasWork === 'function' && descHasWork()) {
+    try { queueDescEnrich(); } catch (e) {}
+  }
+  if (lastRefreshDone) {
     const elapsed = Math.floor((now - lastRefreshDone) / 1000);
     remain = Math.max(0, CYCLE - elapsed);
     paintCountdown();
@@ -11626,7 +11735,47 @@ document.addEventListener('visibilitychange', () => {
     breakRemain = Math.max(0, BREAK_CYCLE - bElapsed);
     paintBreak();
   }
+  const stale = !lastRefreshDone || (lastRefreshDone && now - lastRefreshDone > 30000);
+  if (API == null || needsColdRecovery() || fromOnline || stale) {
+    if (API == null) await detectApi();
+    if (fromOnline || stale) {
+      coldTries = 0;
+      xColdTries = 0;
+      tColdTries = 0;
+      pullCctv.tries = 0;
+    }
+    visRefreshTimer = setTimeout(() => {
+      visRefreshTimer = 0;
+      if (!document.hidden && !busy) {
+        if (stale || fromOnline || !lastRefreshDone) refreshAll(false);
+        else scheduleColdRecovery();
+      }
+    }, fromOnline ? 250 : 650);
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    clearTimeout(visRefreshTimer);
+    visRefreshTimer = 0;
+    clearTimeout(coldTimer);
+    coldTimer = 0;
+    clearTimeout(xRetryT);
+    xRetryT = 0;
+    clearTimeout(tRetryT);
+    tRetryT = 0;
+    clearTimeout(pullCctv.retryT);
+    pullCctv.retryT = 0;
+    return;
+  }
+  coldTries = 0;
+  xColdTries = 0;
+  tColdTries = 0;
+  pullCctv.tries = 0;
+  onTabWake(false);
 });
+window.addEventListener('focus', () => onTabWake(false));
+window.addEventListener('pageshow', e => { coldTries = 0; xColdTries = 0; tColdTries = 0; pullCctv.tries = 0; onTabWake(!!(e && e.persisted)); });
+window.addEventListener('online', () => { coldTries = 0; xColdTries = 0; tColdTries = 0; pullCctv.tries = 0; onTabWake(true); });
 
 let rdOn = false, rdCurrent = '', rdTrigger = null, rdDrag = null, rdStack = [], rdCurrentView = null, rdHero = '';
 const rdCache = new Map();
