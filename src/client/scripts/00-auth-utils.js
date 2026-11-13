@@ -188,28 +188,42 @@ const hue = s => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCod
 
 const CYCLE = 120;
 let remain = CYCLE;
+let remainMs = CYCLE * 1000;
+let syncKickTimer = 0;
+let syncOkUntil = 0;
 function tickClock(){
   $('#clock').textContent = new Date().toLocaleTimeString('id-ID',
     { timeZone:'Asia/Jakarta', hour12:false }).replace(/\./g, ':') + ' WIB';
 }
 setInterval(tickClock, 1000); tickClock();
-function paintCountdown(){
-  $('#countdown').textContent = String(Math.floor(remain/60)).padStart(2,'0') + ':' + String(remain%60).padStart(2,'0');
+function paintCountdown(ms){
+  const leftMs = typeof ms === 'number' ? Math.max(0, Math.min(CYCLE * 1000, ms)) : remain * 1000;
+  remainMs = leftMs;
+  const sec = Math.ceil(leftMs / 1000);
+  remain = sec;
+  $('#countdown').textContent = String(Math.floor(sec/60)).padStart(2,'0') + ':' + String(sec%60).padStart(2,'0');
   const btn = $('#btn-refresh');
-  if (btn) btn.style.setProperty('--sync-p', Math.max(0, Math.min(100, Math.round((remain / CYCLE) * 100))) + '%');
+  if (btn) btn.style.setProperty('--sync-p', ((leftMs / (CYCLE * 1000)) * 100).toFixed(2) + '%');
 }
 setInterval(() => {
   if (document.hidden) return;
+  if (typeof busy !== 'undefined' && busy) return;
+  if (syncOkUntil && Date.now() < syncOkUntil) return;
+  syncOkUntil = 0;
   if (lastRefreshDone) {
-    const elapsed = Math.floor((Date.now() - lastRefreshDone) / 1000);
-    remain = Math.max(0, CYCLE - elapsed);
+    remainMs = Math.max(0, CYCLE * 1000 - (Date.now() - lastRefreshDone));
   } else {
-    remain = Math.max(0, remain - 1);
+    remainMs = Math.max(0, remainMs - 250);
   }
-  paintCountdown();
-  if (remain === 0 && !busy) refreshAll(false);
-}, 1000);
-paintCountdown();
+  paintCountdown(remainMs);
+  if (remainMs === 0 && !syncKickTimer) {
+    syncKickTimer = setTimeout(() => {
+      syncKickTimer = 0;
+      if (!document.hidden && !busy) refreshAll(false);
+    }, 320);
+  }
+}, 250);
+paintCountdown(CYCLE * 1000);
 
 const CAT_ORDER = ['demo','fire','flood','disaster','insiden','siber','kriminal','kesehatan','ekonomi','politik'];
 const CAT_COLOR = { demo:'#f1c21b', fire:'#da1e28', flood:'#4589ff', disaster:'#be95ff', insiden:'#8d8d8d', siber:'#c8f04b', kriminal:'#ff9f43', kesehatan:'#ff6b9d', ekonomi:'#3ddc97', politik:'#6ea8fe', gempa:'#ff5a4e', gunung:'#ff9f0a', tma:'#00e5ff' };

@@ -1,5 +1,5 @@
 const BREAK_CYCLE = 45;
-let breakItems = [], breakSig = '', breakRemain = BREAK_CYCLE, breakBusy = false, breakAt = 0, breakFail = 0;
+let breakItems = [], breakSig = '', breakRemain = BREAK_CYCLE, breakRemainMs = BREAK_CYCLE * 1000, breakBusy = false, breakAt = 0, breakFail = 0, breakKickTimer = 0;
 const TICK_PX_S = 52;
 const tickTrack = $('#ticker-track');
 
@@ -8,10 +8,13 @@ function setBreakState(s){
   if (el) el.dataset.state = s;
   $('#tk-state').textContent = s === 'fetch' ? 'Sync' : s === 'fail' ? 'Retry' : 'Fetch';
 }
-function paintBreak(){
+function paintBreak(ms){
+  const leftMs = typeof ms === 'number' ? Math.max(0, Math.min(BREAK_CYCLE * 1000, ms)) : breakRemain * 1000;
+  breakRemainMs = leftMs;
+  breakRemain = Math.ceil(leftMs / 1000);
   $('#tk-meta').textContent = '00:' + String(breakRemain).padStart(2, '0');
   const el = $('#tk-fetch');
-  if (el) el.style.setProperty('--tk-p', Math.max(0, Math.min(100, Math.round((breakRemain / BREAK_CYCLE) * 100))) + '%');
+  if (el) el.style.setProperty('--tk-p', ((leftMs / (BREAK_CYCLE * 1000)) * 100).toFixed(2) + '%');
 }
 
 const tkFetchEl = $('#tk-fetch');
@@ -159,6 +162,8 @@ if ('ResizeObserver' in window) {
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (breakItems.length) buildTicker(true); });
 async function pullBreaking(){
   if (breakBusy) return;
+  clearTimeout(breakKickTimer);
+  breakKickTimer = 0;
   breakBusy = true;
   setBreakState('fetch');
   const t0 = Date.now();
@@ -187,26 +192,36 @@ async function pullBreaking(){
       ' · sync ' + wibTime(breakAt) + ' WIB · auto ' + BREAK_CYCLE + 's';
   } catch (e) {
     breakFail++;
+    const retryWaitSec = Math.min(BREAK_CYCLE, 10 * Math.min(3, breakFail));
+    breakAt = Date.now() - (BREAK_CYCLE - retryWaitSec) * 1000;
     setBreakState('fail');
     $('#tk-fetch').title = 'Gagal ambil breaking: ' + (e.message || e);
   } finally {
     const wait = 420 - (Date.now() - t0);
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
     breakBusy = false;
-    if (!breakFail) setBreakState('idle');
-    breakRemain = BREAK_CYCLE;
-    paintBreak();
+    if (!breakFail) {
+      setBreakState('idle');
+      breakAt = Date.now();
+      paintBreak(BREAK_CYCLE * 1000);
+    } else {
+      paintBreak(Math.max(0, BREAK_CYCLE * 1000 - (Date.now() - breakAt)));
+    }
   }
 }
 setInterval(() => {
-  if (document.hidden) return;
+  if (document.hidden || breakBusy) return;
   if (breakAt) {
-    const elapsed = Math.floor((Date.now() - breakAt) / 1000);
-    breakRemain = Math.max(0, BREAK_CYCLE - elapsed);
+    breakRemainMs = Math.max(0, BREAK_CYCLE * 1000 - (Date.now() - breakAt));
   } else {
-    breakRemain = Math.max(0, breakRemain - 1);
+    breakRemainMs = Math.max(0, breakRemainMs - 250);
   }
-  paintBreak();
-  if (breakRemain === 0 && !breakBusy) pullBreaking();
-}, 1000);
+  paintBreak(breakRemainMs);
+  if (breakRemainMs === 0 && !breakKickTimer) {
+    breakKickTimer = setTimeout(() => {
+      breakKickTimer = 0;
+      if (!document.hidden && !breakBusy) pullBreaking();
+    }, 280);
+  }
+}, 250);
 

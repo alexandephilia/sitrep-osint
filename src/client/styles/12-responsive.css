@@ -10,7 +10,7 @@
   .mapwrap{width:100%;border-left:0;box-shadow:none}
 }
 @media (max-width:820px){
-  body{height:auto;overflow:auto}
+  body{height:auto;overflow:auto;padding-bottom:50px}
   .console{display:block;background:var(--bg)}
   .pane{border-bottom:1px solid var(--border)}
   .pane .pb{display:none;overflow:visible}
@@ -36,8 +36,8 @@
   .hdr-sync #countdown{padding-left:0;border-left:0;font-size:8.5px}
 
   .ticker{height:auto;grid-template-columns:auto 1fr;grid-template-rows:var(--tick) var(--tick)}
-  .tk-lbl{padding:0 18px 0 10px;gap:6px;letter-spacing:.1em}
-  .tk-fetch{width:auto;padding:0 12px 0 18px;border-right:0;align-items:flex-end;justify-content:center}
+  .tk-lbl{padding:0 18px 0 10px;gap:6px;letter-spacing:.1em;margin-right:0}
+  .tk-fetch{justify-self:end;width:auto;min-width:74px;padding:0 12px 0 12px;border-left:1px solid #24242a;border-right:0;align-items:flex-end;justify-content:center}
   .tk-fetch #tk-meta{margin-top:1px}
   .tk-vp{grid-column:1/-1;grid-row:2;border-top:1px solid var(--border)}
   .tk-fetch-t{display:inline}
@@ -55,9 +55,12 @@
   .pane.mkt .ph-m{max-width:none}
   .stk-chip{flex:0 0 138px;scroll-snap-align:start;padding:7px 11px 0}
   .tk-t{max-width:420px}
-  .foot{height:auto;padding:8px 12px;flex-wrap:wrap;gap:6px 12px;white-space:normal}
-  .foot .sp{margin-left:0}
-  .geobar{padding:0 0 0 8px;gap:0}
+  .foot{height:auto;padding:7px 8px;flex-wrap:nowrap;align-items:center;gap:5px;white-space:nowrap;font-size:clamp(6.4px,1.85vw,8px);letter-spacing:.01em}
+  .foot > span{flex:0 0 auto;white-space:nowrap}
+  .foot .sp{margin-left:auto;min-width:0;text-align:right}
+  .foot .fb-mark{letter-spacing:.08em}
+  .foot .fb-sep{padding:0 3px}
+  .geobar{width:100%;padding:0 0 0 8px;gap:0}
   .geo-head{padding:0 8px 0 0;gap:5px}
   .geo-k{display:none}
   .geo-idx{padding:0 7px;gap:7px}
@@ -66,9 +69,10 @@
   .geo-item{gap:4px}
   .geo-n{font-size:10px}
   .geo-l{font-size:8.5px;letter-spacing:.02em}
-  .geo-c{display:none}
-  #btn-tv{padding:0 16px 0 10px;gap:5px}
-  #btn-map{padding:0 14px 0 16px;margin-left:-9px;gap:5px}
+  .geo-c{padding:0 8px;font-size:8.5px;letter-spacing:.04em}
+  .geo-acts{right:10px;bottom:12px;height:32px;border-radius:5px}
+  #btn-tv{padding:0 16px 0 11px;gap:5px}
+  #btn-map{padding:0 12px 0 15px;margin-left:-9px;gap:5px}
   .pod-tag{display:none}
   .mapwrap{top:0;bottom:0;width:100%;border-left:0;box-shadow:none}
   .mapwrap .map-layers{overflow-x:auto;scrollbar-width:none}

@@ -32,7 +32,7 @@ const TV_CH = [
   { n:'TRT World',          grp:'Internasional (Global)', badge:'TR', s:'https://tv-trtworld.medya.trt.com.tr/master.m3u8', src:'trt',
     pg:'https://www.trtworld.com/live' }
 ];
-let tvOn = false, tvIx = 0, tvHls = null, tvDrag = null, tvRz = null, tvIdleT = null, tvPx = false, tvTry = 0, tvRetryT = null, tvLoadAt = 0, tvLoadT = null;
+let tvOn = false, tvIx = 0, tvHls = null, tvDrag = null, tvRz = null, tvIdleT = null, tvPx = false, tvTry = 0, tvRetryT = null, tvLoadAt = 0, tvLoadT = null, tvUserW = false, tvMoved = false;
 
 function renderTvMenu(){
   const menu = $('#tv-menu');
@@ -181,7 +181,7 @@ function tvPlace(x, y){
   const minX = mob ? 8 : 64 - ww, maxX = mob ? innerWidth - ww - 8 : innerWidth - 64;
   const footEl = document.querySelector('.foot');
   const footH = (footEl && footEl.offsetHeight) || 36;
-  const minY = mob ? 8 : 6, maxY = Math.max(minY, innerHeight - hh - (mob ? 8 : footH + 12));
+  const minY = mob ? 8 : 6, maxY = Math.max(minY, innerHeight - hh - (mob ? 52 : footH + 12));
   w.style.left = Math.round(Math.max(minX, Math.min(maxX, x))) + 'px';
   w.style.top = Math.round(Math.max(minY, Math.min(maxY, y))) + 'px';
   w.style.right = 'auto';
@@ -284,6 +284,7 @@ tvH.addEventListener('pointermove', e => {
 function tvDrop(e){
   if (!tvDrag) return;
   tvDrag = null;
+  tvMoved = true;
   $('#tvwrap').classList.remove('drag');
   try { tvH.releasePointerCapture(e.pointerId); } catch (err) {}
   tvSnap();
@@ -305,6 +306,7 @@ function tvSetW(px){
 tvGrip.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
   e.preventDefault(); e.stopPropagation();
+  tvUserW = true;
   tvRz = { x: e.clientX, w: tvW };
   tvWrap.classList.add('rz');
   try { tvGrip.setPointerCapture(e.pointerId); } catch (err) {}
@@ -321,10 +323,15 @@ function tvRzEnd(e){
 }
 tvGrip.addEventListener('pointerup', tvRzEnd);
 tvGrip.addEventListener('pointercancel', tvRzEnd);
-tvGrip.addEventListener('dblclick', () => tvSetW(344));
+tvGrip.addEventListener('dblclick', () => {
+  tvUserW = false;
+  if (innerWidth <= 820) { tvWrap.style.removeProperty('--tvw'); return; }
+  tvSetW(344);
+});
 tvGrip.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     e.preventDefault();
+    tvUserW = true;
     tvSetW(tvW + (e.key === 'ArrowRight' ? 16 : -16));
   }
 });
@@ -357,9 +364,19 @@ tvWrap.addEventListener('focusin', tvWake);
 
 addEventListener('resize', () => {
   if (!tvOn) return;
+  const mob = innerWidth <= 820;
+  if (!tvUserW && mob) {
+    tvWrap.style.removeProperty('--tvw');
+    tvW = Math.round(tvWrap.getBoundingClientRect().width || Math.min(innerWidth * 0.72, 400));
+  } else {
+    if (!tvUserW && !mob) tvW = 344;
+    tvSetW(tvW);
+  }
   const r = tvWrap.getBoundingClientRect();
-  tvPlace(r.left, r.top);
-  tvSetW(tvW);
+  const footH = (document.querySelector('.foot') && document.querySelector('.foot').offsetHeight) || 36;
+  if (!tvMoved && mob) tvPlace(8, innerHeight - (r.height || 200) - 52);
+  else if (!tvMoved && !mob) tvPlace(18, Math.max(6, innerHeight - (r.height || 200) - footH - 104));
+  else tvPlace(r.left, r.top);
 });
 
 const ETAG_CACHE = new Map();

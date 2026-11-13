@@ -99,6 +99,9 @@ function scheduleColdRecovery(){
 }
 async function refreshAll(manual){
   if (busy) return;
+  clearTimeout(syncKickTimer);
+  syncKickTimer = 0;
+  syncOkUntil = 0;
   busy = true;
   lastGlobalSyncAt = Date.now();
   const syncBtn = $('#btn-refresh');
@@ -122,14 +125,20 @@ async function refreshAll(manual){
   } finally {
     busy = false;
     if (syncBtn) syncBtn.dataset.state = 'idle';
-    remain = CYCLE; paintCountdown();
     lastRefreshDone = Date.now();
+    remain = CYCLE;
+    remainMs = CYCLE * 1000;
+    paintCountdown(remainMs);
     rdPrefetchVisible();
     scheduleColdRecovery();
   }
   if (manual) {
+    syncOkUntil = Date.now() + 1200;
     $('#countdown').textContent = 'OK';
-    setTimeout(paintCountdown, 1200);
+    setTimeout(() => {
+      syncOkUntil = 0;
+      if (!busy && lastRefreshDone) paintCountdown(Math.max(0, CYCLE * 1000 - (Date.now() - lastRefreshDone)));
+    }, 1200);
   }
 }
 $('#btn-refresh').addEventListener('click', () => refreshAll(true));
@@ -151,16 +160,12 @@ async function onTabWake(fromOnline){
     try { queueDescEnrich(); } catch (e) {}
   }
   if (lastRefreshDone) {
-    const elapsed = Math.floor((now - lastRefreshDone) / 1000);
-    remain = Math.max(0, CYCLE - elapsed);
-    paintCountdown();
+    paintCountdown(Math.max(0, CYCLE * 1000 - (now - lastRefreshDone)));
   }
   if (breakAt && now - breakAt > BREAK_CYCLE * 1000 && !breakBusy) {
     setTimeout(() => { if (!document.hidden && !breakBusy) pullBreaking(); }, 500);
   } else if (breakAt) {
-    const bElapsed = Math.floor((now - breakAt) / 1000);
-    breakRemain = Math.max(0, BREAK_CYCLE - bElapsed);
-    paintBreak();
+    paintBreak(Math.max(0, BREAK_CYCLE * 1000 - (now - breakAt)));
   }
   const stale = !lastRefreshDone || (lastRefreshDone && now - lastRefreshDone > 30000);
   if (API == null || needsColdRecovery() || fromOnline || stale) {

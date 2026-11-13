@@ -477,7 +477,7 @@ function clToastSyncMore(){
   const box = $('#cl-toasts'); if (!box) return;
   const chip = box.querySelector('.cl-tmore');
   const n = box.querySelectorAll('.cl-toast:not(.k-out)').length;
-  const mobile = matchMedia('(hover:none)').matches;
+  const mobile = matchMedia('(hover:none), (max-width:820px)').matches;
   const lim = mobile ? 1 : 6;
   if (n <= lim){ if (chip) chip.remove(); box.classList.remove('open'); return; }
   const c = chip || document.createElement('button');

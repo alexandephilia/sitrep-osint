@@ -231,7 +231,7 @@ a{color:inherit;text-decoration:none;text-underline-offset:2px}
   --sync-p:100%;
   position:relative;height:30px;min-width:128px;padding:0 11px 2px 11px;gap:7px;
   background:#1b1b19;
-  border:1px solid #2e2e3a;border-radius:2px 7px 7px 2px;
+  border:1px solid #2e2e3a;border-radius:2px 7px 3px 2px;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
   color:#d8d8e0;font:600 9px/1 var(--mono);letter-spacing:.1em;overflow:hidden;
 }
@@ -256,7 +256,7 @@ a{color:inherit;text-decoration:none;text-underline-offset:2px}
   content:"";position:absolute;left:0;top:0;bottom:0;width:var(--sync-p,100%);
   background:repeating-linear-gradient(110deg,#42be65 0 5px,transparent 5px 7px);
   box-shadow:0 0 6px rgba(66,190,101,.55);
-  transition:width .35s linear;
+  transition:width .22s linear;
 }
 .hdr-sync[data-state="sync"] .sync-rail::before{
   width:45%;
@@ -358,14 +358,14 @@ a{color:inherit;text-decoration:none;text-underline-offset:2px}
   content:"";position:absolute;left:0;top:0;bottom:0;width:var(--tk-p,100%);
   background:linear-gradient(90deg,rgba(255,255,255,.18) 0%,rgba(255,255,255,.45) 50%,rgba(255,255,255,.7) 100%);
   box-shadow:0 0 6px rgba(255,255,255,.2);
-  transition:width .35s linear;
+  transition:width .22s linear;
 }
 .tk-fetch[data-state="fetch"] .tk-cur::before{
   width:45%;
-  background:linear-gradient(90deg,rgba(255,255,255,.3),rgba(255,255,255,.85));
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),#fff,rgba(255,255,255,.35),transparent);
   box-shadow:0 0 8px rgba(255,255,255,.35);
   transition:none;
-  animation:none;
+  animation:hdr-laser .85s ease-in-out infinite;
 }
 .tk-fetch[data-state="fail"] .tk-cur::before{
   width:100%;
@@ -1667,21 +1667,23 @@ a{color:inherit;text-decoration:none;text-underline-offset:2px}
   font:600 9.5px/1 var(--mono);letter-spacing:.06em;color:var(--text2);font-variant-numeric:tabular-nums;
 }
 .geo-acts{
-  margin-left:auto;display:inline-flex;align-items:stretch;height:36px;
-  background:transparent;border:none;box-shadow:none;
-  padding:0;gap:0;position:relative;flex:none;
+  position:fixed;right:12px;bottom:calc(36px + var(--foot) + 8px);z-index:115;
+  display:inline-flex;align-items:stretch;height:34px;
+  background:rgba(12,12,18,.92);border:1px solid #2e2e3c;border-radius:6px;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  box-shadow:0 10px 26px rgba(0,0,0,.62),0 0 0 1px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.07);
+  padding:0;gap:0;overflow:hidden;
 }
 .geo-btn{
-  position:relative;display:inline-flex;align-items:center;height:36px;
-  background:linear-gradient(180deg,#181820 0%,#0e0e14 100%);
-  border:1px solid #282834;border-top:none;border-bottom:none;border-radius:0;
-  color:#9e9eb0;font:600 8.5px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;
+  position:relative;display:inline-flex;align-items:center;height:100%;
+  background:linear-gradient(180deg,#1a1a23 0%,#101017 100%);
+  border:0;border-radius:0;
+  color:#a6a6b8;font:600 8.5px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;
   transition:all .14s cubic-bezier(.2,.8,.3,1);cursor:pointer;
   touch-action:manipulation;-webkit-tap-highlight-color:transparent;
 }
 #btn-tv{
-  gap:7px;padding:0 20px 0 14px;
-  border-right:none;
+  gap:7px;padding:0 20px 0 13px;
   clip-path:polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
   z-index:2;
 }
@@ -1691,8 +1693,7 @@ a{color:inherit;text-decoration:none;text-underline-offset:2px}
   transform:skewX(-18.5deg);pointer-events:none;
 }
 #btn-map{
-  gap:7px;padding:0 18px 0 20px;margin-left:-9px;
-  border-left:none;border-right:none;
+  gap:7px;padding:0 14px 0 19px;margin-left:-9px;
   clip-path:polygon(12px 0, 100% 0, 100% 100%, 0 100%);
   z-index:1;
 }
@@ -2470,7 +2471,7 @@ button.mp-src{background:none;border-top:0;border-left:0;border-right:0;cursor:p
   .mapwrap{width:100%;border-left:0;box-shadow:none}
 }
 @media (max-width:820px){
-  body{height:auto;overflow:auto}
+  body{height:auto;overflow:auto;padding-bottom:50px}
   .console{display:block;background:var(--bg)}
   .pane{border-bottom:1px solid var(--border)}
   .pane .pb{display:none;overflow:visible}
@@ -2496,8 +2497,8 @@ button.mp-src{background:none;border-top:0;border-left:0;border-right:0;cursor:p
   .hdr-sync #countdown{padding-left:0;border-left:0;font-size:8.5px}
 
   .ticker{height:auto;grid-template-columns:auto 1fr;grid-template-rows:var(--tick) var(--tick)}
-  .tk-lbl{padding:0 18px 0 10px;gap:6px;letter-spacing:.1em}
-  .tk-fetch{width:auto;padding:0 12px 0 18px;border-right:0;align-items:flex-end;justify-content:center}
+  .tk-lbl{padding:0 18px 0 10px;gap:6px;letter-spacing:.1em;margin-right:0}
+  .tk-fetch{justify-self:end;width:auto;min-width:74px;padding:0 12px 0 12px;border-left:1px solid #24242a;border-right:0;align-items:flex-end;justify-content:center}
   .tk-fetch #tk-meta{margin-top:1px}
   .tk-vp{grid-column:1/-1;grid-row:2;border-top:1px solid var(--border)}
   .tk-fetch-t{display:inline}
@@ -2515,9 +2516,12 @@ button.mp-src{background:none;border-top:0;border-left:0;border-right:0;cursor:p
   .pane.mkt .ph-m{max-width:none}
   .stk-chip{flex:0 0 138px;scroll-snap-align:start;padding:7px 11px 0}
   .tk-t{max-width:420px}
-  .foot{height:auto;padding:8px 12px;flex-wrap:wrap;gap:6px 12px;white-space:normal}
-  .foot .sp{margin-left:0}
-  .geobar{padding:0 0 0 8px;gap:0}
+  .foot{height:auto;padding:7px 8px;flex-wrap:nowrap;align-items:center;gap:5px;white-space:nowrap;font-size:clamp(6.4px,1.85vw,8px);letter-spacing:.01em}
+  .foot > span{flex:0 0 auto;white-space:nowrap}
+  .foot .sp{margin-left:auto;min-width:0;text-align:right}
+  .foot .fb-mark{letter-spacing:.08em}
+  .foot .fb-sep{padding:0 3px}
+  .geobar{width:100%;padding:0 0 0 8px;gap:0}
   .geo-head{padding:0 8px 0 0;gap:5px}
   .geo-k{display:none}
   .geo-idx{padding:0 7px;gap:7px}
@@ -2526,9 +2530,10 @@ button.mp-src{background:none;border-top:0;border-left:0;border-right:0;cursor:p
   .geo-item{gap:4px}
   .geo-n{font-size:10px}
   .geo-l{font-size:8.5px;letter-spacing:.02em}
-  .geo-c{display:none}
-  #btn-tv{padding:0 16px 0 10px;gap:5px}
-  #btn-map{padding:0 14px 0 16px;margin-left:-9px;gap:5px}
+  .geo-c{padding:0 8px;font-size:8.5px;letter-spacing:.04em}
+  .geo-acts{right:10px;bottom:12px;height:32px;border-radius:5px}
+  #btn-tv{padding:0 16px 0 11px;gap:5px}
+  #btn-map{padding:0 12px 0 15px;margin-left:-9px;gap:5px}
   .pod-tag{display:none}
   .mapwrap{top:0;bottom:0;width:100%;border-left:0;box-shadow:none}
   .mapwrap .map-layers{overflow-x:auto;scrollbar-width:none}
@@ -3008,19 +3013,20 @@ button.mp-src{background:none;border-top:0;border-left:0;border-right:0;cursor:p
     </div>
   </div>
   <span class="geo-c" id="geo-count">— titik</span>
-  <span class="geo-acts">
-    <button class="geo-btn" id="btn-tv" type="button" aria-expanded="false" aria-controls="tvwrap">
-      <span class="pod-led tv-led" aria-hidden="true"></span>
-      <svg class="ic" aria-hidden="true"><use href="#i-tv"></use></svg>
-      <span>Live TV</span>
-      <span class="pod-tag">SIGINT</span>
-    </button>
-    <button class="geo-btn" id="btn-map" type="button" aria-expanded="false" aria-controls="mapwrap">
-      <svg class="ic" aria-hidden="true"><use href="#i-map"></use></svg>
-      <span>Peta Insiden</span>
-      <span class="pod-tag">RADAR</span>
-    </button>
-  </span>
+</div>
+
+<div class="geo-acts" role="group" aria-label="Kontrol Live TV dan Peta Insiden">
+  <button class="geo-btn" id="btn-tv" type="button" aria-expanded="false" aria-controls="tvwrap">
+    <span class="pod-led tv-led" aria-hidden="true"></span>
+    <svg class="ic" aria-hidden="true"><use href="#i-tv"></use></svg>
+    <span>Live TV</span>
+    <span class="pod-tag">SIGINT</span>
+  </button>
+  <button class="geo-btn" id="btn-map" type="button" aria-expanded="false" aria-controls="mapwrap">
+    <svg class="ic" aria-hidden="true"><use href="#i-map"></use></svg>
+    <span>Peta Insiden</span>
+    <span class="pod-tag">RADAR</span>
+  </button>
 </div>
 
 <aside class="mapwrap" id="mapwrap" aria-label="Peta insiden Indonesia" aria-hidden="true" inert>
@@ -3380,28 +3386,42 @@ const hue = s => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCod
 
 const CYCLE = 120;
 let remain = CYCLE;
+let remainMs = CYCLE * 1000;
+let syncKickTimer = 0;
+let syncOkUntil = 0;
 function tickClock(){
   $('#clock').textContent = new Date().toLocaleTimeString('id-ID',
     { timeZone:'Asia/Jakarta', hour12:false }).replace(/\./g, ':') + ' WIB';
 }
 setInterval(tickClock, 1000); tickClock();
-function paintCountdown(){
-  $('#countdown').textContent = String(Math.floor(remain/60)).padStart(2,'0') + ':' + String(remain%60).padStart(2,'0');
+function paintCountdown(ms){
+  const leftMs = typeof ms === 'number' ? Math.max(0, Math.min(CYCLE * 1000, ms)) : remain * 1000;
+  remainMs = leftMs;
+  const sec = Math.ceil(leftMs / 1000);
+  remain = sec;
+  $('#countdown').textContent = String(Math.floor(sec/60)).padStart(2,'0') + ':' + String(sec%60).padStart(2,'0');
   const btn = $('#btn-refresh');
-  if (btn) btn.style.setProperty('--sync-p', Math.max(0, Math.min(100, Math.round((remain / CYCLE) * 100))) + '%');
+  if (btn) btn.style.setProperty('--sync-p', ((leftMs / (CYCLE * 1000)) * 100).toFixed(2) + '%');
 }
 setInterval(() => {
   if (document.hidden) return;
+  if (typeof busy !== 'undefined' && busy) return;
+  if (syncOkUntil && Date.now() < syncOkUntil) return;
+  syncOkUntil = 0;
   if (lastRefreshDone) {
-    const elapsed = Math.floor((Date.now() - lastRefreshDone) / 1000);
-    remain = Math.max(0, CYCLE - elapsed);
+    remainMs = Math.max(0, CYCLE * 1000 - (Date.now() - lastRefreshDone));
   } else {
-    remain = Math.max(0, remain - 1);
+    remainMs = Math.max(0, remainMs - 250);
   }
-  paintCountdown();
-  if (remain === 0 && !busy) refreshAll(false);
-}, 1000);
-paintCountdown();
+  paintCountdown(remainMs);
+  if (remainMs === 0 && !syncKickTimer) {
+    syncKickTimer = setTimeout(() => {
+      syncKickTimer = 0;
+      if (!document.hidden && !busy) refreshAll(false);
+    }, 320);
+  }
+}, 250);
+paintCountdown(CYCLE * 1000);
 
 const CAT_ORDER = ['demo','fire','flood','disaster','insiden','siber','kriminal','kesehatan','ekonomi','politik'];
 const CAT_COLOR = { demo:'#f1c21b', fire:'#da1e28', flood:'#4589ff', disaster:'#be95ff', insiden:'#8d8d8d', siber:'#c8f04b', kriminal:'#ff9f43', kesehatan:'#ff6b9d', ekonomi:'#3ddc97', politik:'#6ea8fe', gempa:'#ff5a4e', gunung:'#ff9f0a', tma:'#00e5ff' };
@@ -5108,7 +5128,7 @@ function clToastSyncMore(){
   const box = $('#cl-toasts'); if (!box) return;
   const chip = box.querySelector('.cl-tmore');
   const n = box.querySelectorAll('.cl-toast:not(.k-out)').length;
-  const mobile = matchMedia('(hover:none)').matches;
+  const mobile = matchMedia('(hover:none), (max-width:820px)').matches;
   const lim = mobile ? 1 : 6;
   if (n <= lim){ if (chip) chip.remove(); box.classList.remove('open'); return; }
   const c = chip || document.createElement('button');
@@ -7408,7 +7428,7 @@ $('#fltwrap').addEventListener('focusout', e => {
 });
 
 const BREAK_CYCLE = 45;
-let breakItems = [], breakSig = '', breakRemain = BREAK_CYCLE, breakBusy = false, breakAt = 0, breakFail = 0;
+let breakItems = [], breakSig = '', breakRemain = BREAK_CYCLE, breakRemainMs = BREAK_CYCLE * 1000, breakBusy = false, breakAt = 0, breakFail = 0, breakKickTimer = 0;
 const TICK_PX_S = 52;
 const tickTrack = $('#ticker-track');
 
@@ -7417,10 +7437,13 @@ function setBreakState(s){
   if (el) el.dataset.state = s;
   $('#tk-state').textContent = s === 'fetch' ? 'Sync' : s === 'fail' ? 'Retry' : 'Fetch';
 }
-function paintBreak(){
+function paintBreak(ms){
+  const leftMs = typeof ms === 'number' ? Math.max(0, Math.min(BREAK_CYCLE * 1000, ms)) : breakRemain * 1000;
+  breakRemainMs = leftMs;
+  breakRemain = Math.ceil(leftMs / 1000);
   $('#tk-meta').textContent = '00:' + String(breakRemain).padStart(2, '0');
   const el = $('#tk-fetch');
-  if (el) el.style.setProperty('--tk-p', Math.max(0, Math.min(100, Math.round((breakRemain / BREAK_CYCLE) * 100))) + '%');
+  if (el) el.style.setProperty('--tk-p', ((leftMs / (BREAK_CYCLE * 1000)) * 100).toFixed(2) + '%');
 }
 
 const tkFetchEl = $('#tk-fetch');
@@ -7568,6 +7591,8 @@ if ('ResizeObserver' in window) {
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (breakItems.length) buildTicker(true); });
 async function pullBreaking(){
   if (breakBusy) return;
+  clearTimeout(breakKickTimer);
+  breakKickTimer = 0;
   breakBusy = true;
   setBreakState('fetch');
   const t0 = Date.now();
@@ -7596,28 +7621,38 @@ async function pullBreaking(){
       ' · sync ' + wibTime(breakAt) + ' WIB · auto ' + BREAK_CYCLE + 's';
   } catch (e) {
     breakFail++;
+    const retryWaitSec = Math.min(BREAK_CYCLE, 10 * Math.min(3, breakFail));
+    breakAt = Date.now() - (BREAK_CYCLE - retryWaitSec) * 1000;
     setBreakState('fail');
     $('#tk-fetch').title = 'Gagal ambil breaking: ' + (e.message || e);
   } finally {
     const wait = 420 - (Date.now() - t0);
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
     breakBusy = false;
-    if (!breakFail) setBreakState('idle');
-    breakRemain = BREAK_CYCLE;
-    paintBreak();
+    if (!breakFail) {
+      setBreakState('idle');
+      breakAt = Date.now();
+      paintBreak(BREAK_CYCLE * 1000);
+    } else {
+      paintBreak(Math.max(0, BREAK_CYCLE * 1000 - (Date.now() - breakAt)));
+    }
   }
 }
 setInterval(() => {
-  if (document.hidden) return;
+  if (document.hidden || breakBusy) return;
   if (breakAt) {
-    const elapsed = Math.floor((Date.now() - breakAt) / 1000);
-    breakRemain = Math.max(0, BREAK_CYCLE - elapsed);
+    breakRemainMs = Math.max(0, BREAK_CYCLE * 1000 - (Date.now() - breakAt));
   } else {
-    breakRemain = Math.max(0, breakRemain - 1);
+    breakRemainMs = Math.max(0, breakRemainMs - 250);
   }
-  paintBreak();
-  if (breakRemain === 0 && !breakBusy) pullBreaking();
-}, 1000);
+  paintBreak(breakRemainMs);
+  if (breakRemainMs === 0 && !breakKickTimer) {
+    breakKickTimer = setTimeout(() => {
+      breakKickTimer = 0;
+      if (!document.hidden && !breakBusy) pullBreaking();
+    }, 280);
+  }
+}, 250);
 
 const camStream = c => c.s;
 
@@ -11175,7 +11210,7 @@ const TV_CH = [
   { n:'TRT World',          grp:'Internasional (Global)', badge:'TR', s:'https://tv-trtworld.medya.trt.com.tr/master.m3u8', src:'trt',
     pg:'https://www.trtworld.com/live' }
 ];
-let tvOn = false, tvIx = 0, tvHls = null, tvDrag = null, tvRz = null, tvIdleT = null, tvPx = false, tvTry = 0, tvRetryT = null, tvLoadAt = 0, tvLoadT = null;
+let tvOn = false, tvIx = 0, tvHls = null, tvDrag = null, tvRz = null, tvIdleT = null, tvPx = false, tvTry = 0, tvRetryT = null, tvLoadAt = 0, tvLoadT = null, tvUserW = false, tvMoved = false;
 
 function renderTvMenu(){
   const menu = $('#tv-menu');
@@ -11324,7 +11359,7 @@ function tvPlace(x, y){
   const minX = mob ? 8 : 64 - ww, maxX = mob ? innerWidth - ww - 8 : innerWidth - 64;
   const footEl = document.querySelector('.foot');
   const footH = (footEl && footEl.offsetHeight) || 36;
-  const minY = mob ? 8 : 6, maxY = Math.max(minY, innerHeight - hh - (mob ? 8 : footH + 12));
+  const minY = mob ? 8 : 6, maxY = Math.max(minY, innerHeight - hh - (mob ? 52 : footH + 12));
   w.style.left = Math.round(Math.max(minX, Math.min(maxX, x))) + 'px';
   w.style.top = Math.round(Math.max(minY, Math.min(maxY, y))) + 'px';
   w.style.right = 'auto';
@@ -11427,6 +11462,7 @@ tvH.addEventListener('pointermove', e => {
 function tvDrop(e){
   if (!tvDrag) return;
   tvDrag = null;
+  tvMoved = true;
   $('#tvwrap').classList.remove('drag');
   try { tvH.releasePointerCapture(e.pointerId); } catch (err) {}
   tvSnap();
@@ -11448,6 +11484,7 @@ function tvSetW(px){
 tvGrip.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
   e.preventDefault(); e.stopPropagation();
+  tvUserW = true;
   tvRz = { x: e.clientX, w: tvW };
   tvWrap.classList.add('rz');
   try { tvGrip.setPointerCapture(e.pointerId); } catch (err) {}
@@ -11464,10 +11501,15 @@ function tvRzEnd(e){
 }
 tvGrip.addEventListener('pointerup', tvRzEnd);
 tvGrip.addEventListener('pointercancel', tvRzEnd);
-tvGrip.addEventListener('dblclick', () => tvSetW(344));
+tvGrip.addEventListener('dblclick', () => {
+  tvUserW = false;
+  if (innerWidth <= 820) { tvWrap.style.removeProperty('--tvw'); return; }
+  tvSetW(344);
+});
 tvGrip.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     e.preventDefault();
+    tvUserW = true;
     tvSetW(tvW + (e.key === 'ArrowRight' ? 16 : -16));
   }
 });
@@ -11500,9 +11542,19 @@ tvWrap.addEventListener('focusin', tvWake);
 
 addEventListener('resize', () => {
   if (!tvOn) return;
+  const mob = innerWidth <= 820;
+  if (!tvUserW && mob) {
+    tvWrap.style.removeProperty('--tvw');
+    tvW = Math.round(tvWrap.getBoundingClientRect().width || Math.min(innerWidth * 0.72, 400));
+  } else {
+    if (!tvUserW && !mob) tvW = 344;
+    tvSetW(tvW);
+  }
   const r = tvWrap.getBoundingClientRect();
-  tvPlace(r.left, r.top);
-  tvSetW(tvW);
+  const footH = (document.querySelector('.foot') && document.querySelector('.foot').offsetHeight) || 36;
+  if (!tvMoved && mob) tvPlace(8, innerHeight - (r.height || 200) - 52);
+  else if (!tvMoved && !mob) tvPlace(18, Math.max(6, innerHeight - (r.height || 200) - footH - 104));
+  else tvPlace(r.left, r.top);
 });
 
 const ETAG_CACHE = new Map();
@@ -11742,6 +11794,9 @@ function scheduleColdRecovery(){
 }
 async function refreshAll(manual){
   if (busy) return;
+  clearTimeout(syncKickTimer);
+  syncKickTimer = 0;
+  syncOkUntil = 0;
   busy = true;
   lastGlobalSyncAt = Date.now();
   const syncBtn = $('#btn-refresh');
@@ -11765,14 +11820,20 @@ async function refreshAll(manual){
   } finally {
     busy = false;
     if (syncBtn) syncBtn.dataset.state = 'idle';
-    remain = CYCLE; paintCountdown();
     lastRefreshDone = Date.now();
+    remain = CYCLE;
+    remainMs = CYCLE * 1000;
+    paintCountdown(remainMs);
     rdPrefetchVisible();
     scheduleColdRecovery();
   }
   if (manual) {
+    syncOkUntil = Date.now() + 1200;
     $('#countdown').textContent = 'OK';
-    setTimeout(paintCountdown, 1200);
+    setTimeout(() => {
+      syncOkUntil = 0;
+      if (!busy && lastRefreshDone) paintCountdown(Math.max(0, CYCLE * 1000 - (Date.now() - lastRefreshDone)));
+    }, 1200);
   }
 }
 $('#btn-refresh').addEventListener('click', () => refreshAll(true));
@@ -11794,16 +11855,12 @@ async function onTabWake(fromOnline){
     try { queueDescEnrich(); } catch (e) {}
   }
   if (lastRefreshDone) {
-    const elapsed = Math.floor((now - lastRefreshDone) / 1000);
-    remain = Math.max(0, CYCLE - elapsed);
-    paintCountdown();
+    paintCountdown(Math.max(0, CYCLE * 1000 - (now - lastRefreshDone)));
   }
   if (breakAt && now - breakAt > BREAK_CYCLE * 1000 && !breakBusy) {
     setTimeout(() => { if (!document.hidden && !breakBusy) pullBreaking(); }, 500);
   } else if (breakAt) {
-    const bElapsed = Math.floor((now - breakAt) / 1000);
-    breakRemain = Math.max(0, BREAK_CYCLE - bElapsed);
-    paintBreak();
+    paintBreak(Math.max(0, BREAK_CYCLE * 1000 - (now - breakAt)));
   }
   const stale = !lastRefreshDone || (lastRefreshDone && now - lastRefreshDone > 30000);
   if (API == null || needsColdRecovery() || fromOnline || stale) {
@@ -12450,14 +12507,45 @@ $$('.pane').forEach(p => {
     }
   });
 });
-if (matchMedia('(max-width: 820px)').matches) {
-  const first = $('.pane');
-  if (first) first.classList.add('open');
+const mqMobile = matchMedia('(max-width: 820px)');
+let wasMobile = mqMobile.matches;
+function applyResponsiveState(forceOpenDefaults){
+  const isMobile = mqMobile.matches;
+  if (isMobile && (forceOpenDefaults || !document.querySelector('.pane.open'))) {
+    const first = $('.pane');
+    if (first) first.classList.add('open');
 
-  const soc = $('.pane[aria-label="Social live"]');
-  if (soc) soc.classList.add('open');
-
+    const soc = $('.pane[aria-label="Social live"]');
+    if (soc) soc.classList.add('open');
+  }
+  wasMobile = isMobile;
+  requestAnimationFrame(() => {
+    if (typeof paintHeroes === 'function') paintHeroes();
+    if (typeof drawGlobe === 'function') drawGlobe(performance.now());
+    if (typeof renderGeoTelemetry === 'function') renderGeoTelemetry();
+    if (typeof P !== 'undefined' && P.size && typeof layout === 'function') {
+      layout();
+      refreshCamVis();
+    }
+    if (typeof mapOpen !== 'undefined' && mapOpen && typeof sizeMap === 'function') {
+      sizeMap();
+      if (map) map.invalidateSize();
+    }
+    if (typeof rdFitView === 'function') rdFitView();
+    if (typeof clToastSyncMore === 'function') clToastSyncMore();
+  });
 }
+applyResponsiveState(true);
+if (mqMobile.addEventListener) {
+  mqMobile.addEventListener('change', () => applyResponsiveState(mqMobile.matches && !wasMobile));
+}
+let _rszSyncT = 0;
+addEventListener('resize', () => {
+  clearTimeout(_rszSyncT);
+  _rszSyncT = setTimeout(() => {
+    if (mqMobile.matches !== wasMobile) applyResponsiveState(mqMobile.matches && !wasMobile);
+  }, 60);
+});
 
 ensureHls().catch(() => {});
 if (!tvOn) tvOpen(true);

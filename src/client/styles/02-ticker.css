@@ -84,14 +84,14 @@
   content:"";position:absolute;left:0;top:0;bottom:0;width:var(--tk-p,100%);
   background:linear-gradient(90deg,rgba(255,255,255,.18) 0%,rgba(255,255,255,.45) 50%,rgba(255,255,255,.7) 100%);
   box-shadow:0 0 6px rgba(255,255,255,.2);
-  transition:width .35s linear;
+  transition:width .22s linear;
 }
 .tk-fetch[data-state="fetch"] .tk-cur::before{
   width:45%;
-  background:linear-gradient(90deg,rgba(255,255,255,.3),rgba(255,255,255,.85));
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),#fff,rgba(255,255,255,.35),transparent);
   box-shadow:0 0 8px rgba(255,255,255,.35);
   transition:none;
-  animation:none;
+  animation:hdr-laser .85s ease-in-out infinite;
 }
 .tk-fetch[data-state="fail"] .tk-cur::before{
   width:100%;

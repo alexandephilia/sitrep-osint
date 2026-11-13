@@ -1261,3 +1261,18 @@ test('startup auto-hydration, disk news prewarm, incidents:nonodes cache, and ta
   assert.ok(readerSrc.includes("window.addEventListener('focus',") && readerSrc.includes("window.addEventListener('pageshow',") && readerSrc.includes("window.addEventListener('online',"), 'must recover on focus, pageshow, and online events');
   assert.ok(readerSrc.indexOf('trackBg(pullIncidents(manual))') < readerSrc.indexOf('await Promise.all([pullMedia(manual)'), 'refreshAll must start background panel pulls without blocking on slow media/situation');
 });
+
+test('responsive mobile resize auto-switches layout, geobar spans full width, geo-acts floats bottom-right, footer stays parallel, and sync countdown drains to 0%', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const geobarStart = html.indexOf('<div class="geobar"');
+  const geobarEnd = html.indexOf('</div>\n\n<div class="geo-acts"', geobarStart);
+  assert.ok(geobarStart !== -1 && geobarEnd > geobarStart, 'geo-acts must sit outside geobar so globe and legend span full width');
+  const geobarHtml = html.slice(geobarStart, geobarEnd);
+  assert.equal(geobarHtml.includes('id="btn-tv"'), false, 'btn-tv must not occupy width inside geobar');
+  assert.equal(geobarHtml.includes('id="btn-map"'), false, 'btn-map must not occupy width inside geobar');
+  assert.ok(/\.geo-acts\{[^}]*position:fixed;right:12px;/.test(html), 'geo-acts must float fixed at bottom-right');
+  assert.ok(html.includes('function applyResponsiveState(forceOpenDefaults)') && html.includes("mqMobile.addEventListener('change'"), 'mobile breakpoint changes on desktop resize must auto-open default panes and reflow panels');
+  assert.ok(html.includes('flex-wrap:nowrap') && html.includes('font-size:clamp(6.4px,1.85vw,8px)'), 'mobile footer must compact stats and brand mark into a parallel row');
+  assert.ok(html.includes('Math.ceil(leftMs / 1000)') && html.includes('((leftMs / (CYCLE * 1000)) * 100).toFixed(2)') && html.includes('if (remainMs === 0 && !syncKickTimer)'), 'sync countdown bar must animate smoothly to 0.00% before triggering sync');
+  assert.ok(html.includes('((leftMs / (BREAK_CYCLE * 1000)) * 100).toFixed(2)') && html.includes('if (breakRemainMs === 0 && !breakKickTimer)'), 'breaking fetch bar must animate smoothly to 0.00% before fetching');
+});

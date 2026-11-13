@@ -31,14 +31,45 @@ $$('.pane').forEach(p => {
     }
   });
 });
-if (matchMedia('(max-width: 820px)').matches) {
-  const first = $('.pane');
-  if (first) first.classList.add('open');
+const mqMobile = matchMedia('(max-width: 820px)');
+let wasMobile = mqMobile.matches;
+function applyResponsiveState(forceOpenDefaults){
+  const isMobile = mqMobile.matches;
+  if (isMobile && (forceOpenDefaults || !document.querySelector('.pane.open'))) {
+    const first = $('.pane');
+    if (first) first.classList.add('open');
 
-  const soc = $('.pane[aria-label="Social live"]');
-  if (soc) soc.classList.add('open');
-
+    const soc = $('.pane[aria-label="Social live"]');
+    if (soc) soc.classList.add('open');
+  }
+  wasMobile = isMobile;
+  requestAnimationFrame(() => {
+    if (typeof paintHeroes === 'function') paintHeroes();
+    if (typeof drawGlobe === 'function') drawGlobe(performance.now());
+    if (typeof renderGeoTelemetry === 'function') renderGeoTelemetry();
+    if (typeof P !== 'undefined' && P.size && typeof layout === 'function') {
+      layout();
+      refreshCamVis();
+    }
+    if (typeof mapOpen !== 'undefined' && mapOpen && typeof sizeMap === 'function') {
+      sizeMap();
+      if (map) map.invalidateSize();
+    }
+    if (typeof rdFitView === 'function') rdFitView();
+    if (typeof clToastSyncMore === 'function') clToastSyncMore();
+  });
 }
+applyResponsiveState(true);
+if (mqMobile.addEventListener) {
+  mqMobile.addEventListener('change', () => applyResponsiveState(mqMobile.matches && !wasMobile));
+}
+let _rszSyncT = 0;
+addEventListener('resize', () => {
+  clearTimeout(_rszSyncT);
+  _rszSyncT = setTimeout(() => {
+    if (mqMobile.matches !== wasMobile) applyResponsiveState(mqMobile.matches && !wasMobile);
+  }, 60);
+});
 
 ensureHls().catch(() => {});
 if (!tvOn) tvOpen(true);
