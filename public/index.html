@@ -1667,23 +1667,21 @@ a{color:inherit;text-decoration:none;text-underline-offset:2px}
   font:600 9.5px/1 var(--mono);letter-spacing:.06em;color:var(--text2);font-variant-numeric:tabular-nums;
 }
 .geo-acts{
-  position:fixed;right:12px;bottom:calc(36px + var(--foot) + 8px);z-index:115;
-  display:inline-flex;align-items:stretch;height:34px;
-  background:rgba(12,12,18,.92);border:1px solid #2e2e3c;border-radius:6px;
-  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-  box-shadow:0 10px 26px rgba(0,0,0,.62),0 0 0 1px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.07);
-  padding:0;gap:0;overflow:hidden;
+  margin-left:auto;display:inline-flex;align-items:stretch;height:36px;
+  background:transparent;border:none;box-shadow:none;
+  padding:0;gap:0;position:relative;flex:none;
 }
 .geo-btn{
-  position:relative;display:inline-flex;align-items:center;height:100%;
-  background:linear-gradient(180deg,#1a1a23 0%,#101017 100%);
-  border:0;border-radius:0;
-  color:#a6a6b8;font:600 8.5px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;
+  position:relative;display:inline-flex;align-items:center;height:36px;
+  background:linear-gradient(180deg,#181820 0%,#0e0e14 100%);
+  border:1px solid #282834;border-top:none;border-bottom:none;border-radius:0;
+  color:#9e9eb0;font:600 8.5px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;
   transition:all .14s cubic-bezier(.2,.8,.3,1);cursor:pointer;
   touch-action:manipulation;-webkit-tap-highlight-color:transparent;
 }
 #btn-tv{
-  gap:7px;padding:0 20px 0 13px;
+  gap:7px;padding:0 20px 0 14px;
+  border-right:none;
   clip-path:polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
   z-index:2;
 }
@@ -1693,7 +1691,8 @@ a{color:inherit;text-decoration:none;text-underline-offset:2px}
   transform:skewX(-18.5deg);pointer-events:none;
 }
 #btn-map{
-  gap:7px;padding:0 14px 0 19px;margin-left:-9px;
+  gap:7px;padding:0 18px 0 20px;margin-left:-9px;
+  border-left:none;border-right:none;
   clip-path:polygon(12px 0, 100% 0, 100% 100%, 0 100%);
   z-index:1;
 }
@@ -2531,7 +2530,14 @@ button.mp-src{background:none;border-top:0;border-left:0;border-right:0;cursor:p
   .geo-n{font-size:10px}
   .geo-l{font-size:8.5px;letter-spacing:.02em}
   .geo-c{padding:0 8px;font-size:8.5px;letter-spacing:.04em}
-  .geo-acts{right:10px;bottom:12px;height:32px;border-radius:5px}
+  .geo-acts{
+    position:fixed;right:10px;bottom:12px;z-index:115;margin-left:0;height:32px;
+    background:rgba(12,12,18,.92);border:1px solid #2e2e3c;border-radius:5px;
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    box-shadow:0 10px 26px rgba(0,0,0,.62),0 0 0 1px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.07);
+    overflow:hidden;
+  }
+  .geo-btn{height:100%;border:0}
   #btn-tv{padding:0 16px 0 11px;gap:5px}
   #btn-map{padding:0 12px 0 15px;margin-left:-9px;gap:5px}
   .pod-tag{display:none}
@@ -3013,20 +3019,19 @@ button.mp-src{background:none;border-top:0;border-left:0;border-right:0;cursor:p
     </div>
   </div>
   <span class="geo-c" id="geo-count">— titik</span>
-</div>
-
-<div class="geo-acts" role="group" aria-label="Kontrol Live TV dan Peta Insiden">
-  <button class="geo-btn" id="btn-tv" type="button" aria-expanded="false" aria-controls="tvwrap">
-    <span class="pod-led tv-led" aria-hidden="true"></span>
-    <svg class="ic" aria-hidden="true"><use href="#i-tv"></use></svg>
-    <span>Live TV</span>
-    <span class="pod-tag">SIGINT</span>
-  </button>
-  <button class="geo-btn" id="btn-map" type="button" aria-expanded="false" aria-controls="mapwrap">
-    <svg class="ic" aria-hidden="true"><use href="#i-map"></use></svg>
-    <span>Peta Insiden</span>
-    <span class="pod-tag">RADAR</span>
-  </button>
+  <span class="geo-acts" role="group" aria-label="Kontrol Live TV dan Peta Insiden">
+    <button class="geo-btn" id="btn-tv" type="button" aria-expanded="false" aria-controls="tvwrap">
+      <span class="pod-led tv-led" aria-hidden="true"></span>
+      <svg class="ic" aria-hidden="true"><use href="#i-tv"></use></svg>
+      <span>Live TV</span>
+      <span class="pod-tag">SIGINT</span>
+    </button>
+    <button class="geo-btn" id="btn-map" type="button" aria-expanded="false" aria-controls="mapwrap">
+      <svg class="ic" aria-hidden="true"><use href="#i-map"></use></svg>
+      <span>Peta Insiden</span>
+      <span class="pod-tag">RADAR</span>
+    </button>
+  </span>
 </div>
 
 <aside class="mapwrap" id="mapwrap" aria-label="Peta insiden Indonesia" aria-hidden="true" inert>
